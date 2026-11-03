@@ -1,0 +1,11 @@
+node_modules/
+# the demo's per-build result cache and pi's per-session state (demo_pi/README.md)
+demo_pi/.cache/
+demo_pi/.pi-agent/
+pptx/render/
+__pycache__/
+.env
+.DS_Store
+# Word / PowerPoint lock and temp files
+~$*
+*.tmp

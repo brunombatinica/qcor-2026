@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QCOR style book</title>
+<!-- One page per look: a man and a woman, a slide, icons. Styles live in styles/<id>.js (see README.md);
+     the last pages are the assets already built (assets.js). -->
+<style>
+  :root { --bg: #121212; --ink: #f2f1ed; --muted: #8b8984; --line: #2a2a28; --gold: #ffb547; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 -apple-system, system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  .page { min-height: 100vh; padding: 44px 48px 64px; max-width: 1680px; margin: 0 auto; border-top: 1px solid var(--line); }
+  .head { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 24px; align-items: start; margin-bottom: 24px; }
+  .num { font: 500 13px/1 -apple-system, system-ui, sans-serif; letter-spacing: 0.08em; color: var(--muted); padding-top: 9px; font-variant-numeric: tabular-nums; }
+  .head h2 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.15; }
+  .head .after { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .head .note { margin: 10px 0 0; max-width: 780px; color: #c9c7c1; font-size: 14.5px; }
+  .meta { text-align: right; font-size: 12px; color: var(--muted); padding-top: 8px; max-width: 360px; }
+  .chips { display: flex; gap: 0; justify-content: flex-end; margin-bottom: 10px; }
+  .chips span { width: 26px; height: 12px; position: relative; }
+  .chips span:first-child { border-radius: 3px 0 0 3px; } .chips span:last-child { border-radius: 0 3px 3px 0; }
+  .chips span:hover::after { content: attr(data-t); position: absolute; top: 18px; right: 0; white-space: nowrap; background: #000; color: #fff; padding: 3px 7px; border-radius: 5px; font-size: 11px; z-index: 5; }
+  .board { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2.25fr); gap: 14px; }
+  .cell { position: relative; border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px rgba(255,255,255,0.06); }
+  .cell .lab { position: absolute; left: 12px; bottom: 9px; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(128,128,128,0.9); mix-blend-mode: difference; pointer-events: none; }
+  .people { display: grid; place-items: center; padding: 18px; }
+  .people > svg, .people > div { width: 100%; height: auto; max-height: 100%; display: block; }
+  .stage-wrap { aspect-ratio: 16 / 9; position: relative; }
+  .stage { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; transform-origin: 0 0; overflow: hidden; }
+  .stage > * { width: 100%; height: 100%; }
+  .icons { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; padding: 20px 18px 28px; }
+  .ic { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .ic .g { width: 64px; height: 64px; display: grid; place-items: center; }
+  .ic .g > svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  .ic .n { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.55; color: var(--on, #000); }
+  .star { position: absolute; top: 9px; right: 9px; width: 28px; height: 28px; border-radius: 50%; border: 0; background: rgba(0,0,0,0.4); color: #fff; font-size: 14px; line-height: 28px; cursor: pointer; z-index: 3; opacity: 0; transition: opacity 0.15s, background 0.15s; }
+  .cell:hover .star, .tile:hover .star { opacity: 1; }
+  .star.on { background: var(--gold); color: #000; opacity: 1; }
+  .missing { display: grid; place-items: center; min-height: 200px; color: var(--muted); background: #1a1a19; border-radius: 10px; }
+
+  /* cover: a plain index */
+  .cover .kick { color: var(--muted); font-size: 13px; letter-spacing: 0.04em; }
+  .cover h1 { font-size: 44px; font-weight: 600; letter-spacing: -0.025em; margin: 18px 0 14px; }
+  .cover p { max-width: 700px; color: #c9c7c1; margin: 0 0 8px; }
+  .cover kbd { font: 11px ui-monospace, Menlo, monospace; border: 1px solid #444; border-radius: 4px; padding: 0 5px; }
+  .toc { columns: 3 300px; column-gap: 40px; margin-top: 40px; }
+  .toc h3 { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 26px 0 6px; break-after: avoid; }
+  .toc h3:first-child { margin-top: 0; }
+  .toc a { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--line); color: inherit; text-decoration: none; break-inside: avoid; }
+  .toc a:hover .nm { text-decoration: underline; text-underline-offset: 3px; }
+  .toc .no { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .toc .nm { font-size: 14.5px; } .toc .af { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .toc .strip { display: flex; width: 56px; height: 8px; border-radius: 2px; overflow: hidden; align-self: center; }
+  .toc .strip i { flex: 1; }
+
+  /* picks */
+  #picks-btn { position: fixed; right: 20px; bottom: 20px; z-index: 50; border: 0; border-radius: 999px; padding: 9px 16px; background: #f2f1ed; color: #000; font: 600 13px -apple-system, system-ui, sans-serif; cursor: pointer; box-shadow: 0 6px 24px rgba(0,0,0,0.5); }
+  #picks { position: fixed; right: 20px; bottom: 64px; z-index: 50; width: 340px; max-height: 60vh; overflow: auto; background: #1d1d1c; border: 1px solid #333; border-radius: 12px; padding: 14px 16px; display: none; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
+  #picks.open { display: block; }
+  #picks ul { list-style: none; margin: 8px 0 12px; padding: 0; }
+  #picks li { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px solid #2c2c2b; font-size: 13px; }
+  #picks li a { color: inherit; text-decoration: none; }
+  #picks li button { background: none; border: 0; color: var(--muted); cursor: pointer; }
+  #picks .act { display: flex; gap: 8px; }
+  #picks .act button { flex: 1; border: 1px solid #444; background: #262625; color: var(--ink); border-radius: 8px; padding: 6px; cursor: pointer; font-size: 12px; }
+  body.only .page { min-height: 0; border: 0; }
+  body.only #picks-btn { display: none; }
+</style>
+<style id="assets-css"></style>
+</head>
+<body>
+<main id="book"></main>
+<button id="picks-btn">Picks</button>
+<div id="picks"></div>
+
+<script type="module">
+  import { STYLES, GROUPS } from "./styles/list.js";
+  import { ASSET_PAGES, ASSET_LABELS, assetsCSS, assetsHTML, inlineLogos } from "./assets.js";
+
+  const PARTS = { people: "People", slide: "Slide", icons: "Icons" };
+  const ICON_NAMES = ["patient", "heart", "pill", "note", "search", "database", "tool", "agent", "check", "warning"];
+  const only = new URLSearchParams(location.search).get("only");
+  const book = document.getElementById("book");
+  const val = (v) => (typeof v === "function" ? v() : v);
+  // label colour that reads on a style's ground
+  const onGround = (c = "#222") => { const h = c.replace("#", "").padEnd(6, "0"); const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) || 0); return 0.299 * r + 0.587 * g + 0.114 * b > 140 ? "#000" : "#fff"; };
+  document.getElementById("assets-css").textContent = assetsCSS();
+
+  const loaded = await Promise.all(STYLES.map((id) => import(`./styles/${id}.js`).then((m) => m.default).catch((e) => ({ id, name: id, error: String(e) }))));
+  const N = STYLES.length;
+  const pad = (n) => String(n).padStart(2, "0");
+  const numOf = (id) => { const i = STYLES.indexOf(id); return pad(i >= 0 ? i + 1 : N + 1 + ASSET_PAGES.findIndex((p) => p.id === id)); };
+
+  // picks live in localStorage as "<style id>:<part>" or an asset key ("a-…:…")
+  const KEY = "qcor-stylebook-picks";
+  let picks = new Set(JSON.parse(localStorage.getItem(KEY) || "[]"));
+  const save = () => { localStorage.setItem(KEY, JSON.stringify([...picks])); renderPicks(); };
+  const pageOf = (k) => k.split(":")[0];
+  const labelOf = (k) => { if (ASSET_LABELS[k]) return ASSET_LABELS[k]; const [id, p] = k.split(":"); return `${loaded.find((s) => s.id === id)?.name || id} · ${PARTS[p] || p}`; };
+  const starKey = (k, what = "") => `<button class="star${picks.has(k) ? " on" : ""}" data-k="${k}" title="Pick ${what}">★</button>`;
+  const star = (id, part) => starKey(`${id}:${part}`, `this ${PARTS[part].toLowerCase()}`);
+
+  function boardHTML(s) {
+    if (s.error) return `<section class="page" id="${s.id}"><div class="head"><div class="num">${numOf(s.id)}</div><div><h2>${s.id}</h2><div class="after">not drawn yet</div></div></div><div class="missing">${s.error}</div></section>`;
+    const byName = Object.fromEntries(val(s.icons) || []);
+    const icons = ICON_NAMES.map((n) => [n, byName[n] || ""]);
+    return `<section class="page s-${s.id}" id="${s.id}">
+      <style>${s.css || ""}</style>
+      <div class="head">
+        <div class="num">${numOf(s.id)}</div>
+        <div><h2>${s.name}</h2><div class="after">after ${s.after || ""}</div><p class="note">${s.note || ""}</p></div>
+        <div class="meta"><div class="chips">${(s.palette || []).map(([c, t]) => `<span style="background:${c}" data-t="${t} ${c}"></span>`).join("")}</div>${s.type || ""}</div>
+      </div>
+      <div class="board">
+        <div class="cell people" style="background:${s.peopleGround || s.ground}">${star(s.id, "people")}${val(s.people) || ""}<span class="lab">People</span></div>
+        <div class="cell stage-wrap">${star(s.id, "slide")}<div class="stage">${val(s.slide)}</div></div>
+        <div class="cell icons" style="background:${s.iconGround || s.ground};--on:${s.iconInk || onGround(s.iconGround || s.ground)}">${star(s.id, "icons")}${icons.map(([n, svg]) => `<div class="ic"><div class="g">${svg}</div><div class="n">${n}</div></div>`).join("")}</div>
+      </div>
+    </section>`;
+  }
+
+  const entry = (s) => `<a href="#${s.id}"><span class="no">${numOf(s.id)}</span><span><span class="nm">${s.name}</span><span class="af">${s.error ? "not drawn yet" : (s.after || "").split(/[;,(]/)[0]}</span></span><span class="strip">${(s.palette || []).map(([c]) => `<i style="background:${c}"></i>`).join("")}</span></a>`;
+  const coverHTML = () => `<section class="page cover" id="cover">
+      <div class="kick">QCOR 2026 · Build an agent, live</div>
+      <h1>Style book</h1>
+      <p>${N} looks for the talk. Each page draws the same three things: a man and a woman, one slide (the same content every
+      time, so the layouts compare), and ten icons. The last ${ASSET_PAGES.length} pages collect the assets already built.</p>
+      <p>Hover a panel and press <b>★</b> to pick it; <b>Picks</b> (bottom right) lists them and copies the list. <kbd>←</kbd> <kbd>→</kbd> flip pages.</p>
+      <div class="toc">${GROUPS.map(([title, ids]) => `<h3>${title}</h3>${ids.map((id) => entry(loaded.find((s) => s.id === id))).join("")}`).join("")}
+        <h3>Assets</h3>${ASSET_PAGES.map((p) => `<a href="#${p.id}"><span class="no">${numOf(p.id)}</span><span><span class="nm">${p.name}</span></span><span></span></a>`).join("")}
+      </div>
+    </section>`;
+
+  if (only) {
+    document.body.classList.add("only");
+    const s = loaded.find((x) => x.id === only);
+    if (s) book.innerHTML = boardHTML(s);
+    else if (only === "cover") book.innerHTML = coverHTML();
+    else if (ASSET_PAGES.some((p) => p.id === only)) { book.innerHTML = assetsHTML(N + 1, starKey); [...book.querySelectorAll(".apage")].forEach((p) => p.id !== only && p.remove()); }
+    else book.innerHTML = `<p>no page ${only}</p>`;
+  } else {
+    book.innerHTML = coverHTML() + loaded.map(boardHTML).join("") + assetsHTML(N + 1, starKey);
+  }
+  inlineLogos(book);
+
+  // scale each 1280×720 stage to its cell
+  const ro = new ResizeObserver((es) => es.forEach((e) => { e.target.querySelector(".stage").style.transform = `scale(${e.contentRect.width / 1280})`; }));
+  document.querySelectorAll(".stage-wrap").forEach((w) => ro.observe(w));
+
+  book.addEventListener("click", (e) => {
+    const f = e.target.closest("[data-flip]");
+    if (f) { const p = document.getElementById(f.dataset.flip); p.classList.toggle("light"); f.textContent = p.classList.contains("light") ? "Show on black" : "Show on white"; return; }
+    const b = e.target.closest(".star"); if (!b) return;
+    const k = b.dataset.k; picks.has(k) ? picks.delete(k) : picks.add(k); b.classList.toggle("on", picks.has(k)); save();
+  });
+
+  const panel = document.getElementById("picks"), btn = document.getElementById("picks-btn");
+  const sorted = () => [...picks].sort((a, b) => numOf(pageOf(a)).localeCompare(numOf(pageOf(b))) || a.localeCompare(b));
+  function renderPicks() {
+    btn.textContent = `★ Picks${picks.size ? ` · ${picks.size}` : ""}`;
+    const items = sorted();
+    panel.innerHTML = `<b>Picks</b>${items.length ? `<ul>${items.map((k) => `<li><a href="#${pageOf(k)}">${numOf(pageOf(k))} ${labelOf(k)}</a><button data-rm="${k}" title="Remove">✕</button></li>`).join("")}</ul>` : `<p style="color:var(--muted)">Nothing yet. Hover a panel and press ★.</p>`}
+      <div class="act"><button id="pk-copy">Copy list</button><button id="pk-clear">Clear</button></div>`;
+  }
+  btn.onclick = () => panel.classList.toggle("open");
+  panel.addEventListener("click", (e) => {
+    const rm = e.target.dataset.rm;
+    if (rm) { picks.delete(rm); document.querySelectorAll(`.star[data-k="${CSS.escape(rm)}"]`).forEach((s) => s.classList.remove("on")); save(); }
+    if (e.target.id === "pk-copy") navigator.clipboard.writeText(sorted().map((k) => `${numOf(pageOf(k))} ${labelOf(k)}`).join("\n")).then(() => (e.target.textContent = "Copied"));
+    if (e.target.id === "pk-clear" && confirm("Clear all picks?")) { picks.clear(); document.querySelectorAll(".star.on").forEach((s) => s.classList.remove("on")); save(); }
+  });
+  renderPicks();
+
+  // ← → flip pages
+  addEventListener("keydown", (e) => {
+    if (!["ArrowRight", "ArrowLeft"].includes(e.key) || e.metaKey || e.ctrlKey || e.altKey) return;
+    const pages = [...document.querySelectorAll(".page")];
+    const cur = pages.findIndex((p) => p.getBoundingClientRect().bottom > innerHeight / 3);
+    const next = e.key === "ArrowRight" ? Math.min(pages.length - 1, cur + 1) : Math.max(0, cur - 1);
+    pages[next].scrollIntoView({ behavior: "smooth" }); e.preventDefault();
+  });
+  if (location.hash) document.querySelector(location.hash)?.scrollIntoView();
+</script>
+</body>
+</html>

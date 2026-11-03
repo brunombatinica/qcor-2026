@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Rosa, figure style">
+  <g fill="#3a3a3e" stroke="#e5e5ea" stroke-width="4" stroke-linejoin="round">
+    <path d="M44 192 C48 146 72 126 100 126 C128 126 152 146 156 192 Z" fill="#ffb547" stroke="#ffb547"/>
+    <circle cx="100" cy="80" r="34"/>
+    <path d="M66 78 C64 52 82 42 100 42 C120 42 136 54 134 78 C126 62 112 58 100 58 C88 58 74 64 66 78 Z" fill="#e5e5ea"/>
+    <circle cx="100" cy="36" r="12" fill="#e5e5ea"/>
+  </g>
+  <g fill="none" stroke="#1d1d1f" stroke-width="3"><circle cx="88" cy="84" r="8"/><circle cx="112" cy="84" r="8"/><path d="M96 84 h8"/></g>
+</svg>

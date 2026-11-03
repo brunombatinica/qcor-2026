@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<!--
+  QCOR 2026 · Demo 02 · Think → Act → Look: the agent loop
+  The one idea: an agent works in a loop. It thinks, calls a tool, looks at what came back,
+  and decides its next step from what it just found, until the job is done. A fixed script
+  runs the same steps for every patient and misses what it was never told to look for.
+  Controls: → / Space / Next = advance · ← = back · R = restart · F = fullscreen · A = autoplay
+            Toggle "Agent / Fixed script" at the top right.
+  Patient and notes are synthetic. No PHI.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>02 · Think → Act → Look · QCOR 2026</title>
+<style>
+:root{
+  --bg:#05070a; --fg:#F2F2F2; --dim:#8C8C8C; --line:#2a2a2a; --panel:#0c0f14;
+  --amber:#FFB020; --cyan:#22D3EE; --green:#4ADE80; --pink:#FF4FA3; --red:#FF4D4D;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,"Helvetica Neue",Arial,sans-serif;
+  --mono:"SF Mono",ui-monospace,Menlo,Consolas,"DejaVu Sans Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#000;color:var(--fg);font-family:var(--sans);overflow:hidden}
+button{font-family:inherit;color:inherit}
+#stage{position:absolute;left:0;top:0;width:1600px;height:900px;transform-origin:0 0;background:var(--bg);overflow:hidden}
+
+/* header */
+header{position:absolute;left:28px;right:28px;top:14px;height:64px;display:flex;align-items:center;gap:24px}
+.back{position:absolute;left:0;top:-6px;font-size:13px;color:var(--dim);text-decoration:none}
+.back:hover{color:var(--fg)}
+.titles{margin-top:12px}
+h1{margin:0;font-size:30px;font-weight:700;letter-spacing:-.01em}
+h1 .t{color:var(--fg)} h1 .a{color:var(--cyan)} h1 .l{color:var(--amber)} h1 .ar{color:var(--dim);font-weight:400}
+.sub{font-size:15px;color:var(--dim);margin-top:2px}
+.spacer{flex:1}
+.toggle{display:flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:#0a0d12;margin-top:12px}
+.toggle button{border:0;background:none;padding:8px 16px;border-radius:999px;font-size:14px;cursor:pointer;color:var(--dim)}
+.toggle button.on{background:#1a1f27;color:var(--fg)}
+.toggle button.on[data-mode=agent]{color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(34,211,238,.5)}
+.toggle button.on[data-mode=fixed]{color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.5)}
+
+/* main columns */
+main{position:absolute;left:28px;right:28px;top:92px;bottom:86px;display:grid;grid-template-columns:500px 548px 1fr;gap:22px}
+.col{min-height:0;display:flex;flex-direction:column}
+.label{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:0 0 8px;display:flex;align-items:center;gap:8px}
+.label svg{width:16px;height:16px}
+
+/* loop */
+#loopWrap{position:relative;height:392px;flex:none;margin-bottom:6px}
+#loopSvg,#pipeSvg{width:100%;height:100%;display:block}
+#pipeSvg{display:none}
+body.fixed #loopSvg{display:none} body.fixed #pipeSvg{display:block}
+.node circle.bg{fill:#0c0f14;stroke-width:2.5;transition:fill .35s, filter .35s}
+.node text{font-family:var(--sans);font-weight:700;letter-spacing:.12em;font-size:15px;text-anchor:middle}
+.node .ico{fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.node.think circle.bg,.node.think .ico{stroke:#d9d9d9} .node.think text{fill:#d9d9d9}
+.node.act circle.bg,.node.act .ico{stroke:var(--cyan)} .node.act text{fill:var(--cyan)}
+.node.look circle.bg,.node.look .ico{stroke:var(--amber)} .node.look text{fill:var(--amber)}
+.node{opacity:.55;transition:opacity .35s}
+.node.on{opacity:1}
+.node.think.on circle.bg{fill:#2a2d33;filter:url(#glowW)}
+.node.act.on circle.bg{fill:#0b3a44;filter:url(#glowC)}
+.node.look.on circle.bg{fill:#4a3505;filter:url(#glowA)}
+#ring{fill:none;stroke:var(--line);stroke-width:3}
+#ringArrows path{fill:#3a3a3a}
+#centerTurn{font-size:15px;fill:var(--dim);text-anchor:middle;letter-spacing:.16em;text-transform:uppercase}
+#centerNum{font-size:76px;font-weight:800;fill:var(--fg);text-anchor:middle}
+#centerDone{opacity:0;transition:opacity .4s}
+body.done #centerDone{opacity:1} body.done #centerCount{opacity:0}
+#centerCount{transition:opacity .4s}
+
+/* narration */
+#narr{flex:none;height:206px;border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:14px 16px;overflow:hidden;position:relative}
+.line{display:flex;gap:12px;align-items:flex-start;margin-bottom:10px;opacity:.42;transition:opacity .3s}
+.line.cur{opacity:1}
+.badge{flex:none;width:62px;text-align:center;font-size:11px;font-weight:800;letter-spacing:.12em;border-radius:6px;padding:4px 0;margin-top:2px}
+.b-think{color:#000;background:#d9d9d9} .b-act{color:#001a1f;background:var(--cyan)} .b-look{color:#1e1400;background:var(--amber)}
+.b-done{color:#002b10;background:var(--green)} .b-step{color:#000;background:#fff}
+.ltext{font-size:18px;line-height:1.35}
+.think-t{color:#e6e6e6}
+.code{font-family:var(--mono);font-size:16px;color:var(--cyan);word-break:break-word}
+.res{color:var(--amber)}
+.intro{font-size:20px;line-height:1.4;color:var(--fg)}
+.intro b{color:var(--amber);font-weight:600}
+.intro .hint{display:block;color:var(--dim);font-size:15px;margin-top:10px}
+
+/* callout */
+#callout{flex:none;margin-top:12px;border:1px dashed rgba(34,211,238,.55);border-radius:12px;padding:12px 16px;background:rgba(34,211,238,.06);opacity:0;transform:translateY(8px);transition:opacity .35s,transform .35s;min-height:84px}
+#callout.show{opacity:1;transform:none}
+#callout .w{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);font-weight:800;display:flex;align-items:center;gap:8px}
+#callout .w svg{width:16px;height:16px;stroke:currentColor}
+#callout .m{font-size:17px;line-height:1.38;margin-top:5px}
+body.fixed #callout{border-color:rgba(255,255,255,.5);background:rgba(255,255,255,.05)}
+body.fixed #callout .w{color:#fff}
+
+/* chart */
+#chart{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
+#query{flex:none;height:40px;border:1px solid var(--line);border-radius:10px;display:flex;align-items:center;gap:10px;padding:0 12px;font-family:var(--mono);font-size:14px;color:var(--dim);background:#080b0f;transition:border-color .3s,color .3s;overflow:hidden;white-space:nowrap}
+#query svg{flex:none;width:18px;height:18px}
+#query.on{border-color:rgba(34,211,238,.6);color:var(--cyan)}
+#query .hits{margin-left:auto;font-family:var(--sans);font-weight:700;color:var(--amber)}
+#query .hits.zero{color:var(--fg)}
+.struct{flex:none;display:grid;grid-template-columns:1.12fr 1fr;gap:8px}
+.card{border:1px solid var(--line);border-radius:10px;background:#0a0c10;padding:8px 12px;transition:border-color .35s,background .35s,box-shadow .35s,opacity .35s,transform .35s;position:relative}
+.card .hd{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:#cfcfcf;white-space:nowrap}
+.card .hd svg{flex:none;width:17px;height:17px;stroke:var(--amber)}
+.card .hd .dt{font-weight:400;color:var(--dim);font-size:13px}
+.card .hd .tag{margin-left:auto;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;padding:2px 7px;border-radius:5px}
+.tag.read{color:var(--amber);border:1px solid rgba(255,176,32,.5)}
+.tag.stale{color:var(--red);border:1px solid rgba(255,77,77,.6)}
+.tag.never{color:var(--red);border:1px dashed rgba(255,77,77,.7)}
+.tag.hit{color:#1e1400;background:var(--amber)}
+.card .bd{font-size:14px;line-height:1.42;color:#bdbdbd;max-height:0;overflow:hidden;transition:max-height .45s ease, margin .3s;margin-top:0}
+.card .qt{font-size:13.5px;line-height:1.35;color:var(--amber);max-height:0;overflow:hidden;transition:max-height .4s;margin-top:0}
+.card.hasq:not(.lit) .qt{max-height:60px;margin-top:4px}
+.card.lit{border-color:var(--amber);background:#16110a;box-shadow:0 0 0 1px rgba(255,176,32,.35),0 0 24px rgba(255,176,32,.18);transform:translateX(-6px)}
+.card.lit .bd{max-height:200px;margin-top:6px;color:#e8e8e8}
+.card.dimmed{opacity:.45}
+.card.never{border-style:dashed;border-color:rgba(255,77,77,.55)}
+.struct .card .bd{max-height:none;margin-top:5px;font-size:13px;line-height:1.5}
+.struct .card:not(.lit) .bd{color:#8f8f8f}
+.struct .card .qt{display:none}
+.struct .card{min-width:0} .struct .card .hd{overflow:hidden}
+mark{background:rgba(255,176,32,.22);color:var(--amber);border-radius:3px;padding:0 2px;box-shadow:0 0 0 1px rgba(255,176,32,.35)}
+mark.stale{background:rgba(255,77,77,.14);color:#ff8a8a;box-shadow:0 0 0 1px rgba(255,77,77,.4);text-decoration:line-through;text-decoration-color:rgba(255,77,77,.8)}
+.notes{display:flex;flex-direction:column;gap:7px;min-height:0}
+#scan{position:absolute;left:0;right:0;top:48px;height:3px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:0;pointer-events:none;box-shadow:0 0 14px var(--cyan)}
+#scan.go{animation:scan 1.1s ease-in-out}
+@keyframes scan{0%{top:48px;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:calc(100% - 4px);opacity:0}}
+
+/* scorecard */
+#score{display:flex;flex-direction:column;gap:8px;flex:1;min-height:0}
+.row{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:10px 14px;transition:border-color .35s,box-shadow .35s}
+.row.fresh{border-color:var(--amber);box-shadow:0 0 18px rgba(255,176,32,.2)}
+.row .top{display:flex;align-items:center;gap:10px}
+.row .q{font-size:15px;font-weight:600;color:#d0d0d0;flex:1}
+.chip{font-size:14px;font-weight:700;border-radius:7px;padding:4px 10px;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+.chip.c-pending{color:var(--cyan);border-color:rgba(34,211,238,.5);border-style:dashed}
+.chip.c-plain{color:#fff;border-color:#888}
+.chip.c-gap{color:#fff;background:var(--red);border-color:var(--red)}
+.chip.c-doc{color:var(--amber);border-color:var(--amber)}
+.chip.c-wrong{color:var(--red);border-color:var(--red);text-decoration:line-through}
+.verdict{width:24px;height:24px;flex:none;opacity:0;transition:opacity .3s}
+.verdict.show{opacity:1}
+.row .qu{font-size:13.5px;line-height:1.35;color:var(--amber);margin-top:6px}
+.row .qu .src{color:var(--dim);font-size:12px;margin-left:4px}
+.row .qu.none{color:var(--dim);font-style:normal}
+.row .fix{font-size:13px;color:var(--red);margin-top:4px}
+#legend{margin-top:auto;font-size:13.5px;color:var(--dim);line-height:2.1;padding:4px 2px}
+#legend .chip{font-size:12px;padding:2px 8px;margin-right:6px}
+.lg-ok svg{width:18px;height:18px;vertical-align:-4px;margin:0 8px 0 4px}
+#stats{margin-top:8px;border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;background:#080b0f}
+#stats .s{text-align:center}
+#stats .n{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;transition:color .3s}
+#stats .k{font-size:12px;color:var(--dim);line-height:1.25}
+#stats .n.cy{color:var(--cyan)} #stats .n.am{color:var(--amber)} #stats .n.gr{color:var(--green)} #stats .n.rd{color:var(--red)}
+
+/* controls */
+#controls{position:absolute;left:28px;right:28px;bottom:30px;height:46px;display:flex;align-items:center;gap:10px}
+.btn{height:42px;min-width:42px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:#0e1218;font-size:15px;display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;color:#ddd}
+.btn:hover{border-color:#555}
+.btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.btn.primary{background:var(--cyan);color:#001a1f;border-color:var(--cyan);font-weight:700;padding:0 22px}
+.btn.on{border-color:var(--cyan);color:var(--cyan)}
+#stepInd{font-size:14px;color:var(--dim);font-variant-numeric:tabular-nums;margin-left:6px}
+#dots{display:flex;gap:4px;flex:1;margin:0 8px;align-items:center}
+#dots i{flex:1;height:4px;border-radius:2px;background:#222;transition:background .3s}
+#dots i.past{background:#3c4a52} #dots i.cur{background:var(--cyan)}
+footer{position:absolute;left:0;right:0;bottom:8px;text-align:center;font-size:12px;color:#5c5c5c}
+
+/* takeaway */
+#take{position:absolute;left:0;right:0;top:0;bottom:84px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(5,7,10,.95);opacity:0;pointer-events:none;transition:opacity .6s;text-align:center;padding:40px;z-index:5}
+#take.show{opacity:1;pointer-events:auto}
+#take .big{font-size:66px;font-weight:800;line-height:1.12;max-width:1200px;letter-spacing:-.015em}
+#take .big em{font-style:normal;color:var(--cyan)}
+#take .sm{font-size:21px;color:var(--dim);margin-top:24px;max-width:900px;line-height:1.45}
+#take .row2{display:flex;gap:14px;margin-top:36px;flex-wrap:wrap;justify-content:center}
+#take a{color:var(--cyan);text-decoration:none;font-size:19px;border:1px solid rgba(34,211,238,.5);padding:10px 18px;border-radius:10px}
+#take a.alt{color:var(--fg);border-color:#555}
+#take button.alt{font-size:19px;border:1px solid #555;padding:10px 18px;border-radius:10px;background:none;cursor:pointer}
+
+/* fluid (phone / narrow) */
+body.fluid{overflow:auto;height:auto}
+body.fluid #stage{position:relative;width:auto;height:auto;transform:none!important;padding:12px 14px 120px;overflow:visible}
+body.fluid header{position:static;height:auto;flex-wrap:wrap;gap:10px}
+body.fluid .back{position:static;display:block;width:100%}
+body.fluid .titles{margin-top:0}
+body.fluid h1{font-size:26px}
+body.fluid .sub{font-size:14px}
+body.fluid .spacer{display:none}
+body.fluid .toggle{margin-top:0}
+body.fluid main{position:static;display:flex;flex-direction:column;gap:16px;margin-top:14px}
+body.fluid #loopWrap{height:210px}
+body.fluid.fixed #loopWrap{height:320px}
+body.fluid .card.lit .bd{max-height:420px}
+body.fluid .card .bd{transition:none}
+body.fluid #narr{height:auto;min-height:150px}
+body.fluid .ltext{font-size:16px} body.fluid .code{font-size:14px} body.fluid .intro{font-size:17px}
+body.fluid #callout{min-height:0}
+body.fluid #callout:not(.show){display:none}
+body.fluid #chart{flex:none}
+body.fluid #score{flex:none}
+body.fluid .struct{grid-template-columns:1fr}
+body.fluid .card.lit{transform:none}
+body.fluid .card .hd{white-space:normal;flex-wrap:wrap}
+body.fluid #controls{position:fixed;left:0;right:0;bottom:0;height:auto;padding:10px 10px 22px;background:rgba(5,7,10,.96);border-top:1px solid var(--line);flex-wrap:wrap;gap:8px;z-index:6}
+body.fluid #dots{order:-1;flex-basis:100%;margin:0 0 4px}
+body.fluid .btn{height:44px}
+body.fluid .btn .lbl{display:none}
+body.fluid .btn.primary .lbl{display:inline}
+body.fluid #fsBtn{display:none}
+body.fluid footer{position:static;margin-top:20px}
+body.fluid #take{position:fixed;z-index:5;bottom:110px}
+body.fluid #take .big{font-size:36px}
+body.fluid #take .sm{font-size:17px}
+body.fluid #stats .n{font-size:26px}
+@media (prefers-reduced-motion: reduce){
+  *{transition-duration:.05s!important;animation-duration:.05s!important}
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <filter id="glowW" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="9" flood-color="#ffffff" flood-opacity=".45"/></filter>
+    <filter id="glowC" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#22D3EE" flood-opacity=".75"/></filter>
+    <filter id="glowA" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#FFB020" flood-opacity=".75"/></filter>
+    <filter id="glowG" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#4ADE80" flood-opacity=".8"/></filter>
+    <radialGradient id="pulseGradW"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#fff" stop-opacity=".8"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="pulseGrad"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#22D3EE"/><stop offset="1" stop-color="#22D3EE" stop-opacity="0"/></radialGradient>
+  </defs>
+</svg>
+
+<div id="stage">
+  <header>
+    <a class="back" href="index.html">← all demos</a>
+    <div class="titles">
+      <h1><span class="t">Think</span> <span class="ar">→</span> <span class="a">Act</span> <span class="ar">→</span> <span class="l">Look</span></h1>
+      <div class="sub">Watch the agent loop work through Mrs. Rosa Delgado's chart, one step at a time</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="toggle" role="group" aria-label="mode">
+      <button data-mode="agent" class="on">Agent</button>
+      <button data-mode="fixed">Fixed script</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- LEFT: loop + narration -->
+    <section class="col" id="colLoop">
+      <div id="loopWrap">
+        <svg id="loopSvg" viewBox="0 0 500 392" aria-label="agent loop diagram">
+          <circle id="ring" cx="250" cy="206" r="160"/>
+          <g id="ringArrows"></g>
+          <g id="trail"></g>
+          <g id="centerCount">
+            <text id="centerTurn" x="250" y="176">turn</text>
+            <text id="centerNum" x="250" y="250">0</text>
+          </g>
+          <g id="centerDone">
+            <circle cx="250" cy="206" r="58" fill="#06210f" stroke="#4ADE80" stroke-width="3" filter="url(#glowG)"/>
+            <path d="M224 207 l17 17 l35 -37" fill="none" stroke="#4ADE80" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+            <text x="250" y="296" fill="#4ADE80" font-size="18" font-weight="800" text-anchor="middle" letter-spacing="3">DONE</text>
+          </g>
+          <!-- THINK at top -->
+          <g class="node think" id="nThink" transform="translate(250 46)">
+            <circle class="bg" r="44"/>
+            <g class="ico" transform="translate(-14 -30)">
+              <path d="M14 2a10 10 0 0 0-6 18v4h12v-4a10 10 0 0 0-6-18z"/><path d="M9 28h10"/>
+            </g>
+            <text y="26" font-size="13">THINK</text>
+          </g>
+          <!-- ACT lower right (30deg) -->
+          <g class="node act" id="nAct" transform="translate(388.6 286)">
+            <circle class="bg" r="44"/>
+            <g class="ico" transform="translate(-13 -29)">
+              <circle cx="11" cy="11" r="8"/><path d="M17 17l8 8"/>
+            </g>
+            <text y="26" font-size="13">ACT</text>
+          </g>
+          <!-- LOOK lower left (150deg) -->
+          <g class="node look" id="nLook" transform="translate(111.4 286)">
+            <circle class="bg" r="44"/>
+            <g class="ico" transform="translate(-15 -24)">
+              <path d="M1 10s5-9 14-9 14 9 14 9-5 9-14 9S1 10 1 10z"/><circle cx="15" cy="10" r="4"/>
+            </g>
+            <text y="26" font-size="13">LOOK</text>
+          </g>
+          <circle id="pulse" r="15" fill="url(#pulseGrad)" cx="250" cy="46"/>
+        </svg>
+        <svg id="pipeSvg" viewBox="0 0 500 392" aria-label="fixed script pipeline">
+          <g id="pipe"></g>
+          <circle id="ppulse" r="13" fill="url(#pulseGradW)" cx="250" cy="20" opacity="0"/>
+        </svg>
+      </div>
+      <div id="narr"></div>
+      <div id="callout"><div class="w"></div><div class="m"></div></div>
+    </section>
+
+    <!-- MIDDLE: chart -->
+    <section class="col" id="colChart">
+      <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="#FFB020" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span style="color:#FFB020">Mrs. Rosa Delgado, 71</span> · her chart</div>
+      <div id="chart">
+        <div id="query"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6"/></svg><span id="qtext">waiting for the agent…</span><span class="hits" id="qhits"></span></div>
+        <div class="struct" id="struct"></div>
+        <div class="notes" id="notes"></div>
+        <div id="scan"></div>
+      </div>
+    </section>
+
+    <!-- RIGHT: scorecard -->
+    <section class="col" id="colScore">
+      <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="#8C8C8C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM8.5 12l2 2 4-4M8.5 17h7"/></svg>The five answers</div>
+      <div id="score"></div>
+    </section>
+  </main>
+
+  <div id="controls">
+    <button class="btn" id="backBtn" title="Back (←)"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg><span class="lbl">Back</span></button>
+    <button class="btn primary" id="nextBtn" title="Next (→ / Space)"><span class="lbl">Next</span><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+    <button class="btn" id="playBtn" title="Autoplay (A)"><svg viewBox="0 0 24 24" id="playIco"><path d="M7 5l12 7-12 7z"/></svg><span class="lbl" id="playLbl">Autoplay</span></button>
+    <button class="btn" id="speedBtn" title="Autoplay speed">1×</button>
+    <button class="btn" id="restartBtn" title="Restart (R)"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2"/><path d="M4 4v5h5"/></svg><span class="lbl">Restart</span></button>
+    <button class="btn" id="fsBtn" title="Fullscreen (F)"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    <div id="dots"></div>
+    <span id="stepInd"></span>
+  </div>
+  <footer>QCOR 2026 · synthetic patient · illustrative simulation</footer>
+
+  <div id="take">
+    <div class="big" id="takeBig"></div>
+    <div class="sm" id="takeSm"></div>
+    <div class="row2">
+      <button class="alt" id="takeAgain">Watch again</button>
+      <button class="alt" id="takeSwitch"></button>
+      <a href="03-race.html">Next demo: chatbot vs agent →</a>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+var RM = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+function $(id){return document.getElementById(id)}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+/* ---------- icons ---------- */
+var IC = {
+  note:'<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h5"/></svg>',
+  heart:'<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/><path d="M5 12h4l1.5-2.5 2 5 1.5-2.5H19"/></svg>',
+  list:'<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>',
+  pill:'<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8.5" width="18" height="7" rx="3.5" transform="rotate(-35 12 12)"/><path d="M9.2 8.2l5.6 7.6" /></svg>',
+  flask:'<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/><path d="M7.5 15h9"/></svg>',
+  steth:'<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v6a4 4 0 0 0 8 0V3"/><path d="M10 13v2a5 5 0 0 0 10 0v-2"/><circle cx="20" cy="11" r="2"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="#4ADE80" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" stroke-width="2"/><path d="M7.5 12.5l3 3 6-6.5"/></svg>',
+  cross:'<svg viewBox="0 0 24 24" fill="none" stroke="#FF4D4D" stroke-width="3" stroke-linecap="round"><circle cx="12" cy="12" r="10" stroke-width="2"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/></svg>',
+  book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M8 7h7"/></svg>',
+  loop:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4h-4"/></svg>'
+};
+
+/* ---------- the chart (verbatim from spec) ---------- */
+var STRUCT = [
+  {id:'meds', title:'Medication list', dt:'active', icon:'pill', lines:[
+    'lisinopril 10 mg daily',
+    'metoprolol tartrate 25 mg twice daily',
+    'furosemide 40 mg daily',
+    'spironolactone 25 mg daily, stopped 4/14/2026',
+    'No SGLT2 inhibitor']},
+  {id:'labs', title:'Labs & vitals', dt:'K = potassium', icon:'flask', lines:[
+    'K 5.9 mmol/L · 4/14/2026',
+    'K 4.6 mmol/L · 9/1/2026',
+    'eGFR 38 · 9/1/2026',
+    'Systolic BP 112 mmHg · 9/2/2026']}
+];
+var NOTES = [
+  {id:'dc', title:'Discharge summary', dt:'9/2/2026 · Hospital Medicine', icon:'note',
+   text:'71-year-old woman with HFrEF (EF 30% on TTE 8/29/2026), CKD stage 3, hypertension, admitted with acute on chronic systolic heart failure. Diuresed with IV furosemide, net -4.2 L. Discharge medications: lisinopril 10 mg daily; metoprolol tartrate 25 mg twice daily; furosemide 40 mg daily. Follow-up: cardiology clinic in 2 weeks, BMP in 1 week.'},
+  {id:'nurse', title:'Nursing note', dt:'8/31/2026 · Nursing', icon:'note',
+   text:'Patient ambulated 150 ft in hallway with walker, no shortness of breath at rest. Tolerating low-sodium diet. Daily weight 69.1 kg.'},
+  {id:'echo', title:'Echocardiogram report', dt:'8/29/2026 · Cardiology', icon:'heart',
+   text:"Left ventricle moderately dilated with global hypokinesis. LVEF 30% (biplane Simpson's). Moderate mitral regurgitation. RV systolic function mildly reduced."},
+  {id:'cardio', title:'Cardiology clinic', dt:'6/10/2026 · Cardiology', icon:'steth',
+   text:'HFrEF follow-up, NYHA class II. We discussed adding an SGLT2 inhibitor (empagliflozin). Patient declines: she had recurrent urinary tract infections on dapagliflozin in 2025 and is worried about cost. Will revisit at next visit. Continue lisinopril and metoprolol.'},
+  {id:'neph', title:'Nephrology clinic', dt:'4/14/2026 · Nephrology', icon:'note',
+   text:'CKD stage 3b, eGFR 38. Potassium 5.9 today. Spironolactone discontinued due to hyperkalemia; would not rechallenge given CKD. Low-potassium diet education provided. Repeat BMP in 1 week.'},
+  {id:'prob', title:'Problem list', dt:'last edited 3/2024', icon:'list',
+   text:'Heart failure with mildly reduced ejection fraction, HFmrEF (EF 45%). Hypertension. Chronic kidney disease stage 3.'}
+];
+var NOTE_IDS = NOTES.map(function(n){return n.id});
+var Q = {
+  echo:"LVEF 30% (biplane Simpson's).",
+  dc:'HFrEF (EF 30% on TTE 8/29/2026)',
+  prob:'HFmrEF (EF 45%)',
+  lis:'lisinopril 10 mg daily',
+  meto:'metoprolol tartrate 25 mg twice daily',
+  spiro:'spironolactone 25 mg daily, stopped 4/14/2026',
+  nosg:'No SGLT2 inhibitor',
+  bp:'Systolic BP 112 mmHg · 9/2/2026',
+  k:'K 4.6 mmol/L · 9/1/2026',
+  neph:'Spironolactone discontinued due to hyperkalemia; would not rechallenge given CKD.',
+  cardio:'Patient declines: she had recurrent urinary tract infections on dapagliflozin in 2025 and is worried about cost.',
+  dcmeds:'Discharge medications: lisinopril 10 mg daily; metoprolol tartrate 25 mg twice daily; furosemide 40 mg daily.'
+};
+
+var ROWS = [
+  {k:'hf', q:'Heart failure type'},
+  {k:'ras', q:'ACE inhibitor / ARB / ARNI'},
+  {k:'bb', q:'Beta blocker'},
+  {k:'mra', q:'MRA'},
+  {k:'sg', q:'SGLT2 inhibitor'}
+];
+
+var CALL = {
+  tool:{w:'Tool call', ic:'book', m:'The agent asking the record system for something, like you clicking a tab in the EHR. It cannot see the chart until it asks.'},
+  loop:{w:'Loop', ic:'loop', m:'It keeps going until the job is done, deciding its own next step. Nobody scripted the order: that last finding chose this one.'},
+  stop:{w:'Stopping', ic:'loop', m:'It knows when it is done: all five answered, each with a quote. So it stops, and hands the result to a clinician to check.'},
+  fixed:{w:'Fixed script', ic:'list', m:'A pipeline written in advance: the same 3 steps, in the same order, for every patient. It never changes course.'},
+  miss:{w:'What went wrong', ic:'list', m:'No step in the script asks "why was spironolactone stopped?" The nephrology note was never opened.'}
+};
+
+/* ---------- the traces ---------- */
+/* step fields: ph (intro|think|act|look|done|take), t (text), call, res, hits, lit[], q{card:[phrases]}, stale, score{k:{...}}, co (callout) */
+var AGENT = [
+  {ph:'intro'},
+  {ph:'think', turn:1, t:'I need her heart failure type. The most recent EF decides it.', score:{hf:{pending:1}}},
+  {ph:'act', turn:1, call:'search_notes("ejection fraction")', co:'tool'},
+  {ph:'look', turn:1, res:'3 hits: echo LVEF 30% (2026), discharge EF 30% (2026), problem list EF 45% (2024).', hits:3, lit:['echo','dc','prob'], q:{echo:[Q.echo],dc:[Q.dc],prob:[Q.prob]}, co:'tool'},
+  {ph:'think', turn:2, t:'The 45% is from 2024, copied forward. The echo is newest: 30%. So HFrEF. Next: what is she taking?', stale:'prob', lit:['echo','prob'],
+     score:{hf:{v:'HFrEF', c:'plain', qu:Q.echo, src:'Echo 8/29/2026'}}, co:'loop'},
+  {ph:'act', turn:2, call:'get_medications()', co:'loop'},
+  {ph:'look', turn:2, res:'Lisinopril, metoprolol tartrate, furosemide. Spironolactone stopped 4/14. No SGLT2 inhibitor.', lit:['meds'],
+     q:{meds:[Q.lis,Q.meto,Q.spiro,Q.nosg]},
+     score:{ras:{v:'on therapy', c:'plain', qu:Q.lis, src:'Medication list'}, bb:{pending:1}, mra:{pending:1}, sg:{pending:1}}},
+  {ph:'think', turn:3, t:'Metoprolol tartrate. My protocol says tartrate does not count. Possible gap. Is there a documented reason?', lit:['meds'],
+     score:{bb:{v:'possible gap?', c:'pending'}}},
+  {ph:'act', turn:3, call:'search_notes("carvedilol OR bisoprolol OR succinate OR asthma")'},
+  {ph:'look', turn:3, res:'0 hits. No note mentions a reason.', hits:0},
+  {ph:'think', turn:4, t:'Could low blood pressure or high potassium explain it? Check the labs.'},
+  {ph:'act', turn:4, call:'get_labs()'},
+  {ph:'look', turn:4, res:'Systolic BP 112. Potassium 4.6. Nothing in the way. Beta blocker: GAP.', lit:['labs'], q:{labs:[Q.bp,Q.k]},
+     score:{bb:{v:'GAP', c:'gap', qu:Q.meto, src:'Medication list · tartrate does not count; no documented reason'}}},
+  {ph:'think', turn:5, t:'Spironolactone was stopped. Why?'},
+  {ph:'act', turn:5, call:'search_notes("spironolactone")'},
+  {ph:'look', turn:5, res:'1 hit: nephrology clinic, 4/14/2026.', hits:1, hitTag:['neph']},
+  {ph:'think', turn:6, t:'Open the nephrology note and read the reason.', hitTag:['neph']},
+  {ph:'act', turn:6, call:'read_note("nephrology 4/14/2026")'},
+  {ph:'look', turn:6, res:'"Spironolactone discontinued due to hyperkalemia." MRA: medical exception.', lit:['neph'], q:{neph:[Q.neph]},
+     score:{mra:{v:'medical exception', c:'doc', qu:Q.neph, src:'Nephrology 4/14/2026'}}},
+  {ph:'think', turn:7, t:'No SGLT2 inhibitor. Was it ever discussed?'},
+  {ph:'act', turn:7, call:'search_notes("SGLT2 OR empagliflozin OR dapagliflozin")'},
+  {ph:'look', turn:7, res:'1 hit: cardiology clinic, 6/10/2026.', hits:1, hitTag:['cardio']},
+  {ph:'think', turn:8, t:'Read the cardiology note.', hitTag:['cardio']},
+  {ph:'act', turn:8, call:'read_note("cardiology 6/10/2026")'},
+  {ph:'look', turn:8, res:'"Patient declines…" SGLT2 inhibitor: patient preference.', lit:['cardio'], q:{cardio:[Q.cardio]},
+     score:{sg:{v:'patient preference', c:'doc', qu:Q.cardio, src:'Cardiology 6/10/2026'}}},
+  {ph:'think', turn:9, t:'All five answered, each with a quote. Nothing left to check. Stop.'},
+  {ph:'done', turn:9, co:'stop', verdict:1},
+  {ph:'take'}
+];
+
+var FIXED = [
+  {ph:'intro'},
+  {ph:'step', n:1, call:'search_notes("ejection fraction")', res:'3 hits. Script takes the newest: 30%. HFrEF.', hits:3, lit:['echo','dc','prob'], q:{echo:[Q.echo],dc:[Q.dc],prob:[Q.prob]},
+     score:{hf:{v:'HFrEF', c:'plain', qu:Q.echo, src:'Echo 8/29/2026'}}, co:'fixed'},
+  {ph:'step', n:2, call:'get_medications()', res:'Lisinopril: on. Metoprolol tartrate: rule says GAP. No active MRA or SGLT2 inhibitor.', lit:['meds'], q:{meds:[Q.lis,Q.meto,Q.spiro,Q.nosg]},
+     score:{ras:{v:'on therapy', c:'plain', qu:Q.lis, src:'Medication list'}, bb:{v:'GAP', c:'gap', qu:Q.meto, src:'Medication list'}, mra:{pending:1}, sg:{pending:1}}, co:'fixed'},
+  {ph:'step', n:3, call:'read_note(most recent note)', res:'Discharge summary. No reason for stopping spironolactone, no SGLT2 discussion.', lit:['dc'], q:{dc:[Q.dcmeds]}},
+  {ph:'end', n:4, res:'Script ends. Anything not on the med list is a "GAP".',
+     score:{mra:{v:'GAP', c:'gap', qu:Q.spiro, src:'Medication list · reason never looked for'}, sg:{v:'GAP', c:'gap', qu:Q.nosg, src:'Medication list · reason never looked for'}}, never:['neph','cardio'], verdict:1, co:'miss'},
+  {ph:'take'}
+];
+var GOLD = {hf:'HFrEF', ras:'on therapy', bb:'GAP', mra:'medical exception', sg:'patient preference'};
+
+/* ---------- state ---------- */
+var mode = 'agent', idx = 0, playing = false, timer = null, speeds = [0.5,1,2], speedI = 1;
+function trace(){ return mode === 'agent' ? AGENT : FIXED; }
+
+function compute(i){
+  var T = trace(), s = {score:{}, cards:{}, calls:0, docs:{}, never:[]};
+  for (var j=0;j<=i;j++){
+    var st = T[j];
+    if (st.call) s.calls++;
+    if (st.q) for (var c in st.q){ s.cards[c] = s.cards[c] || {q:[]}; st.q[c].forEach(function(p){ if (s.cards[c].q.indexOf(p)<0) s.cards[c].q.push(p); }); if (NOTE_IDS.indexOf(c)>=0) s.docs[c]=1; }
+    if (st.stale){ s.cards[st.stale] = s.cards[st.stale] || {q:[]}; s.cards[st.stale].stale = 1; }
+    if (st.score) for (var k in st.score){ s.score[k] = st.score[k]; }
+    if (st.never) s.never = st.never;
+    if (st.verdict) s.verdict = 1;
+  }
+  s.step = T[i];
+  return s;
+}
+
+/* ---------- static builds ---------- */
+function buildCards(){
+  $('struct').innerHTML = STRUCT.map(function(c){
+    return '<div class="card" id="c-'+c.id+'"><div class="hd">'+IC[c.icon]+'<span>'+c.title+'</span>'+(c.dt?'<span class="dt">'+c.dt+'</span>':'')+'<span class="tag" style="display:none"></span></div><div class="bd"></div></div>';
+  }).join('');
+  $('notes').innerHTML = NOTES.map(function(c){
+    return '<div class="card" id="c-'+c.id+'"><div class="hd">'+IC[c.icon]+'<span>'+c.title+'</span><span class="dt">'+c.dt+'</span><span class="tag" style="display:none"></span></div><div class="bd"></div><div class="qt"></div></div>';
+  }).join('');
+}
+function hl(text, phrases, staleP){
+  var out = esc(text);
+  (phrases||[]).forEach(function(p){
+    var e = esc(p), cls = (staleP && p===staleP) ? ' class="stale"' : '';
+    out = out.split(e).join('<mark'+cls+'>'+e+'</mark>');
+  });
+  return out;
+}
+function buildScore(){
+  $('score').innerHTML = ROWS.map(function(r){
+    return '<div class="row" id="r-'+r.k+'"><div class="top"><span class="q">'+r.q+'</span><span class="chip">—</span><span class="verdict"></span></div><div class="qu none">not yet answered</div><div class="fix" style="display:none"></div></div>';
+  }).join('') + '<div id="legend"><span class="chip c-gap">GAP</span> not on it, no documented reason<br><span class="chip c-doc">reason</span> not on it, but a note explains why<br><span class="lg-ok">'+IC.check+'</span> matches two clinicians\' review</div><div id="stats"><div class="s"><div class="n cy" id="sCalls">0</div><div class="k">tool calls</div></div><div class="s"><div class="n am" id="sDocs">0</div><div class="k">notes quoted</div></div><div class="s"><div class="n" id="sScore">–</div><div class="k">match clinician review</div></div></div>';
+}
+function buildRing(){
+  // small arrowheads on the ring between nodes (clockwise)
+  var g = '', cx=250, cy=206, R=160;
+  [-30, 90, 210].forEach(function(a){
+    var r = a*Math.PI/180, x = cx+R*Math.cos(r), y = cy+R*Math.sin(r), rot = a+90;
+    g += '<path transform="translate('+x.toFixed(1)+' '+y.toFixed(1)+') rotate('+rot+')" d="M-7 -6 L7 0 L-7 6 z"/>';
+  });
+  $('ringArrows').innerHTML = g;
+  var t=''; for (var i=0;i<7;i++) t += '<circle r="'+(11-i*1.3)+'" fill="#22D3EE" opacity="'+(0.32-i*0.04)+'"/>';
+  $('trail').innerHTML = t;
+}
+var PIPE = [
+  {y:28, t:'1  search_notes("ejection fraction")'},
+  {y:118, t:'2  get_medications()'},
+  {y:208, t:'3  read_note(most recent note)'},
+  {y:298, t:'END  fill in the five answers'}
+];
+function buildPipe(){
+  var g = '';
+  PIPE.forEach(function(p,i){
+    if (i<PIPE.length-1) g += '<path d="M250 '+(p.y+56)+' V'+(PIPE[i+1].y-4)+'" stroke="#555" stroke-width="2.5"/><path d="M243 '+(PIPE[i+1].y-12)+' L250 '+(PIPE[i+1].y-2)+' L257 '+(PIPE[i+1].y-12)+'" fill="none" stroke="#555" stroke-width="2.5" stroke-linecap="round"/>';
+    g += '<g class="pbox" id="pb'+i+'" opacity=".45"><rect x="40" y="'+p.y+'" width="420" height="56" rx="10" fill="#0c0f14" stroke="#fff" stroke-width="2"/>'+
+         '<text x="250" y="'+(p.y+35)+'" fill="#fff" font-family="SF Mono,ui-monospace,Menlo,Consolas,DejaVu Sans Mono,monospace" font-size="17" text-anchor="middle">'+esc(p.t)+'</text></g>';
+  });
+  g += '<text x="250" y="384" fill="#8C8C8C" font-size="15" text-anchor="middle">same steps, same order, every patient</text>';
+  $('pipe').innerHTML = g;
+}
+
+/* ---------- loop pulse animation ---------- */
+var ANG = {think:-90, act:30, look:150};
+var curA = -90, animId = null;
+function pos(a){ var r=a*Math.PI/180; return [250+160*Math.cos(r), 206+160*Math.sin(r)]; }
+function placeTrail(a, spread){
+  var p = pos(a); $('pulse').setAttribute('cx',p[0]); $('pulse').setAttribute('cy',p[1]);
+  var cs = $('trail').children;
+  for (var i=0;i<cs.length;i++){ var q = pos(a - (i+1)*spread); cs[i].setAttribute('cx',q[0]); cs[i].setAttribute('cy',q[1]); }
+}
+function movePulse(ph, animate){
+  if (!(ph in ANG)) return;
+  var target = ANG[ph];
+  while (target < curA - 0.01) target += 360;
+  if (animId) cancelAnimationFrame(animId);
+  if (!animate || RM || target === curA){ curA = target; placeTrail(curA, 0); return; }
+  var from = curA, dur = 750, t0 = null;
+  function f(ts){
+    if (!t0) t0 = ts;
+    var k = Math.min(1,(ts-t0)/dur), e = k<.5 ? 2*k*k : 1-Math.pow(-2*k+2,2)/2;
+    var a = from + (target-from)*e;
+    placeTrail(a, 4.2*Math.sin(Math.PI*k));
+    if (k<1) animId = requestAnimationFrame(f); else { curA = target; animId=null; placeTrail(curA,0); }
+  }
+  animId = requestAnimationFrame(f);
+}
+function movePipe(n, animate){
+  var el = $('ppulse');
+  if (!n){ el.setAttribute('opacity',0); return; }
+  var y = PIPE[n-1].y + 28, x = 40;
+  el.setAttribute('opacity',1);
+  el.style.transition = (animate && !RM) ? 'cy .6s ease, cx .6s ease' : 'none';
+  el.setAttribute('cx', x); el.setAttribute('cy', y);
+}
+
+/* ---------- typing ---------- */
+var typeTimer = null;
+function typeInto(el, full, cps){
+  if (typeTimer) clearInterval(typeTimer);
+  if (RM || !cps){ el.innerHTML = full; return; }
+  var plain = full, i = 0; el.textContent = '';
+  var step = Math.max(1, Math.round(cps/60));
+  typeTimer = setInterval(function(){
+    i += step; el.textContent = plain.slice(0,i);
+    if (i >= plain.length){ clearInterval(typeTimer); typeTimer = null; el.textContent = plain; }
+  }, 1000/60);
+}
+
+/* ---------- render ---------- */
+function render(animate){
+  var T = trace(), s = compute(idx), st = s.step;
+  document.body.classList.toggle('fixed', mode==='fixed');
+  document.body.classList.toggle('done', mode==='agent' && (st.ph==='done'||st.ph==='take'));
+
+  // loop nodes
+  ['think','act','look'].forEach(function(p){
+    $('n'+p[0].toUpperCase()+p.slice(1)).classList.toggle('on', st.ph===p);
+  });
+  var turn = st.turn || 0;
+  $('centerNum').textContent = turn;
+  $('pulse').style.opacity = (st.ph==='done'||st.ph==='take') ? 0 : (st.ph==='intro' ? .35 : 1);
+  $('trail').style.opacity = $('pulse').style.opacity;
+  if (st.ph==='intro'){ movePulse('think', false); curA = -90; placeTrail(-90,0); }
+  else movePulse(st.ph, animate);
+
+  // pipeline
+  for (var b=0;b<PIPE.length;b++){
+    var on = st.n ? (b === st.n-1) : false, past = st.n ? b < st.n-1 : false;
+    $('pb'+b).setAttribute('opacity', on ? 1 : past ? .7 : .4);
+    $('pb'+b).firstChild.setAttribute('filter', on ? 'url(#glowW)' : '');
+  }
+  movePipe(st.n || (st.ph==='take'?4:0), animate);
+
+  // narration
+  var narr = $('narr'), html = '', typeTarget = null, typeText = '';
+  if (st.ph==='intro'){
+    html = mode==='agent'
+      ? '<div class="intro">The job: for each heart-failure drug class, is <b>Mrs. Delgado</b> on it, is there a documented reason she isn\'t, or is it a real gap?<span class="hint">The agent starts with no plan beyond its protocol. Press Next to watch each step.</span></div>'
+      : '<div class="intro">Same job, but done by a <b style="color:#fff">fixed script</b>: a programmer wrote the steps in advance.<span class="hint">Press Next to run it on Mrs. Delgado.</span></div>';
+  } else if (mode==='agent'){
+    var lines = [];
+    for (var j=1;j<=idx;j++) if (T[j].turn===turn && T[j].ph!=='take') lines.push(T[j]);
+    lines.forEach(function(L,li){
+      var cur = (li===lines.length-1), id = cur ? ' id="typeMe"' : '', txt;
+      if (L.ph==='think'){ txt = '<span class="ltext think-t"'+id+'>'+esc(L.t)+'</span>'; if(cur){typeText=L.t;} }
+      else if (L.ph==='act'){ txt = '<span class="ltext code"'+id+'>'+esc(L.call)+'</span>'; if(cur){typeText=L.call;} }
+      else if (L.ph==='look'){ txt = '<span class="ltext res"'+id+'>'+esc(L.res)+'</span>'; if(cur){typeText=L.res;} }
+      else { txt = '<span class="ltext" style="color:#4ADE80">Agent stops after '+s.calls+' tool calls. Ready for clinician review.</span>'; }
+      var bc = {think:'b-think',act:'b-act',look:'b-look',done:'b-done'}[L.ph];
+      html += '<div class="line'+(cur?' cur':'')+'"><span class="badge '+bc+'">'+L.ph.toUpperCase()+'</span>'+txt+'</div>';
+    });
+    if (st.ph==='take') html = '<div class="line cur"><span class="badge b-done">DONE</span><span class="ltext" style="color:#4ADE80">Agent stopped after '+s.calls+' tool calls.</span></div>';
+  } else {
+    if (st.ph==='take' || st.ph==='end'){
+      html = '<div class="line cur"><span class="badge b-step">END</span><span class="ltext res" id="typeMe">'+esc(FIXED[4].res)+'</span></div>';
+      typeText = st.ph==='end' ? FIXED[4].res : '';
+    } else {
+      var L2 = st;
+      html = '<div class="line cur"><span class="badge b-step">STEP '+L2.n+'</span><span class="ltext code">'+esc(L2.call)+'</span></div>'+
+             '<div class="line cur"><span class="badge b-look">RESULT</span><span class="ltext res" id="typeMe">'+esc(L2.res)+'</span></div>';
+      typeText = L2.res;
+    }
+  }
+  narr.innerHTML = html;
+  var tm = $('typeMe');
+  if (tm && typeText && animate){ typeInto(tm, typeText, (st.ph==='act'||st.ph==='step') ? 70*speeds[speedI] : 55*speeds[speedI]); }
+  else if (typeTimer){ clearInterval(typeTimer); typeTimer=null; }
+
+  // callout
+  var co = $('callout');
+  if (st.co){ var C = CALL[st.co]; co.querySelector('.w').innerHTML = IC[C.ic]+esc(C.w); co.querySelector('.m').textContent = C.m; co.classList.add('show'); }
+  else co.classList.remove('show');
+
+  // query strip
+  var qEl = $('query'), call = st.call || (st.ph==='look' && T[idx-1] && T[idx-1].call) || '';
+  var shownCall = st.ph==='look' ? T[idx-1].call : (st.ph==='act'||st.ph==='step') ? st.call : '';
+  $('qtext').textContent = shownCall ? shownCall : (st.ph==='intro' ? 'waiting for the agent…' : (st.ph==='done'||st.ph==='take'||st.ph==='end') ? 'no more tool calls' : 'thinking…');
+  qEl.classList.toggle('on', !!shownCall);
+  var hits = (st.ph==='look'||st.ph==='step') && ('hits' in st) ? st.hits : null;
+  if (mode==='agent' && st.ph==='act') hits = null;
+  $('qhits').textContent = hits===null ? '' : (hits+' hit'+(hits===1?'':'s'));
+  $('qhits').className = 'hits' + (hits===0 ? ' zero' : '');
+  if (animate && (st.ph==='act'||st.ph==='step')){ var sc=$('scan'); sc.classList.remove('go'); void sc.offsetWidth; sc.classList.add('go'); }
+
+  // cards
+  var lit = st.lit || [], hitTag = st.hitTag || [];
+  STRUCT.concat(NOTES).forEach(function(c){
+    var el = $('c-'+c.id), cs = s.cards[c.id] || {q:[]}, isLit = lit.indexOf(c.id)>=0;
+    var staleP = cs.stale ? Q.prob : null;
+    el.classList.toggle('lit', isLit);
+    el.classList.toggle('hasq', cs.q.length>0);
+    el.classList.toggle('never', s.never.indexOf(c.id)>=0);
+    var anyLit = lit.length>0;
+    el.classList.toggle('dimmed', anyLit && !isLit && hitTag.indexOf(c.id)<0);
+    var bd = el.querySelector('.bd');
+    if (c.lines) bd.innerHTML = c.lines.map(function(l){ return hl(l, cs.q); }).join('<br>');
+    else bd.innerHTML = hl(c.text, cs.q, staleP);
+    var qt = el.querySelector('.qt');
+    if (qt) qt.innerHTML = cs.q.map(function(p){ return '<mark'+(staleP===p?' class="stale"':'')+'>'+esc(p)+'</mark>'; }).join(' ');
+    var tag = el.querySelector('.tag'), tg = '';
+    if (s.never.indexOf(c.id)>=0) tg = ['never','never opened'];
+    else if (cs.stale) tg = ['stale','stale · 2024'];
+    else if (hitTag.indexOf(c.id)>=0) tg = ['hit','search hit'];
+    else if (isLit && st.ph==='look' && T[idx-1].call.indexOf('read_note')===0) tg = ['hit','reading'];
+    else if (cs.q.length && NOTE_IDS.indexOf(c.id)>=0) tg = ['read','quoted'];
+    if (tg){ tag.style.display=''; tag.className='tag '+tg[0]; tag.textContent=tg[1]; } else tag.style.display='none';
+  });
+
+  // scorecard
+  var correct = 0, answered = 0;
+  ROWS.forEach(function(r){
+    var el = $('r-'+r.k), a = s.score[r.k], chip = el.querySelector('.chip'), qu = el.querySelector('.qu'), vd = el.querySelector('.verdict'), fx = el.querySelector('.fix');
+    var fresh = st.score && st.score[r.k] && !st.score[r.k].pending;
+    el.classList.toggle('fresh', !!fresh);
+    fx.style.display='none';
+    if (!a){ chip.className='chip'; chip.textContent='—'; qu.className='qu none'; qu.textContent='not yet answered'; vd.className='verdict'; vd.innerHTML=''; return; }
+    if (a.pending){ chip.className='chip c-pending'; chip.textContent='checking…'; qu.className='qu none'; qu.textContent='looking for evidence'; vd.className='verdict'; return; }
+    chip.className='chip c-'+a.c; chip.textContent=a.v;
+    if (a.qu){ qu.className='qu'; qu.innerHTML='“'+esc(a.qu)+'”<span class="src">'+esc(a.src||'')+'</span>'; }
+    else { qu.className='qu none'; qu.textContent = a.src || ''; }
+    if (a.c!=='pending') answered++;
+    var ok = a.v===GOLD[r.k];
+    if (ok) correct++;
+    if (s.verdict){
+      vd.className='verdict show'; vd.innerHTML = ok ? IC.check : IC.cross;
+      if (!ok){ chip.className='chip c-wrong'; fx.style.display=''; fx.textContent='Clinicians: '+GOLD[r.k]; }
+    } else { vd.className='verdict'; vd.innerHTML=''; }
+  });
+  $('sCalls').textContent = s.calls;
+  $('sDocs').textContent = Object.keys(s.docs).length;
+  var sEl = $('sScore');
+  if (s.verdict){ sEl.textContent = correct+'/5'; sEl.className = 'n ' + (correct===5?'gr':'rd'); }
+  else { sEl.textContent = '–'; sEl.className='n'; }
+
+  // takeaway
+  var tk = $('take');
+  if (st.ph==='take'){
+    if (mode==='agent'){
+      $('takeBig').innerHTML = 'It <em>decides its next step</em><br>from what it just found.';
+      $('takeSm').textContent = 'Stopped spironolactone → go find out why. No SGLT2 inhibitor → was it discussed? Nobody wrote those steps in advance. A clinician still checks the answers.';
+      $('takeSwitch').textContent = 'Now try: fixed script';
+    } else {
+      $('takeBig').innerHTML = 'A script follows its steps.<br>An agent <em>follows the evidence</em>.';
+      $('takeSm').textContent = 'The fixed script scored 3/5 here (illustrative): it never asked why spironolactone was stopped or whether an SGLT2 inhibitor was declined.';
+      $('takeSwitch').textContent = 'Now try: agent';
+    }
+    tk.classList.add('show');
+  } else tk.classList.remove('show');
+
+  // controls
+  var dots = $('dots');
+  if (dots.children.length !== T.length){ dots.innerHTML = T.map(function(){return '<i></i>';}).join(''); }
+  for (var d=0; d<T.length; d++) dots.children[d].className = d<idx ? 'past' : d===idx ? 'cur' : '';
+  $('stepInd').textContent = 'step '+(idx+1)+' / '+T.length;
+  $('backBtn').disabled = idx===0;
+}
+
+/* ---------- navigation ---------- */
+function go(i, animate){
+  var T = trace();
+  idx = Math.max(0, Math.min(T.length-1, i));
+  render(animate);
+}
+function next(){ if (idx < trace().length-1) go(idx+1, true); else stopPlay(); }
+function back(){ stopPlay(); go(idx-1, false); }
+function restart(){ stopPlay(); curA=-90; go(0,false); }
+function setMode(m){
+  stopPlay(); mode = m;
+  document.querySelectorAll('.toggle button').forEach(function(b){ b.classList.toggle('on', b.dataset.mode===m); });
+  $('dots').innerHTML=''; curA=-90; go(0,false);
+}
+function delayFor(st){
+  var base = {intro:1600, think:2300, act:1700, look:2600, done:2600, step:3200, end:3200}[st.ph] || 2200;
+  return base / speeds[speedI];
+}
+function tick(){
+  if (!playing) return;
+  if (idx >= trace().length-1){ stopPlay(); return; }
+  next();
+  timer = setTimeout(tick, delayFor(trace()[idx]));
+}
+function startPlay(){
+  if (idx >= trace().length-1) go(0,false);
+  playing = true; updPlay(); timer = setTimeout(tick, idx===0 ? 300 : 600);
+}
+function stopPlay(){ playing = false; clearTimeout(timer); updPlay(); }
+function updPlay(){
+  $('playBtn').classList.toggle('on', playing);
+  $('playIco').innerHTML = playing ? '<path d="M8 5v14M16 5v14"/>' : '<path d="M7 5l12 7-12 7z"/>';
+  $('playLbl').textContent = playing ? 'Pause' : 'Autoplay';
+}
+function fullscreen(){
+  var d = document.documentElement;
+  if (!document.fullscreenElement){ if (d.requestFullscreen) d.requestFullscreen().catch(function(){}); }
+  else if (document.exitFullscreen) document.exitFullscreen();
+}
+
+$('nextBtn').addEventListener('click', function(){ stopPlay(); next(); });
+$('backBtn').addEventListener('click', back);
+$('restartBtn').addEventListener('click', restart);
+$('fsBtn').addEventListener('click', fullscreen);
+$('playBtn').addEventListener('click', function(){ playing ? stopPlay() : startPlay(); });
+$('speedBtn').addEventListener('click', function(){ speedI = (speedI+1)%speeds.length; $('speedBtn').textContent = speeds[speedI]+'×'; });
+document.querySelectorAll('.toggle button').forEach(function(b){ b.addEventListener('click', function(){ if (mode!==b.dataset.mode) setMode(b.dataset.mode); }); });
+$('takeAgain').addEventListener('click', restart);
+$('takeSwitch').addEventListener('click', function(){ setMode(mode==='agent'?'fixed':'agent'); });
+document.addEventListener('keydown', function(e){
+  if (e.metaKey||e.ctrlKey||e.altKey) return;
+  var k = e.key;
+  if (k==='ArrowRight'||k===' '||k==='PageDown'){ e.preventDefault(); stopPlay(); next(); }
+  else if (k==='ArrowLeft'||k==='PageUp'){ e.preventDefault(); back(); }
+  else if (k==='r'||k==='R') restart();
+  else if (k==='f'||k==='F') fullscreen();
+  else if (k==='a'||k==='A'){ playing ? stopPlay() : startPlay(); }
+});
+
+/* ---------- layout: scaled stage or fluid ---------- */
+function layout(){
+  var w = window.innerWidth, h = window.innerHeight;
+  var fluid = w < 900 || (h > w && w < 1100);
+  document.body.classList.toggle('fluid', fluid);
+  var st = $('stage');
+  if (fluid){ st.style.transform=''; return; }
+  var s = Math.min(w/1600, h/900);
+  st.style.transform = 'translate('+((w-1600*s)/2)+'px,'+((h-900*s)/2)+'px) scale('+s+')';
+}
+window.addEventListener('resize', layout);
+
+buildCards(); buildScore(); buildRing(); buildPipe(); layout(); go(0,false);
+})();
+</script>
+</body>
+</html>

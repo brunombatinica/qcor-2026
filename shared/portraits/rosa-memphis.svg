@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Rosa, corporate Memphis style">
+  <path d="M30 60 C40 18 120 6 160 38 C196 66 188 150 150 174 C108 200 34 186 22 140 C14 110 24 84 30 60 Z" fill="#ffd9a8"/>
+  <circle cx="160" cy="40" r="7" fill="#ff6b6b"/><path d="M28 158 l10 -16 l10 16 z" fill="#6ea8fe"/>
+  <path d="M150 150 q8 -8 16 0 t16 0" fill="none" stroke="#1d1d1f" stroke-width="3" stroke-linecap="round"/>
+  <path d="M46 200 C50 150 70 124 104 124 C138 124 156 150 160 200 Z" fill="#ff7a59"/>
+  <rect x="94" y="78" width="16" height="52" rx="8" fill="#7b61ff"/>
+  <ellipse cx="102" cy="70" rx="19" ry="23" fill="#7b61ff"/>
+  <path d="M80 66 C74 34 128 26 128 62 C124 50 112 44 100 46 C90 48 84 56 80 66 Z" fill="#f4f1ea"/>
+  <circle cx="106" cy="30" r="11" fill="#f4f1ea"/>
+  <path d="M96 82 q6 5 12 0" fill="none" stroke="#1d1d1f" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M66 200 C70 168 80 150 92 146" fill="none" stroke="#e8603f" stroke-width="5" stroke-linecap="round"/>
+</svg>

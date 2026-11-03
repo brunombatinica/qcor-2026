@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<!--
+  QCOR 2026 · Demo 01 · From autocomplete to agent
+  The one idea: a language model only guesses the next word. Teach it one special kind of
+  "next word" (a request that software carries out), put it in a loop, and it becomes an agent.
+  Steps: 1 next word · 2 it has read a library · 3 confident and wrong · 4 the request ·
+         5 the loop · 6 takeaway
+  Controls: Right arrow / Space / Next = advance · Left arrow = back · R = restart · F = fullscreen.
+            Step 1: click a candidate word to choose it. Step 5: toggle "Let it use tools".
+  Patient and notes are synthetic. No PHI. Everything is scripted; no model is called.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>01 · From autocomplete to agent · QCOR 2026</title>
+<style>
+:root{--bg:#05070a;--fg:#F2F2F2;--dim:#8C8C8C;--line:#2a2a2a;--amber:#FFB020;--cyan:#22D3EE;--green:#4ADE80;--pink:#FF4FA3;--red:#FF4D4D;
+--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,"Helvetica Neue",Arial,sans-serif;
+--mono:"SF Mono",ui-monospace,Menlo,Consolas,"DejaVu Sans Mono",monospace;--t:1}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#000;color:var(--fg);font-family:var(--sans);overflow:hidden;-webkit-tap-highlight-color:transparent}
+#wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+#stage{position:relative;width:1600px;height:900px;flex:none;background:radial-gradient(1200px 700px at 70% 40%,#0a1016 0%,var(--bg) 60%);overflow:hidden;transform-origin:center center}
+body.portrait #stage{width:820px;height:1720px}
+svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.14em;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+/* chrome */
+#home{position:absolute;left:28px;top:22px;color:var(--dim);font-size:17px;text-decoration:none;display:flex;gap:8px;align-items:center;z-index:5}
+#home:hover{color:var(--fg)}
+#ttl{position:absolute;left:50%;top:22px;transform:translateX(-50%);color:#5d5d5d;font-size:15px;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}
+#dots{position:absolute;right:32px;top:24px;display:flex;gap:10px;align-items:center;z-index:5}
+#dots i{width:10px;height:10px;border-radius:50%;background:#333;transition:all .3s;cursor:pointer}
+#dots i.on{background:var(--cyan);width:28px;border-radius:6px}
+#dots i.done{background:#5a5a5a}
+#foot{position:absolute;left:64px;bottom:28px;color:#5a5a5a;font-size:14px;letter-spacing:.04em}
+#ctrl{position:absolute;right:40px;bottom:18px;display:flex;gap:10px;align-items:center;z-index:6}
+#ctrl button{height:48px;min-width:48px;padding:0 16px;border:1px solid #333;border-radius:24px;color:#cfcfcf;display:flex;align-items:center;gap:8px;font-size:18px;background:#0b0f14}
+#ctrl button:hover{border-color:#666;color:#fff}
+#ctrl #nextB{background:var(--fg);color:#000;border-color:var(--fg);font-weight:600;padding:0 22px}
+#ctrl #nextB:hover{background:#fff}
+#ctrl #stepN{color:var(--dim);font-size:16px;margin-right:6px;font-variant-numeric:tabular-nums}
+body.portrait #foot{left:40px;bottom:30px;font-size:17px}
+body.portrait #ctrl{right:40px;bottom:72px}
+body.portrait #ctrl button{height:64px;min-width:64px;font-size:22px;border-radius:32px}
+body.portrait #ttl{display:none}
+body.portrait #home{font-size:20px}
+
+/* headline */
+#headline{position:absolute;left:64px;top:74px;width:1472px}
+#headline h1{margin:0;font-size:52px;line-height:1.1;font-weight:700;letter-spacing:-.01em}
+#headline h1 em{font-style:normal;color:var(--cyan)}
+#headline h1 .r{color:var(--red)} #headline h1 .a{color:var(--amber)}
+#headline p{margin:12px 0 0;font-size:24px;color:var(--dim);line-height:1.35}
+#headline.swap{animation:hin calc(.6s*var(--t)) ease both}
+@keyframes hin{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+body.portrait #headline{left:40px;top:80px;width:740px}
+body.portrait #headline h1{font-size:46px}
+body.portrait #headline p{font-size:25px}
+
+/* blocks */
+.blk{position:absolute;opacity:0;pointer-events:none;transition:opacity calc(.5s*var(--t)),top calc(.6s*var(--t)) ease,height calc(.6s*var(--t)) ease}
+.blk.on{opacity:1;pointer-events:auto}
+.panel{border:1px solid var(--line);border-radius:18px;background:rgba(12,16,22,.78);padding:20px 26px}
+.ph{font-size:14px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.ph svg{font-size:20px}
+.ph .rt{margin-left:auto;letter-spacing:.06em;text-transform:none;font-size:15px;color:#666}
+
+#read{left:64px;top:248px;width:880px;height:464px}
+#model{left:984px;top:248px;width:552px;height:464px;border-color:#123a44}
+#model .ph{color:var(--cyan)}
+#ehr{left:984px;top:572px;width:552px;height:140px;border-color:#5a1d3d;background:rgba(40,8,24,.55)}
+#stage[data-step="3"] #model{height:300px}
+body.portrait #read{left:40px;top:330px;width:740px;height:570px}
+body.portrait #model{left:40px;top:925px;width:740px;height:420px}
+body.portrait #ehr{left:40px;top:1254px;width:740px;height:110px}
+body.portrait #stage[data-step="3"] #model{height:312px}
+
+/* reading context */
+#ctx{font-family:var(--mono);font-size:36px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+#ctx.small{font-size:26px;line-height:1.5}
+body.portrait #ctx{font-size:34px}
+body.portrait #ctx.small{font-size:26px}
+.tok{border-bottom:2px solid #333;transition:color .4s,background .4s,border-color .4s;border-radius:2px}
+.tok.new{animation:tnew calc(.7s*var(--t)) ease}
+@keyframes tnew{0%{color:var(--cyan);background:rgba(34,211,238,.25)}100%{}}
+.tok.ok{color:var(--green)}
+.tok.bad{color:var(--red);background:rgba(255,77,77,.12);border-color:var(--red);text-decoration:line-through;text-decoration-thickness:2px}
+.tok.luck{color:#d9b56a}
+.caret{display:inline-block;width:3px;height:1.05em;background:var(--cyan);vertical-align:-.15em;margin-left:2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.q{font-family:var(--sans);font-size:28px;color:var(--fg);line-height:1.3;margin-bottom:14px;white-space:normal}
+.q b{color:var(--dim);font-weight:600;margin-right:8px}
+.alab{color:var(--dim);font-family:var(--sans);font-weight:600;font-size:26px}
+.req{display:inline-block;color:#00161a;background:var(--cyan);border-radius:8px;padding:0 10px;font-size:.84em;box-shadow:0 0 24px rgba(34,211,238,.5);line-height:1.5;border:0;text-decoration:none}
+.req.sent{background:transparent;color:var(--cyan);border:1.5px dashed var(--cyan);box-shadow:none}
+.noteC{display:block;margin:12px 0;border:1.5px solid var(--amber);background:rgba(255,176,32,.08);border-radius:12px;padding:10px 16px;font-family:var(--sans);font-size:20px;line-height:1.4;color:#ffd58a;white-space:normal;opacity:0;transition:opacity .4s}
+.noteC.on{opacity:1}
+.noteC .nh{display:flex;align-items:center;gap:8px;color:var(--amber);font-size:14px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px}
+.noteC .nh .tag{margin-left:auto;color:#a07a35;letter-spacing:.04em;text-transform:none}
+#tokhint{position:absolute;left:26px;right:26px;bottom:18px;font-size:18px;color:var(--dim);opacity:0;transition:opacity .5s}
+#tokhint.on{opacity:1}
+#tokhint span{border-bottom:2px solid #555;font-family:var(--mono);color:var(--fg)}
+
+/* bars */
+#bars{display:flex;flex-direction:column;gap:12px}
+.row{display:block;width:100%;text-align:left;padding:8px 12px;border-radius:12px;border:1px solid transparent;transition:background .3s,opacity .3s,border-color .3s}
+.row[disabled]{cursor:default}
+.row:not([disabled]):hover{background:#121a22;border-color:#2b3b46}
+.row .lab{display:flex;align-items:baseline;gap:12px;font-family:var(--mono);font-size:26px;line-height:1.2;margin-bottom:6px}
+.row .tk{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .pct{margin-left:auto;color:var(--dim);font-size:20px;font-variant-numeric:tabular-nums}
+.row .trk{height:12px;border-radius:6px;background:#1a1f26;overflow:hidden}
+.row .fill{height:100%;width:0;border-radius:6px;background:#9aa3ab;transition:width calc(.45s*var(--t)) cubic-bezier(.2,.8,.2,1),background .3s}
+.row:first-child .fill{background:#d9dde1}
+.row.req .tk{color:var(--cyan)} .row.req .fill{background:var(--cyan)!important;box-shadow:0 0 12px var(--cyan)}
+.row.req .tk{font-size:21px}
+.row.pick{background:#0f1c22;border-color:var(--cyan)}
+.row.pick .fill{background:var(--cyan)}
+.row.dimr{opacity:.35}
+#bars.ok .row:first-child .fill{background:var(--green)}
+#mhint{position:absolute;left:22px;right:22px;bottom:18px;display:flex;gap:12px;align-items:center;font-size:17px;color:var(--dim);opacity:0;transition:opacity .4s}
+#mhint.on{opacity:1}
+#mhint .sp{flex:1}
+#mhint button{white-space:nowrap;flex:none;border:1px solid #2c4650;color:var(--cyan);border-radius:20px;padding:8px 16px;font-size:17px;display:flex;gap:8px;align-items:center}
+#mhint button:hover{background:#0f1c22}
+#mnote{pointer-events:none;position:absolute;left:26px;right:26px;bottom:20px;font-size:19px;color:var(--dim);opacity:0;transition:opacity .4s}
+#mnote.on{opacity:1}
+body.portrait #mhint{font-size:20px} body.portrait #mhint button{font-size:20px;padding:10px 18px}
+
+/* truth card */
+#truth{position:absolute;inset:0;border-radius:18px;background:#0d0a04;border:1.5px solid var(--amber);padding:20px 24px;opacity:0;transform:translateY(16px);transition:all calc(.5s*var(--t));pointer-events:none}
+#truth.on{opacity:1;transform:none}
+#truth .ph{color:var(--amber);margin-bottom:12px}
+.tr{display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-top:1px solid #2a2212;font-size:20px;line-height:1.3;opacity:0;transform:translateX(10px);transition:all .4s}
+.tr.on{opacity:1;transform:none}
+.tr svg{font-size:24px;margin-top:1px}
+.tr b{font-family:var(--mono);font-weight:500;color:var(--fg)}
+.tr .x{color:var(--red)} .tr .k{color:#d9b56a}
+.tr span{color:#d8c7a6}
+
+/* EHR */
+#ehr .ehrb{display:flex;align-items:center;gap:18px}
+#ehr .ehri{width:76px;height:76px;border-radius:18px;border:2px solid var(--pink);display:flex;align-items:center;justify-content:center;color:var(--pink);font-size:40px;flex:none;transition:box-shadow .3s,background .3s}
+#ehr.busy .ehri{box-shadow:0 0 40px rgba(255,79,163,.6);background:rgba(255,79,163,.15)}
+#ehr h3{margin:0;font-size:26px;color:var(--pink)}
+#ehr p{margin:4px 0 0;font-size:18px;color:#b9879f;font-family:var(--mono)}
+#ehr .st{display:none;margin-left:auto;font-size:16px;color:var(--pink);opacity:0;transition:opacity .3s;letter-spacing:.06em}
+#ehr.busy .st{opacity:1;animation:blink .8s steps(1) infinite}
+body.portrait #ehr{padding:14px 22px}
+body.portrait #ehr .ehri{width:64px;height:64px;font-size:34px}
+
+/* unpack */
+#unpack{position:absolute;left:64px;top:734px;width:1472px;display:flex;gap:22px;align-items:baseline;opacity:0;transform:translateY(10px);transition:all calc(.5s*var(--t))}
+#unpack.on{opacity:1;transform:none}
+#unpack .term{flex:none;font-family:var(--mono);font-size:22px;color:#00161a;background:var(--fg);padding:4px 12px;border-radius:8px;font-weight:600}
+#unpack .term.c{background:var(--cyan)} #unpack .term.r{background:var(--red)}
+#unpack .def{font-size:24px;line-height:1.35;color:#d6d6d6}
+#unpack .def i{color:var(--dim);font-style:normal}
+body.portrait #unpack{left:40px;top:1380px;width:740px;flex-direction:column;gap:10px}
+body.portrait #unpack .def{font-size:25px}
+
+/* library */
+#lib{left:64px;top:248px;width:880px;height:464px}
+.pile{position:absolute;display:flex;align-items:center;gap:14px;font-size:22px;color:#cfd5da}
+.pile .pi{width:58px;height:58px;border-radius:14px;border:1.5px solid #3a4148;display:flex;align-items:center;justify-content:center;font-size:30px;color:#c8d0d6;background:#0c1116}
+#herchart{position:absolute;right:30px;bottom:24px;width:300px;text-align:center;opacity:0;transform:scale(.9);transition:all calc(.6s*var(--t))}
+#herchart.on{opacity:1;transform:none}
+#herchart .ring{margin:0 auto 10px;width:132px;height:132px;border-radius:50%;border:2.5px dashed var(--red);display:flex;align-items:center;justify-content:center;color:var(--amber);font-size:58px;position:relative}
+#herchart .ring:after{content:"";position:absolute;width:150px;height:2.5px;background:var(--red);transform:rotate(-45deg);opacity:.9}
+#herchart b{display:block;color:var(--amber);font-size:22px}
+#herchart span{color:var(--red);font-size:19px}
+body.portrait #lib{left:40px;top:330px;width:740px;height:570px}
+body.portrait #herchart{right:20px;bottom:20px}
+#learn{pointer-events:none;position:absolute;left:26px;right:26px;bottom:22px;display:flex;flex-direction:column;gap:8px}
+#learn div{font-family:var(--mono);font-size:20px;color:#a9c9d0;opacity:0;transform:translateY(6px);transition:all .5s}
+#learn div.on{opacity:1;transform:none}
+#learn div i{color:var(--cyan);font-style:normal}
+#brain{position:absolute;left:0;right:0;top:64px;pointer-events:none;display:flex;justify-content:center;opacity:0;transition:opacity .4s}
+#stage[data-step="1"] #brain{opacity:1}
+#stage[data-step="1"] #bars{opacity:0}
+#cv{position:absolute;left:0;top:0;pointer-events:none;z-index:3}
+#fx{position:absolute;inset:0;pointer-events:none;z-index:8}
+.fly{position:absolute;left:0;top:0;will-change:transform}
+
+/* loop */
+#loop{left:64px;top:236px;width:640px;height:490px}
+#loop svg{width:100%;height:100%;overflow:visible}
+#side{left:744px;top:248px;width:792px;height:464px}
+body.portrait #loop{left:40px;top:300px;width:740px;height:520px}
+body.portrait #side{left:40px;top:840px;width:740px;height:560px}
+body.portrait #stage[data-step="4"] #unpack{top:1420px}
+.arc{fill:none;stroke-width:5;stroke-linecap:round}
+.nd circle.b{fill:#070b10;stroke-width:3}
+.nd .ic{stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.nd text,.lt{font-family:var(--sans);font-size:21px;fill:var(--fg)}
+.lt.d{fill:var(--dim);font-size:17px}
+.nd.lit circle.b{filter:url(#glow)}
+#tog{display:flex;align-items:center;gap:16px;font-size:22px;margin-bottom:14px;cursor:pointer;user-select:none}
+#tog .sw{width:64px;height:34px;border-radius:17px;background:#333;position:relative;transition:background .3s;flex:none}
+#tog .sw:after{content:"";position:absolute;left:4px;top:4px;width:26px;height:26px;border-radius:50%;background:#fff;transition:left .3s}
+#tog.on .sw{background:var(--cyan)} #tog.on .sw:after{left:34px}
+#tog .tl{color:var(--fg)} #tog .ts{color:var(--dim);font-size:17px;margin-left:auto}
+#log{display:flex;flex-direction:column;gap:5px;font-size:18px;line-height:1.35}
+#log .lq{font-size:21px;color:var(--fg);margin-bottom:4px}
+#log .lr{font-family:var(--mono);color:var(--cyan);font-size:17px;display:flex;gap:8px;align-items:center}
+#log .lres{color:#ffd58a;border-left:3px solid var(--amber);padding-left:12px;font-size:17px}
+#log .lres i{color:#a07a35;font-style:normal}
+#log .lans{margin-top:6px;color:var(--green);font-size:20px;border:1.5px solid var(--green);border-radius:12px;padding:10px 14px;display:flex;gap:10px;align-items:flex-start}
+#log .lans.bad{color:var(--red);border-color:var(--red);background:rgba(255,77,77,.07)}
+#log .lnote{color:var(--dim);font-size:16px;margin-top:2px}
+#log>div{animation:hin calc(.45s*var(--t)) ease both}
+
+/* takeaway */
+#take{left:64px;top:170px;width:1472px;height:560px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start}
+#take h2{margin:0;font-size:104px;line-height:1.04;letter-spacing:-.02em;font-weight:800}
+#take h2 em{font-style:normal;color:var(--cyan)}
+#take .rec{display:flex;align-items:center;gap:20px;margin-top:56px;font-size:24px;color:#cfd5da;flex-wrap:wrap}
+#take .rec span{display:flex;align-items:center;gap:10px}
+#take .rec svg.i{font-size:30px}
+#take .rec .ar{color:#555}
+#take a.nx{margin-top:52px;display:inline-flex;gap:12px;align-items:center;color:#000;background:var(--fg);text-decoration:none;font-size:22px;font-weight:600;padding:14px 26px;border-radius:30px}
+#take a.nx:hover{background:#fff}
+#take h2 .ln{display:block;opacity:0;transform:translateY(20px);animation:hin calc(.8s*var(--t)) ease forwards}
+#take h2 .ln:nth-child(2){animation-delay:calc(.5s*var(--t))}
+body.portrait #take{left:40px;top:300px;width:740px;height:1000px}
+body.portrait #take h2{font-size:82px} body.portrait #take .rec{font-size:30px} body.portrait #take a.nx{font-size:27px}
+body.portrait .ph{font-size:17px}
+body.portrait .row .lab{font-size:30px} body.portrait .row .pct{font-size:22px} body.portrait .row.req .tk{font-size:24px}
+body.portrait .noteC{font-size:23px} body.portrait .noteC .nh{font-size:15px}
+body.portrait #log{font-size:21px} body.portrait #log .lq{font-size:24px} body.portrait #log .lr,body.portrait #log .lres{font-size:20px}
+body.portrait #log .lans{font-size:23px} body.portrait #log .lnote{font-size:18px} body.portrait #tog{font-size:26px}
+body.portrait .tr{font-size:22px} body.portrait #learn div{font-size:22px} body.portrait .pile{font-size:25px} body.portrait #tokhint{font-size:21px}
+body.portrait #mnote{font-size:21px}
+@media (prefers-reduced-motion:reduce){:root{--t:.3}}
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage" data-step="0">
+  <a id="home" href="index.html"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>All demos</a>
+  <div id="ttl">QCOR 2026 · 01 · From autocomplete to agent</div>
+  <div id="dots"></div>
+
+  <div id="headline"><h1></h1><p></p></div>
+
+  <!-- reading panel -->
+  <div id="read" class="blk panel">
+    <div class="ph"><svg class="i" viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span id="readT">What the model is reading</span><span class="rt" id="readR"></span></div>
+    <div id="ctx"></div>
+    <div id="tokhint">Each underlined piece is one <b style="color:var(--fg)">token</b>: <span>furo</span> + <span>semide</span> = furosemide.</div>
+  </div>
+
+  <!-- model panel -->
+  <div id="model" class="blk panel">
+    <div class="ph"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="4"/><path d="M12 7V4"/><circle cx="12" cy="3" r="1"/><circle cx="9" cy="13" r="1.2" fill="currentColor"/><circle cx="15" cy="13" r="1.2" fill="currentColor"/><path d="M2 12v3M22 12v3"/></svg>Language model<span class="rt" id="modelR">its guesses for the next word</span></div>
+    <div id="bars"></div>
+    <div id="brain"><svg id="brainS" width="300" height="190" viewBox="0 0 300 190"></svg></div>
+    <div id="learn"></div>
+    <div id="mhint"><span>Click a word to choose it</span><span class="sp"></span>
+      <button id="pickB"><svg class="i" viewBox="0 0 24 24"><path d="M8 5l10 7-10 7z"/></svg>Let it pick</button>
+      <button id="replayB"><svg class="i" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/></svg>Replay</button></div>
+    <div id="mnote"></div>
+    <div id="truth"><div class="ph"><svg class="i" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Her chart actually says</div><div id="trows"></div></div>
+  </div>
+
+  <!-- EHR -->
+  <div id="ehr" class="blk panel"><div class="ehrb">
+    <div class="ehri"><svg class="i" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></div>
+    <div><h3>Hospital EHR</h3><p>her notes, meds, labs</p></div><div class="st">SEARCHING…</div></div></div>
+
+  <!-- library -->
+  <div id="lib" class="blk">
+    <div id="piles"></div>
+    <div id="herchart"><div class="ring"><svg class="i" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M8 13h8"/></svg></div><b>Mrs. Delgado's chart</b><span>not in the library</span></div>
+  </div>
+
+  <!-- loop -->
+  <div id="loop" class="blk"><svg viewBox="0 0 600 490" id="loopS">
+    <defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <marker id="ah" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="context-stroke"/></marker></defs>
+    <circle cx="300" cy="250" r="170" fill="none" stroke="#161b21" stroke-width="5"/>
+    <path id="a1" class="arc" stroke="#22D3EE" d="M300 80 A170 170 0 0 1 447.2 335"/>
+    <path id="a2" class="arc" stroke="#FFB020" d="M447.2 335 A170 170 0 0 1 152.8 335"/>
+    <path id="a3" class="arc" stroke="#22D3EE" d="M152.8 335 A170 170 0 0 1 300 80"/>
+    <g id="ctr" opacity="0"><text x="300" y="248" text-anchor="middle" font-size="44" font-weight="800" fill="#F2F2F2" style="font-family:var(--sans);letter-spacing:.06em" id="ctrT">AGENT</text>
+      <text x="300" y="282" text-anchor="middle" class="lt d" id="ctrS">model + tools, in a loop</text></g>
+    <circle id="dot" r="11" fill="#22D3EE" filter="url(#glow)" opacity="0"/>
+    <g class="nd" id="n1" transform="translate(300 80)"><circle class="b" r="46" stroke="#22D3EE"/>
+      <g class="ic" stroke="#22D3EE" transform="translate(-18 -18) scale(1.5)"><rect x="4" y="7" width="16" height="12" rx="4"/><path d="M12 7V4"/><circle cx="9" cy="13" r="1.2" fill="#22D3EE"/><circle cx="15" cy="13" r="1.2" fill="#22D3EE"/></g>
+      <text y="-62" text-anchor="middle">1 · Guess the next word</text></g>
+    <g class="nd" id="n2" transform="translate(447.2 335)"><circle class="b" r="46" stroke="#22D3EE"/>
+      <g class="ic" stroke="#22D3EE" transform="translate(-18 -18) scale(1.5)"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></g>
+      <g id="n2x" opacity="0" class="ic" stroke="#FF4D4D" transform="translate(-18 -18) scale(1.5)"><path d="M6 6l12 12M18 6L6 18"/></g>
+      <text x="30" y="96" text-anchor="middle">2 · Write a request</text><text x="30" y="120" text-anchor="middle" class="lt d" style="fill:#FF4FA3">sent to the EHR</text></g>
+    <g class="nd" id="n3" transform="translate(152.8 335)"><circle class="b" r="46" stroke="#FFB020"/>
+      <g class="ic" stroke="#FFB020" transform="translate(-18 -18) scale(1.5)"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h7"/></g>
+      <text x="-30" y="96" text-anchor="middle">3 · Read the result</text><text x="-30" y="120" text-anchor="middle" class="lt d">added to what it reads</text></g>
+    <text id="again" x="148" y="150" text-anchor="end" class="lt" fill="#22D3EE" opacity="0" style="fill:#22D3EE">4 · guess again</text>
+  </svg></div>
+  <div id="side" class="blk panel">
+    <div id="tog" class="on" role="switch" aria-checked="true" tabindex="0"><div class="sw"></div><span class="tl">Let it use tools</span><span class="ts" id="togS">it can go and look</span></div>
+    <div id="log"></div>
+  </div>
+
+  <!-- takeaway -->
+  <div id="take" class="blk">
+    <h2><span class="ln">An agent is autocomplete</span><span class="ln">that can <em>go and look.</em></span></h2>
+    <div class="rec">
+      <span style="color:var(--cyan)"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="4"/><path d="M12 7V4"/><circle cx="9" cy="13" r="1.2" fill="currentColor"/><circle cx="15" cy="13" r="1.2" fill="currentColor"/></svg>guess the next word</span><span class="ar">→</span>
+      <span style="color:var(--cyan)"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>write a request</span><span class="ar">→</span>
+      <span style="color:var(--amber)"><svg class="i" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h7"/></svg>read the result</span><span class="ar">→</span>
+      <span style="color:#cfd5da"><svg class="i" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/></svg>repeat until done</span>
+    </div>
+    <a class="nx" href="02-the-loop.html">Next demo: the loop, on her whole chart <svg class="i" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+  </div>
+
+  <div id="unpack"><span class="term"></span><span class="def"></span></div>
+  <canvas id="cv"></canvas>
+  <div id="fx"></div>
+
+  <div id="foot">QCOR 2026 · synthetic patient · illustrative simulation</div>
+  <div id="ctrl">
+    <span id="stepN">1 / 6</span>
+    <button id="backB" aria-label="Back"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+    <button id="rstB" aria-label="Restart"><svg class="i" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/></svg></button>
+    <button id="fsB" aria-label="Fullscreen"><svg class="i" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    <button id="nextB">Next <svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+  </div>
+</div></div>
+
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s);
+const stage=$('#stage'), ctxEl=$('#ctx'), barsEl=$('#bars'), fx=$('#fx'), cv=$('#cv');
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const SPD=RM?0.35:1;
+const N=6;
+let step=0, cur=null, scale=1;
+const STOP={stop:1};
+
+/* ---------- layout ---------- */
+function layout(){
+  const portrait=innerWidth/innerHeight<0.9;
+  const was=document.body.classList.contains('portrait');
+  document.body.classList.toggle('portrait',portrait);
+  const W=portrait?820:1600,H=portrait?1720:900;
+  scale=Math.min(innerWidth/W,innerHeight/H);
+  stage.style.transform='scale('+scale+')';
+  return was!==portrait;
+}
+let rT=0;
+addEventListener('resize',()=>{const ch=layout(); clearTimeout(rT); if(ch) rT=setTimeout(()=>go(step),150);});
+
+/* ---------- helpers ---------- */
+function newCtx(){return {dead:false,pick:null,raf:[]};}
+function sl(c,ms){return new Promise((res,rej)=>setTimeout(()=>c.dead?rej(STOP):res(),ms*SPD));}
+function alive(c){if(c.dead)throw STOP;}
+function waitPick(c,ms){
+  return new Promise((res,rej)=>{
+    const t=setTimeout(()=>{c.pick=null; c.dead?rej(STOP):res(null);},ms*SPD);
+    c.pick=i=>{clearTimeout(t);c.pick=null;res(i);};
+  });
+}
+function local(el){const r=el.getBoundingClientRect(),s=stage.getBoundingClientRect();return {x:(r.left-s.left)/scale,y:(r.top-s.top)/scale,w:r.width/scale,h:r.height/scale};}
+function fly(c,from,to,html,cls,dur){
+  const a=local(from),b=local(to);
+  const d=document.createElement('div');d.className='fly '+(cls||'');d.innerHTML=html;fx.appendChild(d);
+  const dw=d.offsetWidth,dh=d.offsetHeight;
+  const x0=a.x+a.w/2-dw/2,y0=a.y+a.h/2-dh/2,x1=b.x+b.w/2-dw/2,y1=b.y+b.h/2-dh/2;
+  const mx=(x0+x1)/2,my=Math.min(y0,y1)-60;
+  const an=d.animate([{transform:`translate(${x0}px,${y0}px) scale(1)`},{transform:`translate(${mx}px,${my}px) scale(1.08)`,offset:.5},{transform:`translate(${x1}px,${y1}px) scale(.96)`}],{duration:dur*SPD,easing:'cubic-bezier(.45,0,.25,1)',fill:'forwards'});
+  return an.finished.then(()=>{d.remove();alive(c);});
+}
+function show(ids){document.querySelectorAll('.blk').forEach(b=>b.classList.toggle('on',ids.includes(b.id)));}
+function head(h,p){const el=$('#headline');el.classList.remove('swap');void el.offsetWidth;el.querySelector('h1').innerHTML=h;el.querySelector('p').innerHTML=p||'';el.classList.add('swap');}
+function unpack(term,def,cls){const u=$('#unpack');if(!term){u.classList.remove('on');return;}u.classList.remove('on');void u.offsetWidth;u.querySelector('.term').textContent=term;u.querySelector('.term').className='term '+(cls||'');u.querySelector('.def').innerHTML=def;u.classList.add('on');}
+function caret(on){ctxEl.querySelectorAll('.caret').forEach(x=>x.remove());if(on){const k=document.createElement('span');k.className='caret';ctxEl.appendChild(k);}}
+function addTok(t,cls,parent){
+  parent=parent||ctxEl;
+  const k=parent.querySelector('.caret');
+  let lead='';if(t[0]===' '){lead=' ';t=t.slice(1);}
+  if(lead)parent.insertBefore(document.createTextNode(lead),k);
+  const s=document.createElement('span');s.className='tok new '+(cls||'');s.textContent=t;parent.insertBefore(s,k);
+  return s;
+}
+function pctS(p){return p<0.01?'<1%':Math.round(p*100)+'%';}
+function bars(list,opt){
+  opt=opt||{};
+  let rows=[...barsEl.children];
+  if(rows.length!==list.length){
+    barsEl.innerHTML='';rows=list.map((_,i)=>{const b=document.createElement('button');b.className='row';b.innerHTML='<div class="lab"><span class="tk"></span><span class="pct"></span></div><div class="trk"><div class="fill"></div></div>';b.onclick=()=>{if(cur&&cur.pick&&!b.disabled)cur.pick(i);};barsEl.appendChild(b);return b;});
+    void barsEl.offsetWidth;
+  }
+  list.forEach((d,i)=>{const r=rows[i];r.className='row'+(d.req?' req':'');r.disabled=!opt.click;r.querySelector('.tk').textContent=d.t.trim();r.querySelector('.pct').textContent=pctS(d.p);});
+  requestAnimationFrame(()=>list.forEach((d,i)=>{rows[i].querySelector('.fill').style.width=Math.max(1.5,d.p*100)+'%';}));
+  return rows;
+}
+function highlight(i){[...barsEl.children].forEach((r,j)=>{r.classList.toggle('pick',j===i);r.classList.toggle('dimr',j!==i);r.disabled=true;});}
+
+function reset(){
+  ctxEl.innerHTML='';ctxEl.className='';barsEl.innerHTML='';barsEl.className='';fx.innerHTML='';
+  $('#tokhint').classList.remove('on');$('#mhint').classList.remove('on');$('#mnote').classList.remove('on');
+  $('#truth').classList.remove('on');$('#trows').innerHTML='';$('#learn').innerHTML='';
+  $('#herchart').classList.remove('on');$('#ehr').classList.remove('busy');
+  $('#readT').textContent='What the model is reading';$('#readR').textContent='';
+  $('#modelR').textContent='its guesses for the next word';$('#ehr p').textContent='her notes, meds, labs';
+  unpack(null);
+  const g=cv.getContext('2d');g.clearRect(0,0,cv.width,cv.height);cv.style.display='none';
+}
+
+/* ---------- step 1: next word ---------- */
+const INTRO=['Mrs','.',' Del','gado',',',' 71',',',' with',' heart',' failure',',',' was',' started',' on',' furo'];
+const PTS={
+  p1:{c:[{t:'semide',p:.94},{t:'sem',p:.04,next:'p1b'},{t:'semid',p:.01,next:'p1c'}],next:'p2'},
+  p1b:{c:[{t:'ide',p:.97},{t:'id',p:.02,next:'p1c'}],next:'p2'},
+  p1c:{c:[{t:'e',p:.98},{t:'es',p:.01}],next:'p2'},
+  p2:{c:[{t:' 40',p:.61},{t:' 20',p:.24},{t:' 80',p:.09},{t:' 10',p:.03}],next:'p3'},
+  p3:{c:[{t:' mg',p:.97},{t:' milligrams',p:.02},{t:' mcg',p:.01}],next:'p4'},
+  p4:{c:[{t:' daily',p:.52},{t:' twice',p:.27,next:'p4b'},{t:' IV',p:.13},{t:' once',p:.05,next:'p4c'}],next:'p5'},
+  p4b:{c:[{t:' daily',p:.91},{t:' a',p:.06,next:'p4d'}],next:'p5'},
+  p4c:{c:[{t:' daily',p:.93},{t:' a',p:.05,next:'p4d'}],next:'p5'},
+  p4d:{c:[{t:' day',p:.98}],next:'p5'},
+  p5:{c:[{t:'.',p:.86},{t:',',p:.08},{t:';',p:.04}],next:null}
+};
+async function s0(c){
+  head('A language model does one thing:<br><em>guess the next word.</em>','It reads the text so far, scores every possible next piece, and adds one. Then it does it again.');
+  show(['read','model']);
+  caret(true);
+  await sl(c,500);
+  for(const t of INTRO){addTok(t);await sl(c,85);}
+  await sl(c,400);
+  $('#mhint').classList.add('on');
+  unpack('token','A piece of a word. The model guesses one token at a time: <i>“furo” + “semide” = furosemide.</i>');
+  let pt='p1';
+  while(pt){
+    const P=PTS[pt];
+    bars(P.c,{click:true});
+    const i=await waitPick(c,pt==='p1'?2000:1150);
+    const k=i==null?0:i;
+    highlight(k);
+    await sl(c,420);
+    addTok(P.c[k].t);
+    pt=P.c[k].next||P.next;
+    await sl(c,200);
+  }
+  caret(false);
+  $('#tokhint').classList.add('on');
+  $('#mhint').querySelector('span').textContent='Try other words';
+}
+
+/* ---------- step 2: library ---------- */
+const PILES=[['Textbooks','book'],['Guidelines','guide'],['Journal articles','journal'],['Web pages','globe'],['Forums and Q&amp;A','note']];
+const IC={
+  book:'<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M8 7h7"/>',
+  guide:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 13l2 2 4-4"/>',
+  journal:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/>',
+  globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+  note:'<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h7"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>',
+  search:'<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>'
+};
+const ic=(n,st)=>'<svg class="i" viewBox="0 0 24 24"'+(st?' style="'+st+'"':'')+'>'+IC[n]+'</svg>';
+function rng(seed){return ()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};}
+async function s1(c){
+  head('It learned from <em>a library</em> of text.','Trained once, ahead of time, on books, guidelines and articles. It learned patterns, not her chart.');
+  show(['lib','model']);
+  $('#modelR').textContent='learning patterns';
+  const portrait=document.body.classList.contains('portrait');
+  const pl=$('#piles');pl.innerHTML='';
+  PILES.forEach((p,i)=>{const d=document.createElement('div');d.className='pile';d.style.left='10px';d.style.top=(portrait?20+i*96:14+i*88)+'px';d.innerHTML='<div class="pi">'+ic(p[1])+'</div>'+p[0];pl.appendChild(d);});
+  // brain grid
+  const bs=$('#brainS');let h='';const R=rng(7);const dots=[];
+  for(let y=0;y<7;y++)for(let x=0;x<12;x++){h+=`<circle cx="${14+x*25.6}" cy="${12+y*27}" r="5" fill="#22D3EE" opacity="0.08"/>`;}
+  bs.innerHTML=h;const cs=[...bs.children];
+  const L=['furo<i> → </i>semide','EF 30%<i> → </i>reduced','potassium 5.9<i> → </i>hyperkalemia','HFrEF<i> → </i>beta blocker'];
+  const le=$('#learn');L.forEach(t=>{const d=document.createElement('div');d.innerHTML=t;le.appendChild(d);});
+  // canvas particles
+  const W=portrait?820:1600,H=portrait?1720:900,dpr=Math.min(2,(devicePixelRatio||1)*scale*1.5);
+  cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';cv.style.display='block';
+  const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);
+  await sl(c,200);
+  const src=[...pl.children].map(e=>{const r=local(e);return {x:r.x+r.w+22,y:r.y+r.h/2};});
+  const mb=local($('#brainS'));const tgt={x:mb.x+mb.w/2,y:mb.y+mb.h/2};
+  const parts=[];let t0=performance.now(),absorbed=0,last=t0;
+  const r2=rng(42);
+  const tick=now=>{
+    if(c.dead)return;
+    const dt=now-last;last=now;
+    const el=(now-t0)/SPD;
+    if(el<9000&&parts.length<160){const n=el<6000?2:1;for(let k=0;k<n;k++){if(r2()<.55){const s=src[Math.floor(r2()*src.length)];parts.push({s,cx:(s.x+tgt.x)/2+(r2()-.5)*200,cy:Math.min(s.y,tgt.y)-20-r2()*90,ty:tgt.y+(r2()-.5)*110,tx:tgt.x+(r2()-.5)*220,t:0,v:.00035+r2()*.0003,rot:(r2()-.5)*.6,col:r2()<.25?'#22D3EE':'#cfd5da'});}}}
+    g.clearRect(0,0,W,H);
+    for(let i=parts.length-1;i>=0;i--){const p=parts[i];p.t+=p.v*dt/SPD;
+      if(p.t>=1){parts.splice(i,1);absorbed++;const d=cs[Math.floor(r2()*cs.length)];d.setAttribute('opacity',Math.min(1,+d.getAttribute('opacity')+.3));continue;}
+      const u=p.t,e=u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2;
+      const x=(1-e)*(1-e)*p.s.x+2*(1-e)*e*p.cx+e*e*p.tx,y=(1-e)*(1-e)*p.s.y+2*(1-e)*e*p.cy+e*e*p.ty;
+      const sc=1-e*.55;g.save();g.translate(x,y);g.rotate(p.rot*(1-e));g.globalAlpha=Math.min(1,u*6)*(1-Math.max(0,(e-.85)/.15));
+      g.strokeStyle=p.col;g.lineWidth=1.5;g.fillStyle='rgba(8,12,16,.9)';
+      const w=16*sc,hh=20*sc;g.beginPath();g.roundRect?g.roundRect(-w/2,-hh/2,w,hh,3):g.rect(-w/2,-hh/2,w,hh);g.fill();g.stroke();
+      g.beginPath();for(let l=0;l<3;l++){g.moveTo(-w/2+3*sc,-hh/2+(5+l*4.5)*sc);g.lineTo(w/2-3*sc,-hh/2+(5+l*4.5)*sc);}g.stroke();g.restore();}
+    // slow fade of dots
+    if(Math.random()<.2){const d=cs[Math.floor(r2()*cs.length)];const o=+d.getAttribute('opacity');if(o>.25)d.setAttribute('opacity',(o-.04).toFixed(2));}
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  const ls=[...le.children];
+  for(let i=0;i<ls.length;i++){await sl(c,i?1100:1400);ls[i].classList.add('on');}
+  await sl(c,500);
+  $('#herchart').classList.add('on');
+  unpack('model','What comes out of training: a huge set of learned patterns about how text usually goes. <i>Like years of reading in residency, before ever meeting this patient.</i>');
+}
+
+/* ---------- step 3: confident and wrong ---------- */
+const ANS=[' Yes','.',' She',' is',' on',' lisinopril',',',' carvedilol',',',' spironolactone',' and',' empagliflozin','.',' Her',' therapy',' is',' fully',' optimized','.'];
+const KEY={
+  ' Yes':[[' Yes',.64],[' No',.19],[' She',.11],[' I',.04]],
+  ' lisinopril':[[' lisinopril',.38],[' sacubitril',.24],[' metoprolol',.19],[' losartan',.11]],
+  ' carvedilol':[[' carvedilol',.41],[' metoprolol',.33],[' bisoprolol',.14],[' furosemide',.07]],
+  ' spironolactone':[[' spironolactone',.57],[' eplerenone',.21],[' furosemide',.14],[' digoxin',.04]],
+  ' empagliflozin':[[' empagliflozin',.46],[' dapagliflozin',.37],[' an',.09],[' torsemide',.05]],
+  ' fully':[[' fully',.44],[' well',.31],[' appropriately',.12],[' not',.08]],
+  ' optimized':[[' optimized',.81],[' appropriate',.09],[' guideline',.06],[' complete',.03]]
+};
+const FILL=[' the',' and',',',' she',' her',' is',' on','.'];
+function dist(t,i){
+  if(KEY[t])return KEY[t].map(([a,p])=>({t:a,p}));
+  const R=rng(i*97+13);const top=.72+R()*.24;let rest=1-top;const o=[];
+  const alts=FILL.filter(f=>f!==t);
+  for(let k=0;k<3;k++){const p=rest*(k<2?.55+R()*.2:1);o.push({t:alts[(i+k*3)%alts.length],p:Math.max(.005,p)});rest-=p;}
+  return [{t,p:top}].concat(o.sort((a,b)=>b.p-a.p));
+}
+async function s2(c){
+  head('Ask about <span class="a">her</span>, and it still just guesses.','It has never seen Mrs. Delgado’s chart. So it writes what an answer like this usually sounds like.');
+  show(['read','model']);
+  ctxEl.className='small';
+  ctxEl.innerHTML='<div class="q"><b>Q</b>Is Mrs. Delgado on all her heart failure medicines?</div><span class="alab">A:</span>';
+  caret(true);
+  await sl(c,900);
+  const toks=[];
+  for(let i=0;i<ANS.length;i++){
+    const t=ANS[i],key=!!KEY[t];
+    bars(dist(t,i));
+    await sl(c,key?620:170);
+    highlight(0);
+    await sl(c,key?200:40);
+    toks.push(addTok(t));
+  }
+  caret(false);
+  await sl(c,500);
+  $('#mnote').innerHTML='Every word was <b style="color:var(--fg)">likely</b>. Likely is not the same as <b style="color:var(--fg)">true</b>.';
+  $('#mnote').classList.add('on');
+  await sl(c,1300);
+  // reveal truth
+  const tr=$('#trows');
+  const rows=[
+    ['k',ic('check'),'<b>lisinopril</b>','<span>on it. A lucky guess.</span>',[5]],
+    ['x',ic('x'),'<b>carvedilol</b>','<span>no: she takes metoprolol tartrate</span>',[7]],
+    ['x',ic('x'),'<b>spironolactone</b>','<span>stopped 4/14/2026, hyperkalemia</span>',[9]],
+    ['x',ic('x'),'<b>empagliflozin</b>','<span>never started: she declined</span>',[11]],
+    ['x',ic('x'),'<b>fully optimized</b>','<span>made up; nothing was checked</span>',[16,17]]
+  ];
+  tr.innerHTML=rows.map(r=>`<div class="tr"><span class="${r[0]}">${r[1]}</span><div>${r[2]} <span>${r[3]}</span></div></div>`).join('');
+  $('#truth').classList.add('on');
+  const trs=[...tr.children];
+  for(let i=0;i<rows.length;i++){
+    await sl(c,i?520:380);
+    trs[i].classList.add('on');
+    rows[i][4].forEach(j=>toks[j].classList.add(rows[i][0]==='x'?'bad':'luck'));
+    if(i===0)toks[0].classList.add('bad');
+  }
+  unpack('hallucination','A fluent, confident answer with nothing behind it. <i>Not lying: it is guessing what text usually says, with no chart to check against.</i>','r');
+}
+
+/* ---------- step 4: the request ---------- */
+const GROUND=[['Spironolactone',[['Spironolactone',.93],['She',.04],['Yes',.02]]],[' was',null],[' stopped',[[' stopped',.88],[' continued',.05],[' started',.03]]],[' for',null],[' hyperkalemia',[[' hyperkalemia',.91],[' low BP',.04],[' cost',.02]]],[' (nephrology,',null],[' 4/14/2026',[[' 4/14/2026',.96],[' 2025',.02],[' 9/2/2026',.01]]],[').',null]];
+async function s3(c){
+  head('The one move: let it write <em>a request.</em>','We teach it one special kind of next word: a request for information, which real software carries out.');
+  show(['read','model','ehr']);
+  ctxEl.className='small';
+  ctxEl.innerHTML='<div class="q"><b>Q</b>Is Mrs. Delgado on all her heart failure medicines?</div><span class="alab">A:</span>';
+  caret(true);
+  $('#modelR').textContent='a new kind of next word: a request';
+  await sl(c,900);
+  const rows=bars([{t:'search_notes("spironolactone")',p:.71,req:true},{t:'Yes',p:.19},{t:'She',p:.06}]);
+  await sl(c,1900);
+  highlight(0);
+  await sl(c,400);
+  const k=ctxEl.querySelector('.caret');
+  ctxEl.insertBefore(document.createTextNode(' '),k);
+  const chip=document.createElement('span');chip.className='req tok new';chip.textContent='search_notes("spironolactone")';ctxEl.insertBefore(chip,k);
+  await sl(c,500);
+  const ehr=$('#ehr'),ei=ehr.querySelector('.ehri');
+  const fp=fly(c,rows[0].querySelector('.tk'),ei,'<span class="req" style="font-family:var(--mono);font-size:22px">search_notes("spironolactone")</span>','',1100);
+  chip.classList.add('sent');
+  await fp;
+  ehr.classList.add('busy');ehr.querySelector('p').textContent='searching her notes…';
+  $('#modelR').textContent='waiting for the result';
+  barsEl.style.opacity='.35';
+  await sl(c,1300);
+  ehr.classList.remove('busy');ehr.querySelector('p').textContent='found 1 note: nephrology, 4/14/2026';
+  // note card placeholder
+  caret(false);
+  const note=document.createElement('div');note.className='noteC';
+  note.innerHTML='<div class="nh">'+ic('note')+'Nephrology clinic · 4/14/2026<span class="tag">result, added to what it reads</span></div>Potassium 5.9 today. Spironolactone discontinued due to hyperkalemia; would not rechallenge given CKD.';
+  ctxEl.appendChild(note);
+  await fly(c,ei,note,'<div style="width:120px;height:80px;border:2px solid var(--amber);border-radius:10px;background:#1a1204;color:var(--amber);display:flex;align-items:center;justify-content:center;font-size:44px">'+ic('note')+'</div>','',1000);
+  note.classList.add('on');
+  barsEl.style.opacity='';
+  $('#modelR').textContent='its guesses for the next word';
+  caret(true);
+  await sl(c,700);
+  barsEl.classList.add('ok');
+  for(const [t,d] of GROUND){
+    if(d){bars(d.map(([a,p])=>({t:a,p})));await sl(c,700);highlight(0);await sl(c,200);}
+    else await sl(c,160);
+    addTok(t,'ok');
+  }
+  caret(false);
+  unpack('tool','Something the model is allowed to ask software to do: search the notes, read a note, get the med list. <i>The model writes the request; the hospital’s system does the work.</i>','c');
+}
+
+/* ---------- step 5: the loop ---------- */
+const LOOP=[
+  ['get_medications()','lisinopril · metoprolol tartrate · furosemide · spironolactone (stopped)','med list'],
+  ['search_notes("spironolactone")','“Spironolactone discontinued due to hyperkalemia…”','nephrology 4/14/2026'],
+  ['search_notes("SGLT2")','“Patient declines: she had recurrent urinary tract infections…”','cardiology 6/10/2026']
+];
+let tools=true;
+const P={n1:-90,n2:30,n3:150};
+function dotAt(deg){const r=deg*Math.PI/180;const d=$('#dot');d.setAttribute('cx',300+170*Math.cos(r));d.setAttribute('cy',250+170*Math.sin(r));}
+function moveDot(c,a0,a1,ms){return new Promise((res,rej)=>{const t0=performance.now();const f=now=>{if(c.dead)return rej(STOP);const u=Math.min(1,(now-t0)/(ms*SPD));const e=u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2;dotAt(a0+(a1-a0)*e);u<1?requestAnimationFrame(f):res();};requestAnimationFrame(f);});}
+function drawArc(id,ms,dash){const p=$('#'+id);const L=p.getTotalLength();p.style.transition='none';p.style.strokeDasharray=dash?'10 14':L;p.style.strokeDashoffset=dash?0:L;p.style.opacity=dash?.45:1;void p.getBoundingClientRect();if(!dash){p.style.transition='stroke-dashoffset '+(ms*SPD)+'ms ease';p.style.strokeDashoffset=0;}}
+function lit(id,on){$('#'+id).classList.toggle('lit',on);}
+function logAdd(html,cls){const d=document.createElement('div');d.className=cls;d.innerHTML=html;$('#log').appendChild(d);return d;}
+async function s4(c){
+  head('Put it in <em>a loop.</em> Now it is an agent.','Guess, request, read the result, guess again. It keeps going until the job is done.');
+  show(['loop','side']);
+  const tg=$('#tog');tg.classList.toggle('on',tools);tg.setAttribute('aria-checked',tools);
+  $('#togS').textContent=tools?'it can go and look':'autocomplete only';
+  ['a1','a2','a3'].forEach(a=>{const p=$('#'+a);p.style.transition='none';p.style.strokeDasharray=2000;p.style.strokeDashoffset=2000;p.style.stroke='';});
+  $('#dot').setAttribute('opacity',0);$('#ctr').setAttribute('opacity',0);$('#again').setAttribute('opacity',0);$('#n2x').setAttribute('opacity',0);
+  $('#n2').querySelector('circle.b').setAttribute('stroke','#22D3EE');$('#n2').querySelector('.ic').setAttribute('opacity',1);
+  ['n1','n2','n3'].forEach(n=>lit(n,false));
+  $('#log').innerHTML='';
+  logAdd('Is Mrs. Delgado on all her heart failure medicines?','lq');
+  await sl(c,500);
+  if(!tools){
+    drawArc('a1',600);await sl(c,700);
+    $('#n2').querySelector('circle.b').setAttribute('stroke','#FF4D4D');$('#n2').querySelector('.ic').setAttribute('opacity',0);$('#n2x').setAttribute('opacity',1);
+    $('#a1').style.stroke='#FF4D4D';drawArc('a2',0,true);drawArc('a3',0,true);
+    $('#ctrT').textContent='AUTOCOMPLETE';$('#ctrT').setAttribute('font-size','30');$('#ctrS').textContent='no tools, no loop';$('#ctr').setAttribute('opacity',1);
+    await sl(c,400);
+    logAdd(ic('x','font-size:24px;flex:none;margin-top:2px')+'<span>Yes. She is on lisinopril, carvedilol, spironolactone and empagliflozin. Her therapy is fully optimized.</span>','lans bad');
+    logAdd('No requests made. Nothing checked. A fluent guess.','lnote');
+    unpack('agent','A language model in a loop, allowed to use tools, until the job is done. <i>Switch tools back on to see the difference.</i>','c');
+    return;
+  }
+  $('#ctrT').textContent='AGENT';$('#ctrT').setAttribute('font-size','44');$('#ctrS').textContent='model + tools, in a loop';
+  lit('n1',true);
+  drawArc('a1',700);await sl(c,750);lit('n2',true);
+  drawArc('a2',700);await sl(c,750);lit('n3',true);
+  drawArc('a3',700);await sl(c,500);$('#again').setAttribute('opacity',1);await sl(c,300);
+  ['n1','n2','n3'].forEach(n=>lit(n,false));
+  $('#ctr').setAttribute('opacity',1);
+  unpack('agent','A language model in a loop, allowed to use tools, until the job is done.','c');
+  $('#dot').setAttribute('opacity',1);dotAt(-90);
+  for(const [req,res,src] of LOOP){
+    lit('n1',true);await sl(c,250);lit('n1',false);
+    await moveDot(c,-90,30,800);lit('n2',true);
+    logAdd(ic('search')+req,'lr');
+    await sl(c,350);lit('n2',false);
+    await moveDot(c,30,150,800);lit('n3',true);
+    logAdd(res+' <i>· '+src+'</i>','lres');
+    await sl(c,350);lit('n3',false);
+    await moveDot(c,150,270,700);
+  }
+  lit('n1',true);
+  $('#ctrS').textContent='done: writes the answer';
+  logAdd(ic('check','font-size:24px;flex:none;margin-top:2px')+'<span>On lisinopril. MRA stopped for hyperkalemia (4/14/2026). SGLT2 inhibitor declined by patient (6/10/2026).</span>','lans');
+  await sl(c,700);
+  logAdd('Still missing: metoprolol <i>tartrate</i> is not an evidence-based HF beta blocker. Looking is not knowing the rule; that comes in demo 6.','lnote');
+}
+$('#tog').onclick=()=>{tools=!tools;if(step===4)go(4);};
+$('#tog').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();e.stopPropagation();$('#tog').click();}};
+
+/* ---------- step 6: takeaway ---------- */
+async function s5(c){
+  $('#headline').querySelector('h1').innerHTML='';$('#headline').querySelector('p').innerHTML='';
+  show(['take']);
+  const t=$('#take');t.querySelectorAll('.ln').forEach(l=>{l.style.animation='none';void l.offsetWidth;l.style.animation='';});
+}
+
+/* ---------- runner ---------- */
+const STEPS=[s0,s1,s2,s3,s4,s5];
+const dotsEl=$('#dots');
+for(let i=0;i<N;i++){const d=document.createElement('i');d.title='Step '+(i+1);d.onclick=()=>go(i);dotsEl.appendChild(d);}
+function go(n){
+  n=Math.max(0,Math.min(N-1,n));
+  if(cur)cur.dead=true;
+  cur=newCtx();step=n;stage.dataset.step=n;
+  reset();
+  [...dotsEl.children].forEach((d,i)=>{d.className=i===n?'on':i<n?'done':'';});
+  $('#stepN').textContent=(n+1)+' / '+N;
+  $('#nextB').style.visibility=n===N-1?'hidden':'visible';
+  STEPS[n](cur).catch(e=>{if(e!==STOP)console.error(e);});
+}
+$('#nextB').onclick=()=>go(step+1);
+$('#backB').onclick=()=>go(step-1);
+$('#rstB').onclick=()=>go(0);
+$('#replayB').onclick=()=>go(0);
+$('#pickB').onclick=()=>{if(cur&&cur.pick)cur.pick(0);};
+function fs(){if(!document.fullscreenElement){(document.documentElement.requestFullscreen||function(){}).call(document.documentElement);}else document.exitFullscreen();}
+$('#fsB').onclick=fs;
+addEventListener('keydown',e=>{
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  const k=e.key;
+  if(k==='ArrowRight'||k===' '||k==='PageDown'){e.preventDefault();go(step+1);}
+  else if(k==='ArrowLeft'||k==='PageUp'){e.preventDefault();go(step-1);}
+  else if(k==='r'||k==='R')go(0);
+  else if(k==='f'||k==='F')fs();
+});
+document.querySelectorAll('button').forEach(b=>b.addEventListener('keydown',e=>{if(e.key===' ')e.preventDefault();}));
+layout();go(0);
+})();
+</script>
+</body>
+</html>

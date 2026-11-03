@@ -1,0 +1,187 @@
+<!doctype html>
+<!--
+  AHA 2026 QCOR · Ten demos of clinical agents: the hub.
+  One idea: ten takes on "what is a clinical AI agent, and why does it matter?", one synthetic patient throughout.
+  Run of show: about 1 minute per demo, about 10 minutes in all. Each card opens a self-contained demo (works offline).
+  Keys: 1–9 and 0 open demo 1–10; F fullscreen.
+  Patient and notes are synthetic. No PHI.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QCOR 2026 · Clinical agents, ten ways</title>
+  <style>
+    :root {
+      --bg: #05070a; --fg: #F2F2F2; --dim: #8C8C8C; --line: #2a2a2a;
+      --amber: #FFB020; --cyan: #22D3EE; --pink: #FF4FA3; --green: #4ADE80; --red: #FF4D4D;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Helvetica Neue", Arial, sans-serif;
+      --mono: "SF Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+    body { min-height: 100vh; overflow-x: hidden; }
+    a { color: inherit; text-decoration: none; }
+
+    header { position: relative; padding: 64px 6vw 28px; display: grid; grid-template-columns: 1fr auto; gap: 40px; align-items: center; }
+    .kicker { font-family: var(--mono); font-size: 14px; letter-spacing: .14em; color: var(--cyan); text-transform: uppercase; }
+    h1 { margin: 14px 0 12px; font-size: clamp(38px, 5.4vw, 78px); line-height: 1.02; letter-spacing: -.025em; font-weight: 800; }
+    h1 em { font-style: normal; color: var(--amber); }
+    .lede { font-size: clamp(17px, 1.6vw, 23px); color: var(--dim); max-width: 760px; line-height: 1.45; margin: 0; }
+    .lede b { color: var(--fg); font-weight: 600; }
+    #hero { width: min(360px, 32vw); height: auto; }
+
+    .patient { margin: 8px 6vw 34px; padding: 18px 22px; border: 1px solid #3a2a08; background: linear-gradient(90deg, rgba(255,176,32,.08), transparent 70%);
+      border-radius: 14px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; font-size: 17px; }
+    .patient .nm { color: var(--amber); font-weight: 700; font-size: 19px; }
+    .patient .q { color: var(--dim); flex: 1 1 380px; }
+    .gold { display: flex; gap: 8px; flex-wrap: wrap; }
+    .gold span { font-family: var(--mono); font-size: 13px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line); color: #cfcfcf; }
+    .gold span.g { border-color: rgba(255,77,77,.6); color: var(--red); }
+
+    .grid { padding: 0 6vw 40px; display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 18px; }
+    .card { position: relative; display: block; border: 1px solid var(--line); border-radius: 18px; padding: 22px 22px 20px; background: #0a0c10;
+      overflow: hidden; transition: transform .25s ease, border-color .25s ease, background .25s ease; opacity: 0; transform: translateY(14px);
+      animation: rise .6s ease forwards; min-height: 236px; }
+    .card:hover, .card:focus-visible { transform: translateY(-4px); border-color: var(--c); background: #0d1015; outline: none; }
+    .card::after { content: ""; position: absolute; inset: auto -40% -60% auto; width: 260px; height: 260px; border-radius: 50%;
+      background: radial-gradient(circle, var(--c) 0%, transparent 65%); opacity: .07; transition: opacity .3s; }
+    .card:hover::after { opacity: .18; }
+    .card .top { display: flex; justify-content: space-between; align-items: flex-start; }
+    .card .n { font-family: var(--mono); font-size: 13px; color: var(--dim); letter-spacing: .08em; }
+    .card .t { font-family: var(--mono); font-size: 12px; color: var(--dim); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+    .card svg.ic { width: 58px; height: 58px; margin: 14px 0 12px; color: var(--c); overflow: visible; }
+    .card h2 { margin: 0 0 6px; font-size: 22px; letter-spacing: -.01em; }
+    .card p { margin: 0; color: var(--dim); font-size: 15.5px; line-height: 1.45; }
+    .card .word { margin-top: 12px; font-size: 13px; font-family: var(--mono); color: var(--c); opacity: .9; }
+    @keyframes rise { to { opacity: 1; transform: none; } }
+
+    .arc { padding: 6px 6vw 40px; }
+    .arc h3 { font-size: 15px; font-family: var(--mono); color: var(--dim); letter-spacing: .12em; text-transform: uppercase; font-weight: 500; margin: 0 0 14px; }
+    .bar { display: flex; height: 40px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+    .bar a { flex: 1; display: grid; place-items: center; font-family: var(--mono); font-size: 13px; color: #000; font-weight: 700;
+      background: var(--c); opacity: .78; transition: opacity .2s, flex .3s; }
+    .bar a:hover { opacity: 1; flex: 1.6; }
+    .acts { display: flex; margin-top: 8px; font-size: 13px; color: var(--dim); }
+    .acts div { border-left: 1px solid var(--line); padding: 4px 8px; }
+
+    footer { padding: 26px 6vw 40px; color: #555; font-size: 13px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; border-top: 1px solid #111; }
+
+    /* hero loop */
+    .orbit { transform-origin: 160px 160px; animation: spin 9s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .pulse { animation: pulse 3s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+    @keyframes pulse { 0%, 100% { transform: scale(1); } 12% { transform: scale(1.12); } 24% { transform: scale(1); } 36% { transform: scale(1.08); } 48% { transform: scale(1); } }
+    .hb { stroke-dasharray: 420; stroke-dashoffset: 420; animation: draw 3s linear infinite; }
+    @keyframes draw { 0% { stroke-dashoffset: 420; } 60% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -420; } }
+
+    @media (max-width: 720px) {
+      header { grid-template-columns: 1fr; padding-top: 36px; }
+      #hero { width: 220px; justify-self: center; order: -1; }
+      .acts { display: none; }
+      .bar a { font-size: 11px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="kicker">AHA 2026 · QCOR workshop · Agentic AI in cardiovascular care</div>
+      <h1>Clinical agents,<br><em>ten ways.</em></h1>
+      <p class="lede">Ten small, playable demos. One patient. About a minute each. Together they build the idea from the ground up:
+        <b>what a language model is</b>, <b>what turns it into an agent</b>, and <b>what it takes to trust one</b> with a chart.</p>
+    </div>
+    <svg id="hero" viewBox="0 0 320 320" aria-label="An agent loop around a heart">
+      <circle cx="160" cy="160" r="128" fill="none" stroke="#1c1f26" stroke-width="2"/>
+      <g class="orbit">
+        <circle cx="160" cy="160" r="128" fill="none" stroke="var(--cyan)" stroke-width="2.5" stroke-dasharray="90 714" stroke-linecap="round" transform="rotate(-130.3 160 160)" opacity=".7"/>
+        <circle cx="160" cy="32" r="7" fill="var(--cyan)"/><circle cx="160" cy="32" r="14" fill="var(--cyan)" opacity=".18"/></g>
+      <g font-family="var(--mono)" font-size="13" font-weight="700" letter-spacing="1.5" text-anchor="middle">
+        <text x="160" y="16" fill="#cfcfcf">THINK</text>
+        <text x="296" y="244" fill="var(--cyan)">ACT</text>
+        <text x="24" y="244" fill="var(--amber)">LOOK</text>
+      </g>
+      <g class="pulse">
+        <path d="M160 214 C 112 182 92 158 92 134 C 92 114 108 100 126 100 C 140 100 152 108 160 120 C 168 108 180 100 194 100 C 212 100 228 114 228 134 C 228 158 208 182 160 214 Z"
+              fill="rgba(255,176,32,.08)" stroke="var(--amber)" stroke-width="3" stroke-linejoin="round"/>
+      </g>
+      <path class="hb" d="M70 160 H 118 L 128 140 L 140 186 L 152 120 L 164 172 L 172 160 H 250" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </header>
+
+  <div class="patient">
+    <svg width="34" height="34" viewBox="0 0 34 34" fill="none" stroke="var(--amber)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="6" y="4" width="22" height="27" rx="3"/><path d="M12 4v4h10V4"/><path d="M11 15h12M11 20h12M11 25h7"/></svg>
+    <span class="nm">Mrs. Rosa Delgado, 71 · HFrEF</span>
+    <span class="q">For each guideline heart-failure drug class: on it, a documented reason not to be, or a real gap?</span>
+    <span class="gold"><span>HFrEF</span><span>ACE/ARB ✓</span><span class="g">Beta blocker: GAP</span><span>MRA: medical reason</span><span>SGLT2i: declined</span></span>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <section class="arc">
+    <h3>Run of show · ~10 minutes</h3>
+    <div class="bar" id="bar"></div>
+    <div class="acts">
+      <div style="flex:2">What is an agent?</div>
+      <div style="flex:3">How is one built?</div>
+      <div style="flex:2">Memory and trust</div>
+      <div style="flex:3">Scale and the team</div>
+    </div>
+  </section>
+
+  <footer>
+    <span>QCOR 2026 · synthetic patient · illustrative simulations · study numbers are preliminary (ACC.27 abstract)</span>
+    <span>Keys: 1–9, 0 open a demo · F fullscreen · every demo works offline</span>
+  </footer>
+
+  <script>
+    // Icons are drawn here (24-unit grid, 2px strokes) so each card carries its own mark.
+    const I = {
+      word: '<rect x="2" y="6" width="20" height="12" rx="3"/><path d="M6 12h5"/><path d="M14 10v4" class="blink"/><path d="M17 15l2-3-2-3"/>',
+      loop: '<path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/><circle cx="12" cy="12" r="2.2"/>',
+      race: '<path d="M4 20V4"/><path d="M4 5h11l-2 3 2 3H4"/><path d="M9 20h11"/><path d="M14 16l3 4"/>',
+      you: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-4 4-6 7-6s6 2 7 6"/><path d="M2 3l3 3M22 3l-3 3"/>',
+      intern: '<circle cx="12" cy="6.5" r="3"/><path d="M6 21v-5c0-3 2.5-5 6-5s6 2 6 5v5"/><path d="M12 11l-2 5 2 1 2-1-2-5"/><rect x="14.5" y="15" width="3" height="3.5" rx=".6"/>',
+      skill: '<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9 11h7M9 14h7M9 17h4"/>',
+      desk: '<path d="M3 13h18"/><path d="M5 13v7M19 13v7"/><rect x="7" y="6" width="6" height="7" rx="1" transform="rotate(-8 10 9)"/><rect x="12" y="7" width="6" height="6" rx="1" transform="rotate(6 15 10)"/>',
+      receipt: '<path d="M6 3h12v18l-2-1.5L14 21l-2-1.5L10 21l-2-1.5L6 21z"/><path d="M9 8h6M9 11h6"/><path d="M9 15l2 2 4-4"/>',
+      many: '<circle cx="6" cy="6" r="1.6"/><circle cx="12" cy="6" r="1.6"/><circle cx="18" cy="6" r="1.6"/><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/><circle cx="6" cy="18" r="1.6"/><circle cx="12" cy="18" r="1.6"/><circle cx="18" cy="18" r="2.6"/>',
+      team: '<circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="17" r="2.5"/><circle cx="12" cy="19" r="2.5"/><circle cx="19" cy="17" r="2.5"/><path d="M12 7.5v9M10.5 7l-4.2 8M13.5 7l4.2 8"/>',
+    };
+    const D = [
+      ["01-next-word", "From autocomplete to agent", "A model guesses the next word. Teach it one special word — a request — and it can go and look.", "language model · token · hallucination", "word", "--fg", 60],
+      ["02-the-loop", "Think · Act · Look", "Watch the agent work her chart, deciding each next step from what it just found.", "tool call · loop", "loop", "--cyan", 60],
+      ["03-race", "Chatbot vs agent", "Same question, two contestants. The fast one finishes first. Then we check the answers.", "chatbot vs agent", "race", "--red", 60],
+      ["04-you-are-the-agent", "You are the agent", "Dark screen, eight turns, four tools. Find the evidence before you answer.", "only what its tools return", "you", "--amber", 75],
+      ["05-the-intern", "Onboarding the intern", "Task, tools, protocol, to-do list, attending. Add each part, watch the score climb.", "task · tools · skill · plan · oversight", "intern", "--green", 60],
+      ["06-the-skill", "Rules in plain English", "Edit the protocol yourself. The agent obeys, even a bad rule. Who writes the rules matters.", "skill · governance", "skill", "--fg", 60],
+      ["07-the-desk", "The desk and the library", "Why not paste the whole chart in? A bigger desk doesn't help if you don't know where to look.", "context window · retrieval", "desk", "--cyan", 60],
+      ["08-show-your-work", "No quote, no answer", "Every claim links to its sentence. A checker catches the one with no source. A human signs.", "grounding · hallucination · verification", "receipt", "--green", 60],
+      ["09-one-to-4078", "One patient to 4,078", "When chart review costs almost nothing, you can review every chart. Exceptions aren't failures.", "quality measure · worklist", "many", "--pink", 60],
+      ["10-the-team", "The team", "A coordinator splits the work, specialists run in parallel, a clinician closes the loop.", "orchestration · sub-agent · human in the loop", "team", "--cyan", 75],
+    ];
+    const grid = document.getElementById("grid"), bar = document.getElementById("bar");
+    D.forEach(([f, t, p, w, ic, c, s], i) => {
+      const a = document.createElement("a");
+      a.className = "card"; a.href = f + ".html"; a.style.setProperty("--c", `var(${c})`); a.style.animationDelay = (i * 60) + "ms";
+      a.innerHTML = `<div class="top"><span class="n">${String(i + 1).padStart(2, "0")}</span><span class="t">~${s}s</span></div>
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[ic]}</svg>
+        <h2>${t}</h2><p>${p}</p><div class="word">${w}</div>`;
+      grid.appendChild(a);
+      const b = document.createElement("a");
+      b.href = f + ".html"; b.textContent = String(i + 1).padStart(2, "0"); b.title = t;
+      b.style.setProperty("--c", `var(${c})`); b.style.flex = s / 60;
+      bar.appendChild(b);
+    });
+    addEventListener("keydown", (e) => {
+      if (e.key === "f" || e.key === "F") { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); return; }
+      const n = "1234567890".indexOf(e.key);
+      if (n >= 0) location.href = D[n][0] + ".html";
+    });
+  </script>
+</body>
+</html>

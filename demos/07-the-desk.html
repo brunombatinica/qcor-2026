@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<!--
+  QCOR 2026 · Demo 07 · The desk and the library
+  The one idea: a model can only read what is on its "desk" (the context window). Pasting the whole
+  chart in overflows the desk, and even a desk big enough to hold it all blurs the details buried in
+  the middle. An agent instead walks to the shelves, retrieves only the few pages it needs, writes
+  itself sticky-note summaries, and clears the desk. A bigger desk doesn't help if you don't know
+  where to look.
+  Controls: → / Space / Next = advance · ← = back · R = restart · F = fullscreen
+            Step 5: "Desk size" slider and "Paste everything / Agent retrieves" toggle.
+  Patient and notes are synthetic. No PHI.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>07 · The desk and the library · QCOR 2026</title>
+<style>
+:root{
+  --bg:#05070a; --fg:#F2F2F2; --dim:#8C8C8C; --line:#2a2a2a; --panel:#0c0f14;
+  --amber:#FFB020; --cyan:#22D3EE; --green:#4ADE80; --pink:#FF4FA3; --red:#FF4D4D;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,"Helvetica Neue",Arial,sans-serif;
+  --mono:"SF Mono",ui-monospace,Menlo,Consolas,"DejaVu Sans Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans)}
+button{font-family:inherit;color:inherit}
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden}
+header{flex:none;display:flex;align-items:center;gap:18px;padding:12px 28px 6px}
+.back{font-size:13px;color:var(--dim);text-decoration:none}
+.back:hover{color:var(--fg)}
+.ttl{font-size:15px;color:var(--dim);letter-spacing:.02em}
+.ttl b{color:var(--fg);font-weight:700}
+.spacer{flex:1}
+#stepind{font:600 13px var(--mono);color:var(--dim);letter-spacing:.08em}
+main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.6fr) minmax(380px,1fr);gap:30px;padding:0 30px;position:relative}
+#sceneWrap{min-height:0;display:flex;align-items:center;justify-content:center}
+#cv{display:block}
+#panel{min-height:0;overflow-y:auto;display:flex;flex-direction:column;justify-content:center;padding:6px 4px 6px 0}
+.kicker{font:600 13px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+h2{font-size:clamp(24px,2.25vw,38px);line-height:1.12;margin:.25em 0 .45em;font-weight:750;letter-spacing:-.01em}
+p{font-size:clamp(15px,1.2vw,19px);line-height:1.42;color:#d4d4d4;margin:.1em 0 .6em}
+.amb{color:var(--amber)} .cy{color:var(--cyan)} .gr{color:var(--green)} .rd{color:var(--red)} .dm{color:var(--dim)}
+.mono{font-family:var(--mono)}
+.unpack{border-left:3px solid var(--fg);background:var(--panel);padding:9px 14px 10px;border-radius:0 10px 10px 0;margin:8px 0}
+.unpack .term{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+.unpack .def{font-size:clamp(15px,1.15vw,18px);line-height:1.38;margin-top:3px}
+.unpack .an{font-size:clamp(13px,1vw,15px);color:var(--dim);margin-top:4px;line-height:1.35}
+.unpack.c{border-color:var(--cyan)} .unpack.c .term{color:var(--cyan)}
+.unpack.a{border-color:var(--amber)} .unpack.a .term{color:var(--amber)}
+.unpack.r{border-color:var(--red)} .unpack.r .term{color:var(--red)}
+.unpack.w .term{color:var(--fg)}
+.big2{display:flex;gap:26px;margin:6px 0 10px}
+.big2 .n{font-size:clamp(28px,2.6vw,44px);font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
+.big2 .l{font-size:13px;color:var(--dim);letter-spacing:.06em;margin-top:4px}
+.toks{display:flex;flex-wrap:wrap;gap:3px;margin:8px 0 4px;min-height:30px}
+.tk{font:15px var(--mono);padding:3px 4px;border-radius:4px;background:#2a2008;color:var(--amber);opacity:0;transform:translateY(6px);transition:opacity .25s,transform .25s;white-space:pre}
+.tk:nth-child(2n){background:#3a2b0a}
+.tk.on{opacity:1;transform:none}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--dim);margin-top:10px}
+.legend i{display:inline-block;width:10px;height:13px;border-radius:2px;margin-right:6px;vertical-align:-2px}
+.chips{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:10px}
+.chip{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:7px 8px;min-width:0;transition:border-color .3s}
+.chip .cn{font-size:11px;color:var(--dim);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip .ca{display:flex;align-items:center;gap:5px;margin-top:3px;font-size:13.5px;font-weight:650;min-height:20px}
+.chip .ca svg{flex:none;width:17px;height:17px}
+.chip .ca span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip.ok{border-color:rgba(74,222,128,.55)} .chip.ok .ca{color:var(--green)}
+.chip.bad{border-color:rgba(255,77,77,.6)} .chip.bad .ca{color:var(--red)}
+.chip.fl{border-color:#555;border-style:dashed}
+.chip.pend .ca{color:#555}
+.score{display:flex;align-items:baseline;gap:10px;margin-top:8px;font-size:15px;color:var(--dim)}
+.score b{font-size:26px;color:var(--fg);font-variant-numeric:tabular-nums}
+.small{font-size:13px;color:var(--dim);margin-top:6px;line-height:1.35}
+.readrow{display:flex;gap:22px;font-size:15px;color:var(--dim);margin:6px 0}
+.readrow b{color:var(--fg);font-size:22px;font-variant-numeric:tabular-nums}
+.quote{border:1px solid rgba(255,176,32,.35);border-radius:10px;padding:10px 14px;margin:10px 0;background:#0e0b05}
+.quote .src{font:12px var(--mono);color:var(--dim);letter-spacing:.04em}
+.quote .q{font-size:clamp(15px,1.2vw,19px);color:var(--amber);margin-top:4px;line-height:1.38}
+.blurq{animation:blurq 2.6s infinite ease-in-out}
+@keyframes blurq{0%,100%{opacity:.9;filter:blur(0)}45%{opacity:.18;filter:blur(1.6px)}60%{opacity:.3;filter:blur(1.2px)}}
+.cards{display:flex;flex-direction:column;gap:7px;margin-top:8px}
+.card{display:flex;gap:10px;align-items:flex-start;opacity:0;transform:translateX(10px);transition:opacity .35s,transform .35s}
+.card.on{opacity:1;transform:none}
+.card .call{font:13.5px var(--mono);color:var(--cyan);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .note{background:var(--amber);color:#1c1300;font-size:14px;font-weight:600;border-radius:3px 3px 3px 10px;padding:5px 9px;margin-top:3px;line-height:1.3;opacity:0;transition:opacity .35s}
+.card .note.on{opacity:1}
+.card .ix{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--cyan);color:var(--cyan);font:700 12px var(--mono);display:flex;align-items:center;justify-content:center;margin-top:1px}
+.card .body{min-width:0;flex:1}
+.seg{display:flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:#0a0d12;margin:4px 0 10px}
+.seg button{flex:1;border:0;background:none;padding:10px 12px;border-radius:999px;font-size:15px;cursor:pointer;color:var(--dim);display:flex;align-items:center;justify-content:center;gap:8px}
+.seg button svg{width:18px;height:18px}
+.seg button.on[data-m=paste]{background:#2a1f08;color:var(--amber);box-shadow:inset 0 0 0 1px rgba(255,176,32,.55)}
+.seg button.on[data-m=agent]{background:#08262c;color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(34,211,238,.55)}
+.sl{display:flex;align-items:center;gap:12px;font-size:14px;color:var(--dim);margin-bottom:8px}
+.sl input{flex:1;accent-color:#e8e8e8;height:28px}
+.sl b{color:var(--fg);font-size:16px;min-width:88px;text-align:right;font-variant-numeric:tabular-nums}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.tile .tl{font-size:12px;color:var(--dim);letter-spacing:.04em}
+.tile .tv{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap}
+.tile .tv small{font-size:13px;font-weight:500;color:var(--dim)}
+.bar{height:8px;background:#1a1d22;border-radius:5px;margin-top:6px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:5px;transition:width .3s,background .3s}
+#explain{font-size:15px;line-height:1.38;margin-top:10px;min-height:42px;color:#d4d4d4}
+nav#bar{flex:none;display:flex;align-items:center;justify-content:center;gap:16px;padding:10px 20px 4px}
+.btn{background:#11151a;border:1px solid #333;border-radius:999px;padding:9px 20px;font-size:15px;cursor:pointer;color:var(--fg);text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+.btn:hover{border-color:#666}
+.btn.primary{border-color:#bbb}
+.btn:disabled{opacity:.35;cursor:default}
+#dots{display:flex;gap:6px}
+#dots span{width:26px;height:6px;border-radius:3px;background:#2a2a2a;cursor:pointer;transition:background .3s}
+#dots span.done{background:#5a5a5a} #dots span.cur{background:var(--fg)}
+footer{flex:none;text-align:center;font-size:12px;color:#555;padding:4px 0 10px}
+#final{position:absolute;inset:0;background:rgba(5,7,10,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:34px;padding:20px 40px;opacity:0;pointer-events:none;transition:opacity .6s}
+#final.on{opacity:1;pointer-events:auto}
+.callout{display:flex;gap:20px;align-items:center;border:1.5px solid rgba(74,222,128,.6);background:#06130b;border-radius:16px;padding:18px 26px;max-width:880px}
+.callout svg{flex:none;width:64px;height:64px}
+.callout .cq{font-size:clamp(20px,2vw,30px);line-height:1.25;font-weight:600}
+.callout .cs{font-size:15px;color:var(--dim);margin-top:6px}
+.take{font-size:clamp(30px,4.1vw,66px);line-height:1.08;font-weight:800;text-align:center;margin:0;max-width:1200px;letter-spacing:-.02em}
+.take em{font-style:normal;color:var(--cyan)}
+@media (max-width:860px), (max-aspect-ratio:1/1){
+  #app{height:auto;min-height:100vh;overflow:visible}
+  header{padding:10px 14px 4px;gap:10px}
+  .ttl{font-size:13px}
+  main{display:flex;flex-direction:column;gap:10px;padding:0 14px}
+  #panel{overflow:visible;justify-content:flex-start}
+  nav#bar{position:sticky;bottom:0;background:rgba(5,7,10,.95);border-top:1px solid #151515;padding:8px 10px;gap:10px}
+  .btn{padding:9px 14px}
+  #dots span{width:16px}
+  .chips{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+  .seg button{font-size:14px;padding:9px 8px} .seg button svg{display:none}
+  .tiles{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .tile .tv{font-size:20px} .tile{padding:7px 10px}
+  #panel,#sceneWrap{width:100%;min-width:0}
+  .chip{padding:6px 5px}
+  .chip .cn{font-size:10px}
+  .chip .ca{font-size:12px;gap:3px}
+  .chip .ca svg{width:14px;height:14px}
+  #final{position:fixed;z-index:5;gap:22px;padding:20px}
+  .callout{padding:14px 16px;gap:14px}
+  .callout svg{width:44px;height:44px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <a class="back" href="index.html">&larr; all demos</a>
+    <div class="ttl"><b>07</b> · The desk and the library</div>
+    <div class="spacer"></div>
+    <div id="stepind">1 / 6</div>
+  </header>
+  <main>
+    <div id="sceneWrap"><canvas id="cv" aria-label="Illustrated scene: the chart as a library wall, the model's desk, and the floor"></canvas></div>
+    <aside id="panel"></aside>
+    <div id="final">
+      <div class="callout">
+        <svg viewBox="0 0 64 64" fill="none" stroke="#4ADE80" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="17" r="9"/><path d="M14 56c0-11 8-19 18-19s18 8 18 19"/><path d="M24 39v7a6 6 0 0 0 12 0"/><path d="M40 39v6"/><circle cx="40" cy="48" r="3"/></svg>
+        <div><div class="cq">&ldquo;You don't read all 400 notes before rounds. You know where to look.&rdquo;</div>
+        <div class="cs">Retrieval is the agent's version of knowing where to look.</div></div>
+      </div>
+      <h1 class="take">A bigger desk doesn't help if you don't know <em>where to look</em>.</h1>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+        <button class="btn" id="tryAgain">&larr; back to the desk</button>
+        <a class="btn primary" href="08-show-your-work.html">next demo: show your work &rarr;</a>
+      </div>
+    </div>
+  </main>
+  <nav id="bar">
+    <button class="btn" id="prev">&larr; Back</button>
+    <div id="dots"></div>
+    <button class="btn primary" id="next">Next &rarr;</button>
+  </nav>
+  <footer>QCOR 2026 · synthetic patient · illustrative simulation</footer>
+</div>
+<script>
+(function(){
+"use strict";
+// ---------------- icons ----------------
+const IC={
+  ok:'<svg viewBox="0 0 24 24" fill="none" stroke="#4ADE80" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  bad:'<svg viewBox="0 0 24 24" fill="none" stroke="#FF4D4D" stroke-width="2.6" stroke-linecap="round"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>',
+  q:'<svg viewBox="0 0 24 24" fill="none" stroke="#bdbdbd" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.6 2.6 0 1 1 3.4 2.5c-.6.3-.9.8-.9 1.5v.5"/><path d="M12 17h.01"/></svg>',
+  pend:'<svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.2" stroke-linecap="round"><path d="M6 12h.01M12 12h.01M18 12h.01"/></svg>',
+  pile:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="12" height="15" rx="1.5"/><path d="M8 21h11a1.5 1.5 0 0 0 1.5-1.5V7"/><path d="M8 7h6M8 10.5h6M8 14h4"/></svg>',
+  agent:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="12" rx="3.5"/><path d="M12 7V4"/><circle cx="12" cy="3.2" r=".8"/><path d="M9 12.5h.01M15 12.5h.01"/><path d="M9.5 16h5"/></svg>'
+};
+const $=s=>document.querySelector(s);
+const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const SPEED=reduce?3:1;
+
+// ---------------- data ----------------
+const W=1000,H=620,N=400,WC=20,CW=19,CH=23,TW=16,TH=20,WX=34,WY=84,DX=735,DY=96,FLOOR=606;
+function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const R=rng(20261015);
+const TYPES=[
+  {k:'note',name:'Notes',c:'#FFB020',w:.30,tk:[700,2400]},
+  {k:'flow',name:'Nursing flowsheets',c:'#C9861A',w:.25,tk:[400,1500]},
+  {k:'lab',name:'Labs',c:'#E8C47C',w:.25,tk:[150,450]},
+  {k:'order',name:'Orders',c:'#94702E',w:.12,tk:[100,300]},
+  {k:'img',name:'Imaging',c:'#F4E0B4',w:.08,tk:[400,900]}];
+const KEYS={130:{id:'neph',lab:'Nephrology 4/14'},205:{id:'card',lab:'Cardiology 6/10'},372:{id:'echo',lab:'Echo 8/29'},396:{id:'dc',lab:'Discharge 9/2'}};
+const docs=[];
+for(let i=0;i<N;i++){
+  let r=R(),ty=0,acc=0;for(let j=0;j<TYPES.length;j++){acc+=TYPES[j].w;if(r<acc){ty=j;break;}}
+  if(i===130||i===205||i===396)ty=0; if(i===372)ty=4;
+  const T=TYPES[ty];
+  docs.push({ty,tok:Math.round(T.tk[0]+R()*(T.tk[1]-T.tk[0])),rx:470+R()*(990-470-TW),ry:FLOOR-26+R()*16,rot:(R()-.5)*1.5,fd:.75+R()*.35,j:R()});
+}
+const TOT=docs.reduce((s,d)=>s+d.tok,0);
+const KEYIDX={neph:130,card:205,echo:372,dc:396};
+const CLASSES=[['HF type','hf','echo'],['ACEi/ARB/ARNI','ras','dc'],['Beta blocker','bb','dc'],['MRA','mra','neph'],['SGLT2i','sglt','card']];
+const ANS={hf:['HFrEF','no EF'],ras:['on drug','unknown'],bb:['GAP','unknown'],mra:['excused','GAP'],sglt:['declined','GAP']};
+const RET=[
+  {i:130,q:'search_notes("spironolactone")',n:'MRA: spironolactone stopped 4/14 for potassium 5.9. Medical exception.',lab:'MRA',cls:['mra']},
+  {i:205,q:'search_notes("SGLT2")',n:'SGLT2i: she declined (UTIs on dapagliflozin, cost). Patient preference.',lab:'SGLT2i',cls:['sglt']},
+  {i:372,q:'search_notes("ejection fraction")',n:'Latest EF 30% (echo 8/29/26): HFrEF. The 45% is stale.',lab:'EF 30%',cls:['hf']},
+  {i:396,q:'read_note("discharge summary")',n:'Lisinopril: on therapy. Metoprolol tartrate does not count: beta-blocker GAP.',lab:'BB gap',cls:['ras','bb']}];
+const P=2.8, CYC0=1.6;
+
+// ---------------- geometry ----------------
+function wallXY(i){return {x:WX+(i%WC)*CW,y:WY+Math.floor(i/WC)*CH};}
+function deskGeo(cap){
+  cap=Math.max(1,cap);
+  const cols=Math.max(2,Math.ceil(Math.sqrt(cap*1.35))),rows=Math.max(1,Math.ceil(cap/cols));
+  const s=Math.min(1,470/(cols*CW),420/(rows*CH)),cw=CW*s,ch=CH*s,pad=12;
+  const w=cols*cw+pad*2,h=rows*ch+pad*2;
+  return {cap,cols,rows,cw,ch,s,pad,w,h,x:DX-w/2,y:DY+Math.max(0,(444-h)/2)};
+}
+function slotXY(g,k){return {x:g.x+g.pad+(k%g.cols)*g.cw+(g.cw-TW*g.s)/2,y:g.y+g.pad+Math.floor(k/g.cols)*g.ch+(g.ch-TH*g.s)/2};}
+const clamp=(v,a,b)=>v<a?a:v>b?b:v, lerp=(a,b,u)=>a+(b-a)*u;
+const ease=u=>{u=clamp(u,0,1);return u*u*(3-2*u);};
+function attn(p,n){if(n<=60)return 1;const d=Math.min(p,n-1-p);if(d<20)return 1;return Math.max(.12,1-(d-20)/70);}
+function capFromSlider(v){return Math.round(6*Math.pow(100,v/100));}
+
+// ---------------- canvas ----------------
+const cv=$('#cv'),ctx=cv.getContext('2d');
+const mq=window.matchMedia('(max-width:860px), (max-aspect-ratio:1/1)');
+let scale=1;
+function resize(){
+  const wrap=$('#sceneWrap');
+  const aw=wrap.clientWidth, ah=mq.matches?1e9:wrap.clientHeight;
+  NARROW=mq.matches;scale=Math.min(aw/W,ah/H);
+  const cw=Math.floor(W*scale),ch=Math.floor(H*scale);
+  cv.style.width=cw+'px';cv.style.height=ch+'px';
+  const dpr=window.devicePixelRatio||1;cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);
+  ctx.setTransform(scale*dpr,0,0,scale*dpr,0,0);
+}
+let NARROW=false;
+let RAW=false;
+function fs(px){return RAW?px:Math.max(px,(NARROW?9:10.5)/scale);} // keep canvas labels legible on phones
+function label(txt,x,y,col,size,align,weight){ctx.font=(weight||600)+' '+fs(size)+'px '+getComputedStyle(document.body).fontFamily;ctx.fillStyle=col;ctx.textAlign=align||'left';ctx.textBaseline='alphabetic';ctx.fillText(txt,x,y);}
+let FONT='';
+function setFont(sz,w,mono){ctx.font=(w||600)+' '+fs(sz)+'px '+(mono?'"SF Mono",ui-monospace,Menlo,Consolas,"DejaVu Sans Mono",monospace':FONT);}
+function text(t,x,y,col,sz,w,al,mono){setFont(sz,w,mono);ctx.fillStyle=col;ctx.textAlign=al||'left';ctx.textBaseline='alphabetic';ctx.fillText(t,x,y);}
+
+function drawDoc(i,x,y,s,a,rot){
+  if(a<=0.01)return;
+  const d=docs[i],T=TYPES[d.ty],w=TW*s,h=TH*s;
+  ctx.save();ctx.globalAlpha=a;ctx.translate(x+w/2,y+h/2);if(rot)ctx.rotate(rot);
+  ctx.fillStyle=T.c;ctx.fillRect(-w/2,-h/2,w,h);
+  ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=Math.max(.8,1.1*s);ctx.beginPath();
+  const l=-w/2+w*.18,r=w/2-w*.18,t=-h/2;
+  if(T.k==='note'){for(const f of [.28,.46,.64,.8]){ctx.moveTo(l,t+h*f);ctx.lineTo(f===.8?l+(r-l)*.55:r,t+h*f);}}
+  else if(T.k==='lab'){ctx.rect(l,t+h*.22,r-l,h*.56);ctx.moveTo(0,t+h*.22);ctx.lineTo(0,t+h*.78);ctx.moveTo(l,t+h*.5);ctx.lineTo(r,t+h*.5);}
+  else if(T.k==='img'){ctx.moveTo(w*.26,0);ctx.arc(0,0,w*.26,0,Math.PI*2);ctx.moveTo(l,t+h*.85);ctx.lineTo(r,t+h*.85);}
+  else if(T.k==='order'){for(const f of [.32,.62]){ctx.rect(l,t+h*f-h*.07,h*.14,h*.14);ctx.moveTo(l+h*.24,t+h*f);ctx.lineTo(r,t+h*f);}}
+  else {ctx.moveTo(l,t+h*.6);ctx.lineTo(l+(r-l)*.25,t+h*.35);ctx.lineTo(l+(r-l)*.5,t+h*.62);ctx.lineTo(l+(r-l)*.75,t+h*.3);ctx.lineTo(r,t+h*.5);}
+  ctx.stroke();ctx.restore();
+}
+function drawGhost(i){const p=wallXY(i);ctx.strokeStyle='#22262c';ctx.lineWidth=1;ctx.strokeRect(p.x+.5,p.y+.5,TW-1,TH-1);}
+function drawWallFrame(a){
+  ctx.save();ctx.globalAlpha=a==null?1:a;
+  ctx.fillStyle='#0a0d11';ctx.strokeStyle='#1e232a';ctx.lineWidth=1.5;
+  roundRect(WX-12,WY-12,WC*CW+21,20*CH+20,8);ctx.fill();ctx.stroke();
+  ctx.strokeStyle='#1a1e24';ctx.lineWidth=2;
+  for(let r=0;r<20;r++){const y=WY+r*CH+TH+1.5;ctx.beginPath();ctx.moveTo(WX-6,y);ctx.lineTo(WX+WC*CW+3,y);ctx.stroke();}
+  text('THE LIBRARY',WX-10,WY-38,'#d9d9d9',15,700);
+  if(!NARROW)text('her whole chart · 400 documents (illustrative)',WX-10,WY-20,'#8C8C8C',12.5,500);
+  ctx.restore();
+}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function drawDesk(g,a,capLabel){
+  if(a<=0)return;
+  ctx.save();ctx.globalAlpha=a;
+  ctx.fillStyle='rgba(0,0,0,.5)';roundRect(g.x+5,g.y+7,g.w,g.h,7);ctx.fill();
+  ctx.fillStyle='#161a20';ctx.strokeStyle='#3b4049';ctx.lineWidth=2;roundRect(g.x,g.y,g.w,g.h,7);ctx.fill();ctx.stroke();
+  ctx.setLineDash([5,4]);ctx.strokeStyle='rgba(255,77,77,.55)';ctx.lineWidth=1.4;roundRect(g.x+4,g.y+4,g.w-8,g.h-8,5);ctx.stroke();ctx.setLineDash([]);
+  const lx=Math.min(g.x,DX-140),below=g.h<200,ly=below?g.y+g.h+30:g.y-30;
+  text('THE DESK',lx,ly,'#d9d9d9',15,700);
+  if(!NARROW)text(capLabel||('context window · holds '+g.cap+' pages'),lx,ly+18,'#8C8C8C',12.5,500);
+  ctx.restore();
+}
+function drawFloor(n){
+  ctx.strokeStyle='#2a2a2a';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(462,FLOOR+10);ctx.lineTo(996,FLOOR+10);ctx.stroke();
+}
+function floorLabel(n){if(n<=0)return;const t=n+' pages on the floor';setFont(13,700);const w=ctx.measureText(t).width+16,h=fs(13)+10;
+  ctx.fillStyle='rgba(5,7,10,.85)';ctx.strokeStyle='rgba(255,77,77,.5)';ctx.lineWidth=1;roundRect(994-w,FLOOR-52-h*.7,w,h,6);ctx.fill();ctx.stroke();
+  text(t,986,FLOOR-52+h*.3-3,'#FF4D4D',13,700,'right');}
+function drawAgent(x,y,a,glow){
+  ctx.save();ctx.globalAlpha=a;ctx.translate(x,y);
+  if(glow){ctx.shadowColor='#22D3EE';ctx.shadowBlur=14;}
+  ctx.strokeStyle='#22D3EE';ctx.lineWidth=2.2;ctx.lineCap='round';ctx.lineJoin='round';
+  roundRect(-15,-10,30,22,7);ctx.fillStyle='#061a1e';ctx.fill();ctx.stroke();
+  ctx.shadowBlur=0;
+  ctx.beginPath();ctx.moveTo(0,-10);ctx.lineTo(0,-17);ctx.stroke();
+  ctx.beginPath();ctx.arc(0,-19,2,0,7);ctx.fillStyle='#22D3EE';ctx.fill();
+  ctx.beginPath();ctx.arc(-6,0,2.2,0,7);ctx.arc(6,0,2.2,0,7);ctx.fill();
+  ctx.beginPath();ctx.moveTo(-5,6);ctx.lineTo(5,6);ctx.stroke();
+  ctx.restore();
+  if(!NARROW)text('model',x,y+30,'#22D3EE',11.5,600,'center');
+}
+function agentPos(g){return {x:g.x-30,y:g.y+Math.min(g.h/2,70)};}
+function glowRect(x,y,w,h,col,lw){ctx.save();ctx.shadowColor=col;ctx.shadowBlur=12;ctx.strokeStyle=col;ctx.lineWidth=lw||2;ctx.strokeRect(x-2,y-2,w+4,h+4);ctx.restore();}
+function sticky(x,y,lab,a,rot){
+  if(a<=0)return;ctx.save();ctx.globalAlpha=a;ctx.translate(x+52,y+24);ctx.rotate(rot||0);
+  ctx.fillStyle='rgba(0,0,0,.45)';ctx.fillRect(-49,-21,104,50);
+  ctx.fillStyle='#FFB020';ctx.beginPath();ctx.moveTo(-52,-24);ctx.lineTo(52,-24);ctx.lineTo(52,14);ctx.lineTo(40,24);ctx.lineTo(-52,24);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#c8860f';ctx.beginPath();ctx.moveTo(52,14);ctx.lineTo(40,14);ctx.lineTo(40,24);ctx.closePath();ctx.fill();
+  setFont(17,800);ctx.fillStyle='#1c1300';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(lab,-2,-1);
+  ctx.restore();
+}
+function boardPos(g,k){const right=g.x+g.w+150<998;return {x:right?g.x+g.w+36:g.x+g.w-124,y:g.y+(right?0:22)+k*64,right};}
+
+// ---------- step-1 / step-2 trajectories ----------
+const CAP1=120,G1=deskGeo(CAP1),G2=deskGeo(600);
+const L1=i=>0.7+i*0.011;
+const E1=i=>L1(i+CAP1)+0.15;
+function s1(i,t){ // returns null if on wall
+  const L=L1(i);if(t<L)return null;
+  const w=wallXY(i),to=slotXY(G1,i%CAP1);
+  if(t<L+0.5){const u=ease((t-L)/0.5);return {x:lerp(w.x,to.x,u),y:lerp(w.y,to.y,u)-Math.sin(Math.PI*u)*40,s:lerp(1,G1.s,u),rot:0,layer:3};}
+  if(i>=N-CAP1)return {x:to.x,y:to.y,s:G1.s,rot:0,layer:1};
+  const E=E1(i);if(t<E)return {x:to.x,y:to.y,s:G1.s,rot:0,layer:1};
+  const d=docs[i],left=d.rx+TW/2<DX,u=(t-E)/d.fd;
+  if(u>=1)return {x:d.rx,y:d.ry,s:.85,rot:d.rot,layer:0,floor:1};
+  const ex=left?G1.x-TW*.5:G1.x+G1.w-TW*.5;
+  if(u<.3){const v=ease(u/.3);return {x:lerp(to.x,ex,v),y:to.y,s:G1.s,rot:0,layer:2};}
+  const v=(u-.3)/.7;
+  return {x:lerp(ex,d.rx,v),y:to.y+(d.ry-to.y)*v*v,s:lerp(G1.s,.85,v),rot:d.rot*v*1.6,layer:2};
+}
+const M2=i=>1.0+i*0.004;
+function s2(i,t){
+  const a=s1(i,99),to=slotXY(G2,i),M=M2(i);
+  if(t<M)return a;
+  const u=ease((t-M)/0.6);
+  return {x:lerp(a.x,to.x,u),y:lerp(a.y,to.y,u)-(a.floor?Math.sin(Math.PI*u)*50:0),s:lerp(a.s,G2.s,u),rot:lerp(a.rot,0,u),layer:u<1?3:1};
+}
+
+// ---------------- state ----------------
+let step=0,t0=performance.now(),mode='paste',sliderV=65;
+const STEPS=6;
+function go(n){
+  n=clamp(n,0,STEPS-1);step=n;t0=performance.now();lastPanel={};
+  renderPanel();
+  $('#final').classList.toggle('on',step===5);
+  $('#prev').disabled=step===0;$('#next').disabled=step===STEPS-1;
+  $('#stepind').textContent=(step+1)+' / '+STEPS;
+  [...$('#dots').children].forEach((d,k)=>{d.className=k===step?'cur':k<step?'done':'';});
+}
+
+// ---------------- panel ----------------
+function unpack(cls,term,def,an){return `<div class="unpack ${cls}"><div class="term">${term}</div><div class="def">${def}</div>${an?`<div class="an">${an}</div>`:''}</div>`;}
+function chipsHTML(){return '<div class="chips">'+CLASSES.map(c=>`<div class="chip pend" id="ch-${c[1]}"><div class="cn">${c[0]}</div><div class="ca">${IC.pend}<span></span></div></div>`).join('')+'</div><div class="score" id="score"></div>';}
+const TOKS=['Spir','ono','lact','one',' discontinued',' due',' to',' hyper','kal','emia','.'];
+function renderPanel(){
+  const p=$('#panel');let h='';
+  if(step===0){
+    h=`<div class="kicker">1 · The library</div>
+    <h2>Mrs. Delgado's chart is a <span class="amb">library</span></h2>
+    <p>Every note, lab, image, order and nursing flowsheet. A heart-failure patient can have <b>thousands</b> of documents (illustrative; 400 drawn here).</p>
+    <div class="big2"><div><div class="n amb" id="docN">0</div><div class="l">DOCUMENTS</div></div><div><div class="n" id="tokN">0</div><div class="l">TOKENS (ILLUSTRATIVE)</div></div></div>
+    ${unpack('a','Token','The unit a model reads: about &frac34; of a word.','Everyday words are often one token; medical words split into several.')}
+    <div class="toks">${TOKS.map(t=>`<span class="tk">${t}</span>`).join('')}</div>
+    <div class="small"><span id="tkc">0</span> tokens for 5 words (illustrative split)</div>
+    <div class="legend">${TYPES.map(T=>`<span><i style="background:${T.c}"></i>${T.name}</span>`).join('')}</div>`;
+  } else if(step===1){
+    h=`<div class="kicker">2 · The desk</div>
+    <h2>The model can only read what's <span style="color:#fff">on its desk</span></h2>
+    ${unpack('w','Context window','How much the model can hold in mind at once.','The size of the desk, not the size of the library.')}
+    <p>Paste the whole chart in, oldest first. The desk fills up, and the oldest pages slide off onto the floor.</p>
+    <div class="readrow"><span>on the desk <b id="onD">0</b> / ${CAP1}</span><span>on the floor <b id="onF" class="rd">0</b></span></div>
+    <div id="lostBox" style="opacity:0;transition:opacity .5s"><p style="margin-top:8px">Fell on the floor: the <span class="amb">nephrology note (4/14)</span> and the <span class="amb">cardiology note (6/10)</span>. So MRA and SGLT2i look like gaps.</p></div>
+    ${chipsHTML()}
+    <div class="small">Same protocol in every scenario. Only what the model reads changes.</div>`;
+  } else if(step===2){
+    h=`<div class="kicker">3 · Lost in the middle</div>
+    <h2>A bigger desk? Now it all fits, but <span class="rd">the middle blurs</span></h2>
+    ${unpack('r','Lost in the middle','Models attend less reliably to details buried in very long inputs.','Like a one-hour sign-out: you remember how it started and how it ended.')}
+    <div class="quote"><div class="src">NEPHROLOGY 4/14/2026 · page 131 of 400</div><div class="q blurq">&ldquo;Spironolactone discontinued due to hyperkalemia; would not rechallenge given CKD.&rdquo;</div></div>
+    <p>The SGLT2 refusal (page 206) is buried too. Some runs catch them, some don't.</p>
+    ${chipsHTML()}`;
+  } else if(step===3){
+    h=`<div class="kicker">4 · The agent's way</div>
+    <h2>Walk to the shelf. <span class="cy">Fetch only what you need.</span></h2>
+    ${unpack('c','Retrieval','Fetch only the pages that answer the question, using tools like <span class="mono">search_notes</span>.')}
+    ${unpack('a','Working notes (memory)','A sticky-note summary the agent writes before it clears the desk for the next page.')}
+    <div class="cards">${RET.map((r,k)=>`<div class="card" id="cd${k}"><div class="ix">${k+1}</div><div class="body"><div class="call">${r.q}</div><div class="note" id="nt${k}">${r.n}</div></div></div>`).join('')}</div>
+    ${chipsHTML()}`;
+  } else if(step===4){
+    h=`<div class="kicker">5 · Try it</div>
+    <h2>Change the desk. Change the strategy.</h2>
+    <div class="seg"><button data-m="paste">${IC.pile}Paste everything</button><button data-m="agent">${IC.agent}Agent retrieves</button></div>
+    <div class="sl"><span>Desk size</span><input type="range" id="desk" min="0" max="100" step="1" value="${sliderV}" aria-label="Desk size"><b id="capL"></b></div>
+    <div class="tiles">
+      <div class="tile"><div class="tl">Pages on the desk</div><div class="tv" id="rPg"></div></div>
+      <div class="tile"><div class="tl">Key facts clearly visible</div><div class="tv" id="rFx"></div></div>
+      <div class="tile"><div class="tl">Answers correct</div><div class="tv" id="rSc"></div></div>
+      <div class="tile"><div class="tl">Reading cost per patient (illustrative)</div><div class="tv" id="rCo" style="font-size:18px"></div><div class="bar"><i id="rBar"></i></div></div>
+    </div>
+    ${chipsHTML().replace('<div class="score" id="score"></div>','')}
+    <div id="explain"></div>`;
+  } else {
+    h=`<div class="kicker">6 · Takeaway</div>`;
+  }
+  p.innerHTML=h;
+  if(step===4){
+    p.querySelectorAll('.seg button').forEach(b=>{b.onclick=()=>{mode=b.dataset.m;syncSeg();};});
+    const s=$('#desk');s.oninput=()=>{sliderV=+s.value;};
+    syncSeg();
+  }
+}
+function syncSeg(){document.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));}
+let lastPanel={};
+function setTxt(id,v){if(lastPanel[id]===v)return;lastPanel[id]=v;const e=document.getElementById(id);if(e)e.textContent=v;}
+function setHTML(id,v){if(lastPanel[id]===v)return;lastPanel[id]=v;const e=document.getElementById(id);if(e)e.innerHTML=v;}
+function fmtK(n){return n>=1000?Math.round(n/1000).toLocaleString()+'k':String(n);}
+// states: {hf:'ok'|'bad'|'fl'|'pend'}
+function setChips(st,now){
+  CLASSES.forEach((c,ci)=>{
+    const k=c[1];let s=st[k]||'pend',icon,txt,cls=s;
+    if(s==='ok'){icon=IC.ok;txt=ANS[k][0];}
+    else if(s==='bad'){icon=IC.bad;txt=ANS[k][1];}
+    else if(s==='fl'){const on=Math.floor(now*1.3+ci*.55)%3!==0;icon=IC.q;txt=on?ANS[k][1]:ANS[k][0];cls='fl';
+      txt=`<span style="color:${on?'#FF4D4D':'#4ADE80'}">${txt}?</span>`;}
+    else {icon=IC.pend;txt='';cls='pend';}
+    const html=icon+(s==='fl'?txt:`<span>${txt}</span>`);
+    const id='ch-'+k;
+    if(lastPanel[id]!==html+cls){lastPanel[id]=html+cls;const e=document.getElementById(id);if(e){e.className='chip '+cls;e.querySelector('.ca').innerHTML=html;}}
+  });
+}
+function scoreOf(st){let lo=0,hi=0;for(const c of CLASSES){const s=st[c[1]];if(s==='ok'){lo++;hi++;}else if(s==='fl')hi++;}return {lo,hi};}
+function scoreTxt(st){const {lo,hi}=scoreOf(st);return hi>lo?`${lo}&ndash;${hi} / 5`:`${lo} / 5`;}
+
+// paste-mode model of what is seen
+function pasteState(cap){
+  const n=Math.min(cap,N),start=N-n,f={};
+  for(const id in KEYIDX){const i=KEYIDX[id];if(i<start)f[id]='lost';else f[id]=attn(i-start,n)>=.6?'ok':'blur';}
+  const st={};for(const c of CLASSES){const v=f[c[2]];st[c[1]]=v==='ok'?'ok':v==='blur'?'fl':'bad';}
+  return {n,start,f,st};
+}
+
+function updatePanel(t,now){
+  if(step===0){
+    let n=0,tk=0;for(let i=0;i<N;i++){if(t>=0.3+i*0.009+0.2){n++;tk+=docs[i].tok;}}
+    setTxt('docN',n.toLocaleString());setTxt('tokN',(tk?'≈ ':'')+tk.toLocaleString());
+    const k=clamp(Math.floor((t-1.0)/0.28),0,TOKS.length);
+    if(lastPanel.tk!==k){lastPanel.tk=k;document.querySelectorAll('.tk').forEach((e,j)=>e.classList.toggle('on',j<k));setTxt('tkc',String(k));}
+  } else if(step===1){
+    let onD=0,onF=0;for(let i=0;i<N;i++){const a=t>=L1(i)+0.5;if(!a)continue;if(i>=N-CAP1||t<E1(i))onD++;else if(t>=E1(i)+docs[i].fd)onF++;}
+    setTxt('onD',String(onD));setTxt('onF',String(onF));
+    const done=t>6.4;
+    const e=$('#lostBox');if(e)e.style.opacity=done?1:0;
+    const st=done?{hf:'ok',ras:'ok',bb:'ok',mra:'bad',sglt:'bad'}:{};
+    setChips(st,now);setHTML('score',done?`<b>3 / 5</b> correct`:'');
+  } else if(step===2){
+    const done=t>4.4;
+    const st=done?{hf:'ok',ras:'ok',bb:'ok',mra:'fl',sglt:'fl'}:{};
+    setChips(st,now);setHTML('score',done?`<b>3&ndash;5 / 5</b> varies run to run`:'');
+  } else if(step===3){
+    const tt=t-CYC0,st={};
+    RET.forEach((r,k)=>{const u=tt-k*P;const c=document.getElementById('cd'+k),n=document.getElementById('nt'+k);
+      if(c)c.classList.toggle('on',u>=0);if(n)n.classList.toggle('on',u>=1.9);if(u>=1.9)r.cls.forEach(x=>st[x]='ok');});
+    setChips(st,now);
+    const s=scoreOf(st).lo;setHTML('score',s?`<b>${s} / 5</b> correct · read ${Math.min(4,Math.max(0,Math.floor(tt/P)+1))} of 400 pages`:'');
+  } else if(step===4){
+    const cap=capFromSlider(sliderV);setTxt('capL',cap+' pages');
+    const keyTok=RET.reduce((s,r)=>s+docs[r.i].tok,0)+4*400;
+    if(mode==='paste'){
+      const ps=pasteState(cap);let tok=0;for(let i=ps.start;i<N;i++)tok+=docs[i].tok;
+      const clear=Object.values(ps.f).filter(v=>v==='ok').length,blur=Object.values(ps.f).filter(v=>v==='blur').length;
+      setHTML('rPg',`${ps.n}<small> of 400${ps.start?` · ${ps.start} on floor`:''}</small>`);
+      setHTML('rFx',`${clear} / 4${blur?`<small> + ${blur} blurry</small>`:''}`);
+      setHTML('rSc',scoreTxt(ps.st)+(scoreOf(ps.st).hi>scoreOf(ps.st).lo?'<small> unreliable</small>':''));
+      setHTML('rCo',`≈ ${fmtK(tok)} tokens`);
+      const b=$('#rBar');if(b){b.style.width=Math.max(2,100*tok/TOT)+'%';b.style.background='#FFB020';}
+      setChips(ps.st,now);
+      const NM={neph:'nephrology note',card:'cardiology note',echo:'echo',dc:'discharge summary'};
+      const lost=Object.keys(ps.f).filter(k=>ps.f[k]==='lost').map(k=>NM[k]),bl=Object.keys(ps.f).filter(k=>ps.f[k]==='blur').map(k=>NM[k]);
+      const list=a=>a.length>1?a.slice(0,-1).join(', ')+' and '+a[a.length-1]:a[0];
+      let ex=lost.length?`On the floor: the ${list(lost)}.`:ps.start?`${ps.start} older pages fell off, but no key note.`:'Everything fits on the desk.';
+      if(bl.length)ex+=` Buried in the middle, so it blurs: the ${list(bl)}.`;
+      if(!lost.length&&!bl.length)ex+=' Every key fact is clear.';
+      setTxt('explain',ex);
+    } else {
+      setHTML('rPg',`1<small> at a time · 4 in total</small>`);
+      setHTML('rFx','4 / 4');
+      setHTML('rSc','5 / 5');
+      setHTML('rCo',`≈ ${fmtK(keyTok)} tokens`);
+      const b=$('#rBar');if(b){b.style.width=Math.max(2,100*keyTok/TOT)+'%';b.style.background='#22D3EE';}
+      setChips({hf:'ok',ras:'ok',bb:'ok',mra:'ok',sglt:'ok'},now);
+      setTxt('explain',cap<30?'A small desk is plenty: the agent searches, reads one page, writes a sticky note, and clears the desk.':'A bigger desk changes nothing here: the agent still reads only the 4 pages it needs.');
+    }
+  }
+}
+
+// ---------------- scene drawing per step ----------------
+function bg(){ctx.fillStyle='#05070a';ctx.fillRect(0,0,W,H);}
+function drawStates(states,dimF){ // states: array of {i,x,y,s,rot,layer}
+  states.sort((a,b)=>a.layer-b.layer);
+  for(const p of states){drawDoc(p.i,p.x,p.y,p.s,dimF?dimF(p.i):1,p.rot);}
+}
+function scene0(t){
+  drawWallFrame();
+  for(let i=0;i<N;i++){const A=0.3+i*0.009,u=(t-A)/0.35;if(u<=0){drawGhost(i);continue;}const e=ease(u);const p=wallXY(i);drawDoc(i,p.x,p.y+(1-e)*28,1,e,0);}
+  // magnified needle
+  const a=ease((t-4.4)/0.8);if(a<=0)return;
+  const p=wallXY(130);ctx.save();ctx.globalAlpha=a;
+  glowRect(p.x,p.y,TW,TH,'#FFB020',2);
+  const bx=480,by=250,bw=500,bh=200;
+  ctx.strokeStyle='rgba(255,176,32,.5)';ctx.lineWidth=1.2;ctx.setLineDash([4,4]);
+  ctx.beginPath();ctx.moveTo(p.x+TW+2,p.y);ctx.lineTo(bx,by);ctx.moveTo(p.x+TW+2,p.y+TH);ctx.lineTo(bx,by+bh);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#0e0b05';ctx.strokeStyle='rgba(255,176,32,.7)';ctx.lineWidth=1.5;roundRect(bx,by,bw,bh,12);ctx.fill();ctx.stroke();
+  RAW=true;
+  text('ONE PAGE · NEPHROLOGY 4/14/2026',bx+22,by+34,'#8C8C8C',13,600,'left',true);
+  const lines=['“Spironolactone discontinued due to','hyperkalemia; would not rechallenge','given CKD.”'];
+  lines.forEach((l,k)=>text(l,bx+22,by+72+k*30,'#FFB020',22,600));
+  text('One sentence in ≈ '+Math.round(TOT/1000)+'k tokens decides the MRA answer.',bx+22,by+bh-18,'#F2F2F2',14,600);
+  RAW=false;
+  ctx.restore();
+}
+function scene1(t){
+  drawWallFrame();
+  const st=[];let floorN=0;
+  for(let i=0;i<N;i++){const s=s1(i,t);if(!s){const p=wallXY(i);drawDoc(i,p.x,p.y,1,1,0);continue;}drawGhost(i);if(s.floor)floorN++;s.i=i;st.push(s);}
+  drawFloor(floorN);
+  drawDesk(G1,ease(t/0.5));
+  const ap=agentPos(G1);drawAgent(ap.x,ap.y,ease(t/0.5));
+  drawStates(st);
+  if(t>6.4){const a=ease((t-6.4)/.6);ctx.save();ctx.globalAlpha=a;
+    for(const id of ['neph','card']){const d=docs[KEYIDX[id]];glowRect(d.rx,d.ry,TW*.85,TH*.85,'#FF4D4D',2);}
+    ctx.restore();}
+  floorLabel(floorN);
+}
+function scene2(t){
+  drawWallFrame();for(let i=0;i<N;i++)drawGhost(i);
+  const cap=lerp(CAP1,600,ease(t/1.0));const g=deskGeo(Math.round(cap));
+  let floorN=0;const st=[];
+  for(let i=0;i<N;i++){const s=s2(i,t);s.i=i;if(s.floor&&t<M2(i))floorN++;st.push(s);}
+  drawFloor(floorN);
+  drawDesk(g,1,'context window · holds '+Math.round(cap)+' pages');
+  const ap=agentPos(g);drawAgent(ap.x,ap.y,1);
+  const dimA=ease((t-2.8)/1.0);
+  floorLabel(floorN);drawStates(st,i=>{let b=lerp(1,attn(i,N),dimA);if((i===130||i===205)&&t>3.8)b=b+(1-b)*(.5+.5*Math.sin(t*5+i))*.6;return b;});
+  if(t>3.8){const a=ease((t-3.8)/.5);ctx.save();ctx.globalAlpha=a;
+    for(const i of [130,205]){const p=slotXY(G2,i);glowRect(p.x,p.y,TW*G2.s,TH*G2.s,'#FF4D4D',1.8);}
+    const mid=slotXY(G2,190);setFont(14,700);const tw=ctx.measureText('the middle blurs').width;
+    ctx.fillStyle='rgba(5,7,10,.88)';roundRect(DX-tw/2-10,mid.y-fs(14)+2,tw+20,fs(14)+10,6);ctx.fill();
+    text('the middle blurs',DX,mid.y+6,'#FF4D4D',14,700,'center');
+    ctx.restore();}
+}
+function retrieval(tt,g,loop){
+  // returns nothing; draws wall, beam, page, stickies. tt time since cycle start
+  const k=Math.floor(tt/P),u=tt-k*P;
+  const active=(k>=0&&k<4&&u>=0.8&&u<2.6)?RET[k].i:-1;
+  for(let i=0;i<N;i++){const p=wallXY(i);if(i===active)drawGhost(i);else drawDoc(i,p.x,p.y,1,1,0);}
+  const ap=agentPos(g);
+  // stickies
+  for(let j=0;j<4;j++){
+    const b=boardPos(g,j),rot=(j%2?.03:-.025);
+    if(j<k||(j===k&&u>=2.1))sticky(b.x,b.y,RET[j].lab,1,rot);
+    else if(j===k&&u>=1.75){const v=ease((u-1.75)/.35),c={x:g.x+g.w/2-52,y:g.y+g.h/2-24};sticky(lerp(c.x,b.x,v),lerp(c.y,b.y,v),RET[j].lab,v,rot*v);}
+  }
+  if(k>=0||loop){const b=boardPos(g,0);setFont(12,700);const lw=ctx.measureText('WORKING NOTES').width;text('WORKING NOTES',Math.min(b.x,996-lw),b.y-8,'#FFB020',12,700);}
+  if(k<0||k>=4){drawAgent(ap.x,ap.y,1,false);return;}
+  const tg=RET[k].i,wp=wallXY(tg);
+  const cx=g.x+g.w/2-TW,cy=g.y+g.h/2-TH;
+  if(u<0.8){
+    const v=u/0.8,e=ease(v);
+    const zx=WX+(.5+.5*Math.sin(v*8+k*2))*(WC*CW-TW),zy=WY+(.5+.5*Math.sin(v*5.3+k))*(20*CH-TH);
+    const px=lerp(zx,wp.x,e)+TW/2,py=lerp(zy,wp.y,e)+TH/2;
+    // scanned tiles
+    ctx.strokeStyle='rgba(34,211,238,.55)';ctx.lineWidth=1.2;
+    for(let i=0;i<N;i++){const p=wallXY(i);const dx=p.x+TW/2-px,dy=p.y+TH/2-py;if(dx*dx+dy*dy<26*26)ctx.strokeRect(p.x-1,p.y-1,TW+2,TH+2);}
+    ctx.save();ctx.strokeStyle='rgba(34,211,238,.8)';ctx.lineWidth=2;ctx.setLineDash([6,5]);ctx.lineDashOffset=-tt*40;
+    ctx.beginPath();ctx.moveTo(ap.x-14,ap.y);ctx.lineTo(px,py);ctx.stroke();ctx.restore();
+    ctx.strokeStyle='#22D3EE';ctx.lineWidth=2.2;ctx.beginPath();ctx.arc(px,py,15,0,7);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(px+11,py+11);ctx.lineTo(px+19,py+19);ctx.stroke();
+    if(v>.75)glowRect(wp.x,wp.y,TW,TH,'#22D3EE',2.2);
+    setFont(13,600,true);const q=RET[k].q,qw=ctx.measureText(q).width+20;
+    const qx=clamp(ap.x+18-qw,432,996-qw),qy=g.h<200?ap.y-66:ap.y+40;
+    ctx.fillStyle='#061a1e';ctx.strokeStyle='rgba(34,211,238,.6)';ctx.lineWidth=1.2;roundRect(qx,qy,qw,26,6);ctx.fill();ctx.stroke();
+    text(q,qx+10,qy+18,'#22D3EE',13,600,'left',true);
+  } else {
+    let x,y,s;
+    if(u<1.3){const e=ease((u-.8)/.5);x=lerp(wp.x,cx,e);y=lerp(wp.y,cy,e)-Math.sin(Math.PI*e)*40;s=lerp(1,2,e);}
+    else if(u<2.1){x=cx;y=cy;s=2;}
+    else {const e=ease((u-2.1)/.5);x=lerp(cx,wp.x,e);y=lerp(cy,wp.y,e)-Math.sin(Math.PI*e)*40;s=lerp(2,1,e);}
+    drawDoc(tg,x,y,s,1,0);
+    if(u>=1.3&&u<2.1){const v=(u-1.3)/.8;glowRect(x,y,TW*2,TH*2,'#22D3EE',1.6);
+      ctx.fillStyle='rgba(34,211,238,.85)';ctx.fillRect(x-3,y+TH*2*v,TW*2+6,2);
+      text('reading',x+TW,y-10,'#22D3EE',12,600,'center');}
+  }
+  drawAgent(ap.x,ap.y,1,u>=1.3&&u<2.1);
+}
+function scene3(t){
+  drawWallFrame();
+  const back=t<1.3;
+  const cap=Math.round(lerp(600,6,ease((t-.2)/.9)));const g=deskGeo(cap);
+  drawFloor(0);
+  drawDesk(g,1,'context window · holds '+cap+' pages');
+  if(back){
+    const st=[];
+    for(let i=0;i<N;i++){const Q=.1+docs[i].j*.6,a=slotXY(G2,i),w=wallXY(i);
+      if(t<Q){drawGhost(i);st.push({i,x:a.x,y:a.y,s:G2.s,rot:0,layer:1,b:attn(i,N)});continue;}
+      const u=ease((t-Q)/.5);if(u>=1){drawDoc(i,w.x,w.y,1,1,0);continue;}
+      drawGhost(i);st.push({i,x:lerp(a.x,w.x,u),y:lerp(a.y,w.y,u),s:lerp(G2.s,1,u),rot:0,layer:2,b:lerp(attn(i,N),1,u)});}
+    st.sort((a,b)=>a.layer-b.layer);for(const p of st)drawDoc(p.i,p.x,p.y,p.s,p.b,0);
+    const ap=agentPos(g);drawAgent(ap.x,ap.y,1);
+    return;
+  }
+  retrieval(t-CYC0,g,false);
+}
+let capDisp=120;
+function scene4(t,now){
+  const cap=capFromSlider(sliderV);capDisp+=(cap-capDisp)*.25;if(Math.abs(cap-capDisp)<.5)capDisp=cap;
+  const c=Math.round(capDisp);
+  drawWallFrame();
+  const g=deskGeo(c);
+  if(mode==='agent'){
+    drawFloor(0);drawDesk(g,1);
+    const cyc=4*P+1.0;retrieval((t%cyc),g,true);
+    return;
+  }
+  const ps=pasteState(cap),gg=deskGeo(Math.max(c,1));
+  let floorN=ps.start;
+  for(let i=0;i<N;i++)drawGhost(i);
+  drawFloor(floorN);
+  for(let i=0;i<ps.start;i++){const d=docs[i];drawDoc(i,d.rx,d.ry,.85,1,d.rot);}
+  drawDesk(gg,1);
+  const ap=agentPos(gg);drawAgent(ap.x,ap.y,1);
+  for(let i=ps.start;i<N;i++){const k=i-ps.start;if(k>=gg.cap)continue;const p=slotXY(gg,k);let b=attn(k,ps.n);
+    if(KEYS[i]&&b<.6)b=b+(1-b)*(.5+.5*Math.sin(now*5+i))*.6;drawDoc(i,p.x,p.y,gg.s,b,0);}
+  for(const id in KEYIDX){const i=KEYIDX[id];const f=ps.f[id];
+    if(f==='lost'){const d=docs[i];glowRect(d.rx,d.ry,TW*.85,TH*.85,'#FF4D4D',1.8);}
+    else if(f==='blur'){const k=i-ps.start;if(k<gg.cap){const p=slotXY(gg,k);glowRect(p.x,p.y,TW*gg.s,TH*gg.s,'#FF4D4D',1.6);}}}
+  floorLabel(floorN);
+}
+function scene5(t,now){
+  ctx.save();ctx.globalAlpha=.5;const g=deskGeo(6);drawWallFrame();drawFloor(0);drawDesk(g,1);retrieval(t%(4*P+1)+0.0,g,true);ctx.restore();
+}
+
+function frame(now){
+  const t=(now-t0)/1000*SPEED;
+  FONT=FONT||getComputedStyle(document.body).fontFamily;
+  bg();
+  [scene0,scene1,scene2,scene3,scene4,scene5][step](t,now/1000);
+  updatePanel(t,now/1000);
+  requestAnimationFrame(frame);
+}
+
+// ---------------- controls ----------------
+$('#dots').innerHTML=Array.from({length:STEPS},(_,k)=>`<span title="Step ${k+1}"></span>`).join('');
+[...$('#dots').children].forEach((d,k)=>d.onclick=()=>go(k));
+$('#next').onclick=()=>go(step+1);$('#prev').onclick=()=>go(step-1);
+$('#tryAgain').onclick=()=>go(4);
+$('#sceneWrap').addEventListener('click',()=>{if(step<4)go(step+1);});
+document.addEventListener('keydown',e=>{
+  const inInput=e.target&&e.target.tagName==='INPUT';
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){if(inInput&&e.key!==' ')return;e.preventDefault();go(step+1);}
+  else if(e.key==='ArrowLeft'||e.key==='PageUp'){if(inInput)return;e.preventDefault();go(step-1);}
+  else if(e.key==='r'||e.key==='R'){mode='paste';sliderV=65;go(0);}
+  else if(e.key==='f'||e.key==='F'){if(!document.fullscreenElement)document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{});else document.exitFullscreen();}
+});
+window.addEventListener('resize',resize);
+if(mq.addEventListener)mq.addEventListener('change',resize);
+resize();go(0);requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

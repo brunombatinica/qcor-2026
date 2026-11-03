@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<!--
+  QCOR 2026 · Demo 05 · Onboarding the new intern
+  The one idea: you already know how to build an agent, because you have onboarded interns.
+  An agent is a language model plus five parts: a task, tools, a skill, a plan, and oversight.
+  Add the parts one at a time (in any order) and watch the scorecard on Mrs. Delgado change;
+  remove one to see what breaks.
+  Controls: Right arrow / Space / "Next" adds the next part, then shows the takeaway.
+            Left arrow / "Back" removes the most recently added part. R restarts. F fullscreen.
+            1-5 toggle a part directly. Drag a card onto the intern, or tap/click it to toggle.
+  Patient and notes are synthetic. No PHI.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>05 · Onboarding the new intern · QCOR 2026</title>
+<style>
+:root{
+  --bg:#05070a; --fg:#F2F2F2; --dim:#8C8C8C; --line:#2a2a2a; --panel:#0c1016;
+  --amber:#FFB020; --cyan:#22D3EE; --green:#4ADE80; --pink:#FF4FA3; --red:#FF4D4D;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,"Helvetica Neue",Arial,sans-serif;
+  --mono:"SF Mono",ui-monospace,Menlo,Consolas,"DejaVu Sans Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+body{min-height:100vh;display:flex;flex-direction:column}
+a{color:inherit}
+.home{position:fixed;top:10px;left:14px;font-size:13px;color:var(--dim);text-decoration:none;z-index:30}
+.home:hover{color:var(--fg)}
+header{padding:30px 28px 6px 28px;display:flex;align-items:baseline;gap:18px;flex-wrap:wrap}
+h1{margin:0;font-size:30px;font-weight:700;letter-spacing:-.01em}
+h1 .n{color:var(--dim);font-weight:500;margin-right:6px}
+.sub{color:var(--dim);font-size:17px}
+.sub b{color:var(--fg);font-weight:600}
+
+main{flex:1;display:grid;grid-template-columns:290px minmax(0,1fr) minmax(0,1.12fr);gap:22px;padding:8px 28px 6px 28px;min-height:0}
+.col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:2px 0 0 2px}
+
+/* part cards */
+.cards{display:flex;flex-direction:column;gap:9px}
+.card{position:relative;display:flex;gap:12px;align-items:center;padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;background:var(--panel);cursor:grab;user-select:none;-webkit-user-select:none;transition:border-color .25s,background .25s,transform .2s,opacity .2s;touch-action:none;text-align:left;color:var(--fg);font:inherit;width:100%}
+.card:hover{border-color:#4a4a4a;transform:translateX(2px)}
+.card:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.card .ic{flex:0 0 40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:#11161d}
+.card .ic svg{width:28px;height:28px}
+.card .t{display:flex;flex-direction:column;gap:2px;min-width:0}
+.card .k{font-size:13px;color:var(--dim)}
+.card .nm{font-size:18px;font-weight:650}
+.card .num{position:absolute;top:7px;right:10px;font-size:11px;color:#555;font-family:var(--mono)}
+.card .st{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--dim)}
+.card.on .num{display:none}
+.card.on{border-color:var(--c);background:color-mix(in srgb,var(--c) 9%,var(--panel))}
+.card.on .st{color:var(--c)}
+.card.dragging{opacity:.35}
+.ghost{position:fixed;z-index:50;pointer-events:none;width:280px;opacity:.95;transform:rotate(-2deg);box-shadow:0 12px 40px rgba(0,0,0,.6)}
+.hint{font-size:13px;color:var(--dim);line-height:1.4;padding:2px 4px}
+
+/* centre */
+.stagebox{position:relative;border:1px solid var(--line);border-radius:16px;background:radial-gradient(ellipse at 50% 60%,#0d141c 0%,#05070a 70%);flex:0 0 auto;transition:border-color .3s,box-shadow .3s}
+.stagebox.over{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(34,211,238,.18) inset}
+.stagebox svg{display:block;width:100%;height:auto}
+.droptip{position:absolute;left:14px;top:10px;text-align:left;font-size:13px;color:var(--dim);pointer-events:none}
+.part{transform-box:fill-box;transform-origin:center;transition:opacity .45s,transform .45s cubic-bezier(.3,1.5,.5,1)}
+.part.off{opacity:0;transform:scale(.4)}
+.flow{stroke-dasharray:5 7;animation:flow 1.1s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-24}}
+
+.unpack{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--panel);flex:1;min-height:0;overflow:auto}
+.unpack .w{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.unpack h3{margin:4px 0 4px 0;font-size:22px}
+.unpack p{margin:0 0 8px 0;font-size:16px;line-height:1.4;color:#d9d9d9}
+.unpack .an{color:var(--dim);font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;align-items:center}
+.chip{font-family:var(--mono);font-size:14px;padding:4px 9px;border:1px solid var(--cyan);color:var(--cyan);border-radius:7px;background:rgba(34,211,238,.06)}
+.ehr{font-size:13px;padding:4px 9px;border:1.5px solid var(--pink);color:var(--pink);border-radius:7px}
+.arrow{color:var(--cyan);font-size:15px}
+pre.skill{margin:6px 0 0 0;font-family:var(--mono);font-size:12.5px;line-height:1.36;color:#e8e8e8;background:#080b0f;border:1px solid #333;border-radius:8px;padding:8px 10px;white-space:pre-wrap;overflow:auto}
+.fname{font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:4px}
+pre.skill .hl{background:rgba(255,77,77,.18);color:#fff;outline:1px solid var(--red);border-radius:3px}
+pre.skill .fm{color:var(--dim)}
+.plan{margin:6px 0 0 0;padding:0;list-style:none;display:grid;gap:5px}
+.plan li{font-size:15px;display:flex;gap:9px;align-items:baseline}
+.plan li span{font-family:var(--mono);color:var(--cyan);font-size:13px;flex:0 0 18px}
+.vs{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;font-size:15px;margin-top:4px;align-items:baseline}
+.vs .x{color:var(--red);font-weight:700}
+.vs .ok{color:var(--green);font-weight:700}
+
+/* right: scorecard */
+.score{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:12px 16px 12px 16px}
+.shead{display:flex;align-items:center;gap:14px}
+.big{font-size:46px;font-weight:750;line-height:1;font-variant-numeric:tabular-nums;min-width:96px;transition:color .3s}
+.big small{font-size:22px;color:var(--dim);font-weight:500}
+.shead .cap{font-size:14px;color:var(--dim);line-height:1.35}
+.shead .cap b{color:var(--fg);font-weight:600}
+.calls{margin-left:auto;text-align:right;font-size:12px;color:var(--dim);min-width:160px}
+.calls .cn{font-size:22px;color:var(--cyan);font-weight:700;font-variant-numeric:tabular-nums}
+.dots{display:flex;gap:3px;justify-content:flex-end;margin-top:3px;flex-wrap:nowrap;margin-left:auto}
+.dots i{width:8px;height:8px;border-radius:50%;background:var(--cyan);opacity:.85;transition:opacity .3s,transform .3s}
+.dots i.gone{opacity:.12;transform:scale(.6)}
+.status{margin:8px 0 8px 0;font-size:15px;line-height:1.4;min-height:44px;padding:8px 12px;border-left:3px solid var(--cyan);background:#0a0e13;border-radius:0 8px 8px 0}
+.status .q{color:var(--amber)}
+.status .ag{color:var(--cyan)}
+.rows{display:grid;gap:6px}
+.row{display:grid;grid-template-columns:128px 1fr 26px;gap:1px 10px;align-items:center;padding:5px 10px;border-radius:9px;background:#090c11;border:1px solid #1b1f25;transition:border-color .3s}
+.row .qn{font-size:14px;color:var(--dim);line-height:1.2}
+.row .ans{font-size:17px;font-weight:650;line-height:1.2}
+.row .ans .gold{font-size:12.5px;color:var(--dim);font-weight:400;margin-left:10px;white-space:nowrap}
+.row .mk{width:24px;height:24px}
+.row .qt{grid-column:1 / 4;font-size:13.5px;line-height:1.3;color:var(--amber);display:none}
+.row .qt.flag{color:var(--green);font-style:normal}
+.row.showq .qt{display:block}
+.row.ok .ans{color:var(--fg)}
+.row.bad .ans{color:var(--red)}
+.row.none .ans{color:#555}
+.row.pulse-bad{animation:pbad 1s ease 2}
+.row.pulse-ok{animation:pok 1s ease 1}
+@keyframes pbad{0%,100%{box-shadow:none;border-color:#1b1f25}40%{box-shadow:0 0 0 3px rgba(255,77,77,.45);border-color:var(--red)}}
+@keyframes pok{0%,100%{box-shadow:none}40%{box-shadow:0 0 0 3px rgba(74,222,128,.4);border-color:var(--green)}}
+
+/* translation table */
+.trans{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:10px 14px}
+.trans table{width:100%;border-collapse:collapse;font-size:15px}
+.trans th{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);font-weight:500;text-align:left;padding:2px 6px 6px}
+.trans td{padding:5px 6px;border-top:1px solid #1b1f25;transition:color .4s,opacity .4s}
+.trans td.mid{color:#555;width:26px;text-align:center}
+.trans tr.off td{color:#3b3b3b}
+.trans tr.off td.ag{color:#3b3b3b!important;font-weight:400}
+.trans td.ag{color:var(--cyan);font-weight:600}
+.trans tr.on td.mid{color:var(--dim)}
+
+/* controls */
+.controls{display:flex;align-items:center;gap:10px;padding:8px 28px 4px}
+.btn{font:inherit;font-size:15px;color:var(--fg);background:#11161d;border:1px solid #333;border-radius:9px;padding:8px 16px;cursor:pointer}
+.btn:hover{border-color:#666}
+.btn.pri{border-color:var(--cyan);color:var(--cyan)}
+.steps{display:flex;gap:6px;margin-left:8px}
+.steps i{width:22px;height:6px;border-radius:3px;background:#2a2a2a;transition:background .3s}
+.steps i.on{background:var(--fg)}
+.stepn{font-size:13px;color:var(--dim);margin-left:6px;font-variant-numeric:tabular-nums}
+.keys{margin-left:auto;font-size:12px;color:#5a5a5a}
+footer{font-size:12px;color:#5a5a5a;padding:4px 28px 10px}
+
+/* takeaway */
+.take{position:fixed;inset:0;background:rgba(5,7,10,.97);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;z-index:40;opacity:0;pointer-events:none;transition:opacity .6s;padding:30px;text-align:center}
+.take.show{opacity:1;pointer-events:auto}
+.take .line{font-size:clamp(28px,4vw,62px);font-weight:750;line-height:1.15;max-width:1450px;letter-spacing:-.01em}
+.take .line em{font-style:normal;color:var(--green)}
+.take .five{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.take .five span{font-size:16px;padding:6px 12px;border:1px solid #333;border-radius:20px;color:#cfcfcf}
+.take .five span b{color:var(--cyan);font-weight:600}
+.take .nav{display:flex;gap:14px}
+.take a.next{color:var(--cyan);text-decoration:none;font-size:18px;border:1px solid var(--cyan);padding:9px 18px;border-radius:10px}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.01s!important;transition-duration:.08s!important}
+}
+
+@media (min-width: 981px){
+  body{height:100vh;overflow:hidden}
+  .stagebox svg{height:43vh}
+  main{grid-template-rows:minmax(0,1fr);overflow:hidden}
+  .col{min-height:0}
+}
+/* phone / narrow */
+@media (max-width: 980px){
+  header{padding:34px 16px 4px}
+  h1{font-size:23px}
+  .sub{font-size:15px}
+  main{display:flex;flex-direction:column;gap:14px;padding:8px 14px 90px}
+  .col{display:contents}
+  .stagebox{order:1}
+  .cards{order:2}
+  .score{order:4}
+  .unpack{order:5;flex:none}
+  .trans{order:6}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .card{padding:8px 9px;gap:8px}
+  .card .ic{flex-basis:32px;height:32px}
+  .card .ic svg{width:22px;height:22px}
+  .card .nm{font-size:16px}
+  .card .k{font-size:11.5px}
+  .card .st{display:none}
+  .card .num{display:none}
+  .hint{display:none}
+  .label.cl{display:none}
+  .card:nth-child(5){grid-column:1 / 3}
+  .big{font-size:38px;min-width:78px}
+  .calls{min-width:0}
+  .row{grid-template-columns:92px 1fr 22px;padding:6px 8px}
+  .row .ans{font-size:15px}
+  .row .ans .gold{display:block;margin-left:0;white-space:normal}
+  .score,.trans,.unpack{min-width:0}
+  .steps{display:none}
+  .btn{padding:8px 12px}
+  .nx-x{display:none}
+  .stagebox svg{height:auto!important}
+  .row .qn{font-size:12.5px}
+  .controls{position:fixed;left:0;right:0;bottom:0;background:rgba(5,7,10,.96);border-top:1px solid var(--line);padding:10px 14px;z-index:35}
+  .keys{display:none}
+  footer{padding:4px 16px 80px}
+  .steps i{width:14px}
+}
+</style>
+</head>
+<body>
+<a class="home" href="index.html">&larr; all demos</a>
+
+<header>
+  <h1><span class="n">05</span>Onboarding the new intern</h1>
+  <div class="sub">An agent is built the way you onboard an intern: <b>five moves</b>. Add them, and watch the review of Mrs. Delgado change.</div>
+</header>
+
+<main>
+  <!-- LEFT: the five parts -->
+  <section class="col cardsWrap" aria-label="The five parts">
+    <div class="label cl">The five parts &middot; drag onto the intern, or tap</div>
+    <div class="cards" id="cards"></div>
+    <div class="hint">Order doesn't matter. Tap a part again to take it away and see what breaks.</div>
+  </section>
+
+  <!-- CENTRE: intern + unpacked -->
+  <section class="col" aria-label="The intern">
+    <div class="stagebox" id="drop">
+      <svg viewBox="0 0 520 360" id="intern" role="img" aria-label="A new intern in a white coat, progressively equipped">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#22D3EE"/></marker>
+          <marker id="ahp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#FF4FA3"/></marker>
+        </defs>
+        <!-- floor -->
+        <ellipse cx="250" cy="336" rx="150" ry="10" fill="#10161d"/>
+
+        <!-- OVERSIGHT: attending (green) on the left, connected by sign-out -->
+        <g id="p-over" class="part off">
+          <g transform="translate(58,150)">
+            <circle cx="0" cy="38" r="20" fill="none" stroke="#4ADE80" stroke-width="3"/>
+            <path d="M-34 140 C-34 90 -24 70 0 70 C24 70 34 90 34 140" fill="none" stroke="#4ADE80" stroke-width="3" stroke-linecap="round"/>
+            <path d="M-10 74 C-14 96 -2 108 8 100" fill="none" stroke="#4ADE80" stroke-width="2.2" stroke-linecap="round"/>
+            <circle cx="9" cy="98" r="5" fill="none" stroke="#4ADE80" stroke-width="2.2"/>
+            <!-- shield -->
+            <path d="M0 -26 L22 -18 L22 -2 C22 12 12 20 0 26 C-12 20 -22 12 -22 -2 L-22 -18 Z" fill="#0d1a12" stroke="#4ADE80" stroke-width="2.5" stroke-linejoin="round"/>
+            <path d="M-9 0 L-2 7 L10 -7" fill="none" stroke="#4ADE80" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <text x="0" y="166" text-anchor="middle" font-size="13" fill="#4ADE80" font-family="-apple-system,Segoe UI,Arial,sans-serif">attending</text><text x="0" y="182" text-anchor="middle" font-size="11" fill="#4ADE80" opacity=".75" font-family="-apple-system,Segoe UI,Arial,sans-serif">sign-out</text>
+          </g>
+          <path d="M100 236 C130 236 140 250 160 250" fill="none" stroke="#4ADE80" stroke-width="2" stroke-dasharray="4 5" stroke-linecap="round"/>
+          
+        </g>
+
+        <!-- TOOLS: EHR box on the right + arrows -->
+        <g id="p-tools" class="part off">
+          <rect x="398" y="128" width="104" height="122" rx="10" fill="#1a0b14" stroke="#FF4FA3" stroke-width="2.5"/>
+          <text x="450" y="152" text-anchor="middle" font-size="15" font-weight="700" fill="#FF4FA3" font-family="-apple-system,Segoe UI,Arial,sans-serif">EHR</text>
+          <g stroke="#FF4FA3" stroke-width="2" stroke-linecap="round" opacity=".8">
+            <path d="M414 170 h72"/><path d="M414 186 h56"/><path d="M414 202 h66"/><path d="M414 218 h48"/><path d="M414 234 h60"/>
+          </g>
+          <path class="flow" d="M306 190 C340 186 360 178 392 172" fill="none" stroke="#22D3EE" stroke-width="2.5" marker-end="url(#ah)"/>
+          <path class="flow" d="M392 214 C360 214 340 214 306 210" fill="none" stroke="#FF4FA3" stroke-width="2.5" marker-end="url(#ahp)" style="animation-delay:-.5s"/>
+          <!-- keys on a ring, hanging from the badge -->
+          <g transform="translate(286,232)">
+            <circle cx="0" cy="0" r="7" fill="none" stroke="#22D3EE" stroke-width="2.4"/>
+            <g transform="rotate(25)"><circle cx="0" cy="16" r="5" fill="none" stroke="#22D3EE" stroke-width="2.4"/><path d="M0 21 v14 M0 29 h5 M0 34 h4" stroke="#22D3EE" stroke-width="2.4" stroke-linecap="round"/></g>
+            <g transform="rotate(-20)"><circle cx="0" cy="16" r="5" fill="none" stroke="#22D3EE" stroke-width="2.4"/><path d="M0 21 v12 M0 28 h-5" stroke="#22D3EE" stroke-width="2.4" stroke-linecap="round"/></g>
+          </g>
+        </g>
+
+        <!-- TASK: speech bubble with the job -->
+        <g id="p-task" class="part off">
+          <rect x="300" y="20" width="200" height="62" rx="12" fill="#0e1218" stroke="#F2F2F2" stroke-width="2"/>
+          <path d="M318 82 L300 104 L336 82" fill="#0e1218" stroke="#F2F2F2" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M318 81.5 L336 81.5" stroke="#0e1218" stroke-width="3"/>
+          <text x="400" y="45" text-anchor="middle" font-size="15" fill="#F2F2F2" font-weight="600" font-family="-apple-system,Segoe UI,Arial,sans-serif">Review GDMT for</text>
+          <text x="400" y="67" text-anchor="middle" font-size="15" fill="#FFB020" font-weight="600" font-family="-apple-system,Segoe UI,Arial,sans-serif">Mrs. Delgado</text>
+        </g>
+
+        <!-- THE INTERN -->
+        <g id="internBody">
+          <!-- legs -->
+          <path d="M228 300 L224 332 M272 300 L276 332" stroke="#8C8C8C" stroke-width="7" stroke-linecap="round"/>
+          <!-- coat -->
+          <path d="M206 150 C186 154 176 166 174 190 L168 304 L332 304 L326 190 C324 166 314 154 294 150 L250 172 Z" fill="#E9EDF1" stroke="#F2F2F2" stroke-width="2" stroke-linejoin="round"/>
+          <!-- shirt / V -->
+          <path d="M226 152 L250 196 L274 152 L250 170 Z" fill="#1d4f63"/>
+          <path d="M206 150 L236 210 L250 196 M294 150 L264 210 L250 196" fill="none" stroke="#9aa3ad" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M250 200 L250 304" stroke="#9aa3ad" stroke-width="1.6"/>
+          <circle cx="250" cy="228" r="2.4" fill="#9aa3ad"/><circle cx="250" cy="262" r="2.4" fill="#9aa3ad"/>
+          <!-- pocket with pen -->
+          <path d="M202 206 h26 v18 h-26 z" fill="none" stroke="#9aa3ad" stroke-width="1.6"/>
+          <path d="M210 196 v12" stroke="#22D3EE" stroke-width="3" stroke-linecap="round"/>
+          <!-- arms -->
+          <path d="M178 178 C166 210 162 240 166 270" fill="none" stroke="#E9EDF1" stroke-width="22" stroke-linecap="round"/>
+          <path d="M322 178 C334 210 338 240 334 270" fill="none" stroke="#E9EDF1" stroke-width="22" stroke-linecap="round"/>
+          <path d="M178 178 C166 210 162 240 166 270" fill="none" stroke="#c9d0d7" stroke-width="1.5" opacity=".6"/>
+          <circle cx="166" cy="282" r="10" fill="#c9a27e"/>
+          <circle cx="334" cy="282" r="10" fill="#c9a27e"/>
+          <!-- neck & head -->
+          <rect x="241" y="132" width="18" height="22" rx="6" fill="#c9a27e"/>
+          <circle cx="250" cy="106" r="34" fill="#c9a27e"/>
+          <path d="M216 102 C214 76 232 64 252 64 C272 64 288 78 284 104 C278 88 266 82 250 84 C236 84 224 90 216 102 Z" fill="#3a2a22"/>
+          <circle cx="238" cy="108" r="3.2" fill="#111"/><circle cx="262" cy="108" r="3.2" fill="#111"/>
+          <path d="M240 121 C246 127 254 127 260 121" fill="none" stroke="#111" stroke-width="2.4" stroke-linecap="round"/>
+          <!-- ID badge -->
+          <path d="M282 160 L286 190" stroke="#8C8C8C" stroke-width="1.6"/>
+          <g id="badge">
+            <rect x="272" y="190" width="28" height="36" rx="4" fill="#0e1218" stroke="#8C8C8C" stroke-width="2" id="badgeRect"/>
+            <circle cx="286" cy="202" r="5" fill="none" stroke="#8C8C8C" stroke-width="1.6" id="badgeFace"/>
+            <path d="M278 214 h16 M280 220 h12" stroke="#8C8C8C" stroke-width="1.6" stroke-linecap="round" id="badgeLines"/>
+          </g>
+          <text x="250" y="352" text-anchor="middle" font-size="13" fill="#8C8C8C" font-family="-apple-system,Segoe UI,Arial,sans-serif" id="nameTag">the new intern (a language model)</text>
+        </g>
+
+        <!-- SKILL: binder under the right arm (viewer's left) -->
+        <g id="p-skill" class="part off">
+          <g transform="translate(104,198) rotate(-8)">
+            <rect x="0" y="0" width="46" height="62" rx="4" fill="#F2F2F2" stroke="#F2F2F2" stroke-width="2"/>
+            <rect x="0" y="0" width="9" height="62" fill="#9aa3ad"/>
+            <circle cx="4.5" cy="14" r="2.5" fill="#05070a"/><circle cx="4.5" cy="31" r="2.5" fill="#05070a"/><circle cx="4.5" cy="48" r="2.5" fill="#05070a"/>
+            <path d="M15 14 h24 M15 21 h18" stroke="#05070a" stroke-width="2.2" stroke-linecap="round"/>
+            <rect x="14" y="30" width="27" height="9" rx="2" fill="#FF4D4D" opacity=".85"/>
+            <text x="27" y="56" text-anchor="middle" font-size="8.5" font-weight="700" fill="#05070a" font-family="-apple-system,Segoe UI,Arial,sans-serif">SKILL</text>
+          </g>
+          <path d="M178 178 C166 210 162 240 166 270" fill="none" stroke="#E9EDF1" stroke-width="22" stroke-linecap="round"/>
+          <circle cx="166" cy="282" r="10" fill="#c9a27e"/>
+        </g>
+
+        <!-- PLAN: clipboard checklist in the left hand (viewer's right) -->
+        <g id="p-plan" class="part off">
+          <g transform="translate(312,246) rotate(6)">
+            <rect x="0" y="0" width="54" height="70" rx="5" fill="#0e1218" stroke="#22D3EE" stroke-width="2.4"/>
+            <rect x="17" y="-5" width="20" height="9" rx="3" fill="#22D3EE"/>
+            <g stroke="#22D3EE" stroke-width="2.2" stroke-linecap="round" fill="none">
+              <path d="M8 18 l3 3 l6 -6"/><path d="M22 18 h24"/>
+              <path d="M8 34 l3 3 l6 -6"/><path d="M22 34 h20"/>
+              <path d="M8 50 h9"/><path d="M22 50 h22"/>
+            </g>
+          </g>
+          <circle cx="334" cy="282" r="10" fill="#c9a27e"/>
+        </g>
+      </svg>
+      <div class="droptip" id="droptip">drop a part here</div>
+    </div>
+
+    <div class="unpack" id="unpack" aria-live="polite"></div>
+  </section>
+
+  <!-- RIGHT: scorecard + translation -->
+  <section class="col" aria-label="Scorecard">
+    <div class="score" id="score">
+      <div class="shead">
+        <div class="big" id="big">0<small>/5</small></div>
+        <div class="cap"><b>Mrs. Delgado, 71 &middot; HFrEF</b><br>5 answers vs two clinicians' review</div>
+        <div class="calls"><div>chart look-ups <span style="color:#5a5a5a">(illustrative)</span></div><div class="cn" id="cn">0</div><div class="dots" id="dots"></div></div>
+      </div>
+      <div class="status" id="status"></div>
+      <div class="rows" id="rows"></div>
+    </div>
+
+    <div class="trans">
+      <table>
+        <thead><tr><th>Intern</th><th></th><th>Agent</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<div class="controls">
+  <button class="btn" id="back">&larr; Back</button>
+  <button class="btn pri" id="next">Next &rarr;</button>
+  <button class="btn" id="restart">Restart</button>
+  <div class="steps" id="steps"></div>
+  <div class="stepn" id="stepn"></div>
+  <div class="keys">&rarr; / Space next &middot; &larr; back &middot; 1&ndash;5 toggle a part &middot; R restart &middot; F fullscreen</div>
+</div>
+<footer>QCOR 2026 &middot; synthetic patient &middot; illustrative simulation</footer>
+
+<div class="take" id="take">
+  <div class="line">You already know how to build an agent:<br><em>you've onboarded interns.</em></div>
+  <div class="five">
+    <span>the job &rarr; <b>task</b></span><span>the Epic login &rarr; <b>tools</b></span><span>the protocol binder &rarr; <b>skill</b></span><span>the to-do list &rarr; <b>plan</b></span><span>sign-out &amp; attending &rarr; <b style="color:#4ADE80">oversight</b></span>
+  </div>
+  <div class="nav"><button class="btn" id="takeBack">&larr; back to the intern</button><a class="next" href="06-the-skill.html">next demo: the skill &rarr;</a></div>
+</div>
+
+<script>
+(function(){
+'use strict';
+var C={amber:'#FFB020',cyan:'#22D3EE',green:'#4ADE80',pink:'#FF4FA3',red:'#FF4D4D',fg:'#F2F2F2',dim:'#8C8C8C'};
+function svg(inner,col){return '<svg viewBox="0 0 32 32" fill="none" stroke="'+col+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+inner+'</svg>';}
+var ICON={
+  task:svg('<circle cx="16" cy="16" r="11"/><circle cx="16" cy="16" r="6"/><circle cx="16" cy="16" r="1.5" fill="#F2F2F2"/>',C.fg),
+  tools:svg('<rect x="5" y="6" width="13" height="18" rx="2"/><circle cx="11.5" cy="12" r="2.5"/><path d="M8.5 19h6"/><circle cx="23" cy="19" r="3.5"/><path d="M23 22.5v6M23 26h2.5"/>',C.cyan),
+  skill:svg('<rect x="7" y="4" width="18" height="24" rx="2"/><path d="M11 4v24"/><path d="M15 10h6M15 14h6M15 18h4"/>',C.fg),
+  plan:svg('<rect x="7" y="6" width="18" height="22" rx="2"/><rect x="12" y="3.5" width="8" height="4" rx="1.5"/><path d="M10.5 14l1.8 1.8 3-3M18 14h4M10.5 21l1.8 1.8 3-3M18 21h4"/>',C.cyan),
+  over:svg('<path d="M16 4l10 4v7c0 6.5-4.5 10.5-10 13C10.5 25.5 6 21.5 6 15V8z"/><path d="M11.5 16l3.2 3.2L21 12.8"/>',C.green),
+  ok:'<svg class="mk" viewBox="0 0 24 24" fill="none" stroke="#4ADE80" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" stroke-width="2"/><path d="M7.5 12.5l3 3 6-6.5"/></svg>',
+  bad:'<svg class="mk" viewBox="0 0 24 24" fill="none" stroke="#FF4D4D" stroke-width="2.6" stroke-linecap="round"><circle cx="12" cy="12" r="10" stroke-width="2"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/></svg>',
+  none:'<svg class="mk" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>'
+};
+var PARTS=[
+  {id:'task', intern:'The job', agent:'Task (the prompt)', name:'Task', col:C.fg, k:'the job'},
+  {id:'tools',intern:'The Epic login', agent:'Tools', name:'Tools', col:C.cyan, k:'the Epic login'},
+  {id:'skill',intern:'The protocol binder', agent:'Skill', name:'Skill', col:C.fg, k:'the protocol binder'},
+  {id:'plan', intern:'The to-do list', agent:'Plan (orchestration)', name:'Plan', col:C.cyan, k:'the to-do list'},
+  {id:'over', intern:'Sign-out & the attending', agent:'Human in the loop', name:'Oversight', col:C.green, k:'sign-out & attending'}
+];
+var SKILL_TXT=[
+ ['fm','---'],['fm','name: gdmt-gaps'],['fm','description: Decide, for an HFrEF patient, whether each guideline'],['fm','  drug class is used, excused, or a real gap.'],['fm','---'],
+ ['','HF type: use the most recent dated LVEF. Ignore old values'],['','copied into problem lists. HFrEF means LVEF 40% or less.'],['',''],
+ ['','Beta blocker counts only if: carvedilol, bisoprolol or'],['','metoprolol succinate.'],['hl','Metoprolol tartrate does not count.'],['',''],
+ ['','Look back 12 months. Before calling anything a gap, search'],['','the notes for a documented reason. Not a gap if the chart'],['','documents any of:'],['','  - a medical reason (e.g. hyperkalemia, low BP, asthma)'],['','  - the patient declined it (patient preference)'],['',''],
+ ['','Quote the sentence you relied on for every answer.']
+];
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+var UNPACK={
+  none:'<div class="w">Unpacked</div><h3>Agent</h3><p>A language model (the bright new intern) that is given a job, access to act, rules to follow, a plan, and someone checking its work.</p><p class="an">On its own, the model can only chat. Drag a part onto the intern, tap one, or press Next.</p>',
+  task:'<div class="w">Unpacked &middot; the job</div><h3>Task (the prompt)</h3><p>The instructions you give the agent. Like an intern, it does best with a clear, narrow job.</p><div class="vs"><span class="x">&times;</span><span>&ldquo;Be a cardiologist.&rdquo;</span><span class="ok">&#10003;</span><span>&ldquo;Review GDMT for Mrs. Delgado: for each drug class, is she on it, excused, or is it a gap?&rdquo;</span></div>',
+  tools:'<div class="w">Unpacked &middot; the Epic login</div><h3>Tool</h3><p>A button the agent is allowed to press in the record. It presses one, reads what comes back, decides the next.</p><div class="chips"><span class="chip">search_notes(query)</span><span class="chip">read_note(id)</span><span class="chip">get_medications()</span><span class="chip">get_labs()</span><span class="arrow">&rarr;</span><span class="ehr">EHR</span></div><p class="an" style="margin-top:8px">Without tools it only sees what you paste in. The reasons live in the notes.</p>',
+  skill:'<div class="w">Unpacked &middot; the protocol binder</div><h3>Skill</h3><p>A protocol written by clinicians, in plain English, that the agent reads before working.</p><div class="fname">gdmt-gaps / SKILL.md (peek)</div><pre class="skill">'+SKILL_TXT.slice(5,14).map(function(l){var t=esc(l[1]);return l[0]==='hl'?'<span class="hl">'+t+'</span>':(l[0]==='fm'?'<span class="fm">'+t+'</span>':t);}).join('\n')+'\n<span class="fm">  \u2026 (documented reasons; quote every answer)</span></pre>',
+  plan:'<div class="w">Unpacked &middot; the to-do list</div><h3>Plan (decomposition, orchestration)</h3><p>Break the big job into small steps and do them in order, instead of searching everywhere at once.</p><ol class="plan"><li><span>1</span>HF type: find every EF, date it, take the latest</li><li><span>2</span>Each drug class: ACEi/ARB/ARNI, beta blocker, MRA, SGLT2i</li><li><span>3</span>For anything missing: search the notes for a reason</li><li><span>4</span>Write each answer with its quote</li></ol>',
+  over:'<div class="w">Unpacked &middot; sign-out &amp; the attending</div><h3>Human in the loop</h3><p>A person checks the work before it counts. Rule one: <b>no quote, no answer.</b> Anything unquoted or uncertain goes to a clinician.</p><p class="an">Oversight doesn\'t make the intern smarter. It makes mistakes visible before they reach the patient.</p>'
+};
+var Q=[
+  {id:'hf', q:'HF type', gold:'HFrEF'},
+  {id:'ras',q:'ACEi / ARB / ARNI', gold:'on therapy'},
+  {id:'bb', q:'Beta blocker', gold:'GAP'},
+  {id:'mra',q:'MRA', gold:'medical exception'},
+  {id:'sg', q:'SGLT2 inhibitor', gold:'patient preference'}
+];
+
+/* ---------- state ---------- */
+var on={}; var order=[]; var lastTouched=null; var showTake=false; var prev=null;
+
+function compute(){
+  var T=!!on.task,O=!!on.tools,S=!!on.skill,P=!!on.plan,V=!!on.over;
+  var r={rows:{},calls:0,msg:'',score:0};
+  if(!T){
+    Q.forEach(function(x){r.rows[x.id]={a:'not started',st:'none'};});
+    if(!O&&!S&&!P&&!V) r.msg='<span class="q">You:</span> &ldquo;Can you check Mrs. Delgado&rsquo;s heart failure meds?&rdquo;<br><span class="ag">Model:</span> &ldquo;I don&rsquo;t have access to her chart. In general, patients with HFrEF should be on four drug classes&hellip;&rdquo; <span style="color:#8C8C8C">It just chats.</span>';
+    else r.msg='<span class="ag">Model:</span> &ldquo;I&rsquo;m all set up! What would you like me to do?&rdquo; <span style="color:#8C8C8C">Equipped, but with no job it just waits.</span>';
+    return r;
+  }
+  r.rows.hf ={a:'HFrEF',st:'ok',qt:O?'Echo 8/29: “LVEF 30% (biplane Simpson’s).”':'Discharge summary: “HFrEF (EF 30% on TTE 8/29/2026)”'};
+  r.rows.ras={a:'on therapy',st:'ok',qt:'Med list: “lisinopril 10 mg daily”'};
+  r.rows.bb = S?{a:'GAP',st:'ok',qt:'“metoprolol tartrate 25 mg twice daily” · skill: tartrate doesn’t count'}
+               :{a:'on therapy',st:'bad',qt:'“metoprolol tartrate 25 mg twice daily” · quoted, but no rule'};
+  r.rows.mra= O?{a:'medical exception',st:'ok',qt:'Nephrology: “Spironolactone discontinued due to hyperkalemia”'}
+               :{a:'GAP',st:'bad',qt:null};
+  r.rows.sg = O?{a:'patient preference',st:'ok',qt:'Cardiology: “Patient declines”'}
+               :{a:'GAP',st:'bad',qt:null};
+  Q.forEach(function(x){if(r.rows[x.id].st==='ok')r.score++;});
+  r.calls=O?(P?6:14):0;
+  var m;
+  if(!O&&!S) m='It has a job, and you paste in the discharge summary. The reasons for MRA and SGLT2i live in <span class="q">other notes</span> it can&rsquo;t see, so it calls them gaps.';
+  else if(!O&&S) m='It knows the tartrate rule, so the beta blocker is right. But the skill says &ldquo;search the notes for a reason&rdquo;, and it has no way to search.';
+  else if(O&&!S) m='With tools it opens the chart and finds the <span class="q">nephrology</span> and <span class="q">cardiology</span> reasons. But nobody told it: <b>metoprolol tartrate doesn&rsquo;t count.</b>';
+  else m='All five match the clinicians: it searched the notes and followed the tartrate rule.';
+  if(P&&O) m+=' <span class="ag">Plan: step by step, 14 look-ups &rarr; 6.</span>';
+  else if(P&&!O) m+=' <span style="color:#8C8C8C">It has a plan, but no tools to carry out the steps.</span>';
+  if(V){
+    var flagged=0; Q.forEach(function(x){if(!r.rows[x.id].qt)flagged++;});
+    if(flagged) m+=' <span style="color:#4ADE80">Oversight: '+flagged+' answer'+(flagged>1?'s have':' has')+' no quote, so '+(flagged>1?'they go':'it goes')+' to a clinician.</span>';
+    else if(r.score<5) m+=' <span style="color:#4ADE80">Every answer carries a quote</span>, so the attending can spot the wrong one fast.';
+    else m+=' <span style="color:#4ADE80">Every answer quoted; the attending signs off.</span>';
+  }
+  r.msg=m; return r;
+}
+
+/* ---------- build DOM ---------- */
+var cardsEl=document.getElementById('cards');
+PARTS.forEach(function(p,i){
+  var b=document.createElement('button');
+  b.className='card'; b.dataset.id=p.id; b.style.setProperty('--c',p.col);
+  b.setAttribute('aria-pressed','false');
+  b.innerHTML='<span class="num">'+(i+1)+'</span><span class="ic">'+ICON[p.id]+'</span><span class="t"><span class="k">'+p.k+'</span><span class="nm">'+p.name+'</span></span><span class="st"></span>';
+  cardsEl.appendChild(b);
+});
+var tb=document.getElementById('tbody');
+PARTS.forEach(function(p){
+  var tr=document.createElement('tr'); tr.id='tr-'+p.id; tr.className='off';
+  tr.innerHTML='<td>'+p.intern.replace('&','&amp;')+'</td><td class="mid">&harr;</td><td class="ag" data-c="'+(p.id==='over'?C.green:(p.col===C.fg?C.fg:C.cyan))+'" data-t="'+p.agent+'">?</td>';
+  tb.appendChild(tr);
+});
+var rowsEl=document.getElementById('rows');
+Q.forEach(function(x){
+  var d=document.createElement('div'); d.className='row none'; d.id='row-'+x.id;
+  d.innerHTML='<div class="qn">'+x.q+'</div><div class="ans"></div><div class="mkw"></div><div class="qt"></div>';
+  rowsEl.appendChild(d);
+});
+var dotsEl=document.getElementById('dots');
+for(var i=0;i<14;i++){var d=document.createElement('i');d.className='gone';dotsEl.appendChild(d);}
+var stepsEl=document.getElementById('steps');
+for(i=0;i<7;i++){stepsEl.appendChild(document.createElement('i'));}
+
+/* ---------- render ---------- */
+var bigEl=document.getElementById('big'),cnEl=document.getElementById('cn'),statusEl=document.getElementById('status'),unpackEl=document.getElementById('unpack');
+var shownScore=0,shownCalls=0,anim=null;
+function tween(fromS,toS,fromC,toC){
+  if(anim)cancelAnimationFrame(anim);
+  var t0=performance.now(),dur=matchMedia('(prefers-reduced-motion: reduce)').matches?50:650;
+  function f(t){var k=Math.min(1,(t-t0)/dur);var e=1-Math.pow(1-k,3);
+    var s=Math.round(fromS+(toS-fromS)*e), c=Math.round(fromC+(toC-fromC)*e);
+    bigEl.innerHTML=s+'<small>/5</small>'; cnEl.textContent=c;
+    if(k<1)anim=requestAnimationFrame(f);}
+  anim=requestAnimationFrame(f);
+}
+function render(){
+  var r=compute(), V=!!on.over;
+  // cards + svg parts + table
+  PARTS.forEach(function(p){
+    var c=cardsEl.querySelector('[data-id="'+p.id+'"]');
+    c.classList.toggle('on',!!on[p.id]); c.setAttribute('aria-pressed',on[p.id]?'true':'false');
+    c.querySelector('.st').textContent=on[p.id]?'equipped':''; c.title=on[p.id]?'Tap to remove':'Tap or drag onto the intern';
+    document.getElementById('p-'+p.id).classList.toggle('off',!on[p.id]);
+    document.getElementById('tr-'+p.id).className=on[p.id]?'on':'off';
+    var ag=document.getElementById('tr-'+p.id).querySelector('.ag'); ag.textContent=on[p.id]?ag.dataset.t:'?'; ag.style.color=on[p.id]?ag.dataset.c:'';
+  });
+  // badge colour when tools are on
+  var bc=on.tools?C.cyan:C.dim;
+  document.getElementById('badgeRect').setAttribute('stroke',bc);
+  document.getElementById('badgeFace').setAttribute('stroke',bc);
+  document.getElementById('badgeLines').setAttribute('stroke',bc);
+  var n=order.length;
+  document.getElementById('droptip').textContent=n===0?'drop a part here':(n<5?n+' of 5 parts':'fully onboarded');
+  document.getElementById('nameTag').textContent=n===5?'the intern, onboarded = an agent':'the new intern (a language model)';
+  // rows
+  Q.forEach(function(x){
+    var el=document.getElementById('row-'+x.id), d=r.rows[x.id];
+    var before=prev?prev.rows[x.id].st:'none';
+    el.className='row '+d.st+(V&&d.st!=='none'?' showq':'');
+    el.querySelector('.ans').innerHTML=esc(d.a)+(d.st!=='none'?'<span class="gold">clinicians: '+x.gold+'</span>':'');
+    el.querySelector('.mkw').innerHTML=ICON[d.st];
+    var qt=el.querySelector('.qt');
+    if(d.qt){qt.className='qt';qt.textContent=d.qt;}
+    else{qt.className='qt flag';qt.innerHTML='<svg viewBox="0 0 16 16" width="13" height="13" style="vertical-align:-2px;margin-right:5px" fill="none" stroke="#4ADE80" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15V2M3 2.5h9l-2 3 2 3H3"/></svg>no quote found &rarr; sent to a clinician to check';}
+    if(prev){
+      void el.offsetWidth;
+      if(before==='ok'&&d.st==='bad') el.classList.add('pulse-bad');
+      else if(before!=='ok'&&d.st==='ok') el.classList.add('pulse-ok');
+      else if(before==='none'&&d.st==='bad') el.classList.add('pulse-bad');
+    }
+  });
+  bigEl.style.color=r.score===5?C.green:(r.score===0?C.dim:C.fg);
+  tween(prev?prev.score:0,r.score,prev?prev.calls:0,r.calls);
+  Array.prototype.forEach.call(dotsEl.children,function(d,i){d.classList.toggle('gone',i>=r.calls);});
+  statusEl.innerHTML=r.msg;
+  statusEl.style.borderLeftColor=!on.task?C.dim:(r.score===5?C.green:C.cyan);
+  unpackEl.innerHTML=UNPACK[lastTouched||'none'];
+  // steps
+  var step=showTake?6:n;
+  Array.prototype.forEach.call(stepsEl.children,function(s,i){s.classList.toggle('on',i<=step);});
+  document.getElementById('stepn').textContent=(step+1)+' / 7';
+  document.getElementById('take').classList.toggle('show',showTake);
+  document.getElementById('next').innerHTML=n<5?'Next<span class="nx-x">: add '+PARTS.filter(function(p){return !on[p.id];})[0].name+'</span> &rarr;':'Takeaway &rarr;';
+  prev=r;
+}
+function setPart(id,val){
+  if(!!on[id]===val)return;
+  on[id]=val;
+  if(val){order.push(id);lastTouched=id;}
+  else{order=order.filter(function(x){return x!==id;});lastTouched=id;}
+  render();
+  if(!val){unpackEl.insertAdjacentHTML('afterbegin','<p style="color:#FF4D4D;font-size:14px;margin:0 0 6px">Removed: '+PARTS.filter(function(p){return p.id===id;})[0].name+'. See what breaks on the right.</p>');}
+}
+function toggle(id){setPart(id,!on[id]);}
+function next(){
+  if(showTake)return;
+  var miss=PARTS.filter(function(p){return !on[p.id];});
+  if(miss.length)setPart(miss[0].id,true); else {showTake=true;render();}
+}
+function back(){
+  if(showTake){showTake=false;render();return;}
+  if(order.length){var id=order[order.length-1];on[id]=false;order.pop();lastTouched=order.length?order[order.length-1]:null;render();}
+}
+function restart(){on={};order=[];lastTouched=null;showTake=false;prev=null;render();}
+
+document.getElementById('next').onclick=next;
+document.getElementById('back').onclick=back;
+document.getElementById('restart').onclick=restart;
+document.getElementById('takeBack').onclick=back;
+document.addEventListener('keydown',function(e){
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  var k=e.key;
+  if(k==='ArrowRight'||k===' '||k==='PageDown'){e.preventDefault();next();}
+  else if(k==='ArrowLeft'||k==='PageUp'){e.preventDefault();back();}
+  else if(k==='r'||k==='R'){restart();}
+  else if(k==='f'||k==='F'){if(!document.fullscreenElement){var p=document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();if(p&&p.catch)p.catch(function(){});}else document.exitFullscreen();}
+  else if(/^[1-5]$/.test(k)){if(showTake){showTake=false;}toggle(PARTS[+k-1].id);}
+});
+
+/* ---------- drag & tap ---------- */
+var drop=document.getElementById('drop'),drag=null;
+function overDrop(x,y){var b=drop.getBoundingClientRect();return x>=b.left&&x<=b.right&&y>=b.top&&y<=b.bottom;}
+cardsEl.addEventListener('pointerdown',function(e){
+  var c=e.target.closest('.card'); if(!c)return;
+  drag={c:c,id:c.dataset.id,x:e.clientX,y:e.clientY,moved:false,ghost:null,touch:e.pointerType==='touch'};
+  if(!drag.touch){try{c.setPointerCapture(e.pointerId);}catch(_){} }
+});
+cardsEl.addEventListener('pointermove',function(e){
+  if(!drag||drag.touch)return;
+  var dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+  if(!drag.moved&&Math.hypot(dx,dy)>6){
+    drag.moved=true; drag.c.classList.add('dragging');
+    var g=drag.c.cloneNode(true); g.classList.add('ghost'); g.classList.remove('dragging'); document.body.appendChild(g); drag.ghost=g;
+  }
+  if(drag.moved){drag.ghost.style.left=(e.clientX-40)+'px';drag.ghost.style.top=(e.clientY-28)+'px';drop.classList.toggle('over',overDrop(e.clientX,e.clientY));}
+});
+function endDrag(e,cancel){
+  if(!drag)return; var d=drag; drag=null;
+  if(d.moved){
+    d.c.classList.remove('dragging'); if(d.ghost)d.ghost.remove(); drop.classList.remove('over');
+    if(!cancel&&overDrop(e.clientX,e.clientY)){if(showTake)showTake=false;setPart(d.id,true);}
+    d.c._skipClick=true;
+  }
+}
+cardsEl.addEventListener('pointerup',function(e){endDrag(e,false);});
+cardsEl.addEventListener('pointercancel',function(e){endDrag(e,true);});
+cardsEl.addEventListener('click',function(e){
+  var c=e.target.closest('.card'); if(!c)return;
+  if(c._skipClick){c._skipClick=false;return;}
+  toggle(c.dataset.id);
+});
+// prevent Space on a focused card from also toggling via button default
+cardsEl.addEventListener('keydown',function(e){if(e.key===' '){e.preventDefault();}});
+
+render();
+})();
+</script>
+</body>
+</html>

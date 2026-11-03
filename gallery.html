@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QCOR assets</title>
+<!-- Every visual asset for the talk and demo, side by side, so we can pick a style. Icons come from shared/icons.js. -->
+<style>
+  :root { --bg: #000; --card: #111113; --line: #2c2c2e; --ink: #f5f5f7; --muted: #8e8e93;
+          --amber: #ffb547; --blue: #6ea8fe; --violet: #b794f6; --green: #4ade80; --red: #ff6b6b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 Inter, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding: 32px 40px 80px; }
+  h1 { font-size: 30px; margin: 0 0 6px; } h2 { font-size: 20px; margin: 48px 0 6px; } p.lead { color: var(--muted); margin: 0 0 18px; }
+  .grid { display: grid; gap: 14px; }
+  .portraits { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .tile img { width: 140px; height: 140px; }
+  .tile .name { font-weight: 600; } .tile .sub { color: var(--muted); font-size: 12px; text-align: center; }
+  .style { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-bottom: 14px; }
+  .style h3 { margin: 0 0 12px; font-size: 15px; } .style h3 span { color: var(--muted); font-weight: 400; }
+  .icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; }
+  .ic { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px; border-radius: 10px; }
+  .ic:hover { background: #1a1a1d; }
+  .ic .lbl { font-size: 10px; color: var(--muted); }
+  .duo { position: relative; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: rgba(255, 181, 71, 0.14); color: var(--amber); }
+  .memphis { position: relative; width: 44px; height: 44px; display: grid; place-items: center; }
+  .memphis::before { content: ""; position: absolute; inset: 6px 2px 2px 8px; border-radius: 40% 60% 55% 45%; background: var(--c); transform: rotate(-8deg); }
+  .memphis svg { position: relative; color: #000; }
+  .memphis i { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: var(--ink); top: 2px; right: 4px; }
+  .academic { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--ink); color: var(--ink); background: #1c1c1f; }
+  .swatches { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .sw { border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
+  .sw div:first-child { height: 64px; } .sw div:last-child { padding: 8px 10px; font-size: 12px; background: var(--card); }
+  .logos { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .logos .tile img { width: 44px; height: 44px; }
+  .charts { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+  .charts .tile img { width: 100%; height: auto; background: #fff; border-radius: 8px; }
+</style>
+</head>
+<body>
+<h1>Assets</h1>
+<p class="lead">Pick a portrait style and an icon style; the deck and demo use the first of each for now.</p>
+
+<h2>Rosa</h2>
+<p class="lead">Styles of the same synthetic patient. <b>Default</b> is in use (shared/rosa.svg).</p>
+<div class="grid portraits">
+  <div class="tile"><img src="shared/portraits/rosa-default.svg" alt=""><div class="name">Default</div><div class="sub">generic woman icon, in use</div></div>
+  <div class="tile"><img src="shared/portraits/rosa-flat.svg" alt=""><div class="name">Flat</div><div class="sub">simple shapes</div></div>
+  <div class="tile"><img src="shared/portraits/rosa-memphis.svg" alt=""><div class="name">Corporate Memphis</div><div class="sub">exaggerated, playful</div></div>
+  <div class="tile"><img src="shared/portraits/rosa-academic.svg" alt=""><div class="name">Academic figure</div><div class="sub">outlined, like a paper figure</div></div>
+  <div class="tile"><img src="shared/portraits/rosa-line.svg" alt=""><div class="name">Line</div><div class="sub">matches the line icons</div></div>
+  <div class="tile"><img src="shared/portraits/rosa-pixel.svg" alt="" style="image-rendering: pixelated"><div class="name">8-bit</div><div class="sub">pixel art</div></div>
+  <div class="tile"><img src="shared/portraits/rosa-badge.svg" alt=""><div class="name">Badge</div><div class="sub">initials only</div></div>
+</div>
+
+<h2>Colour</h2>
+<p class="lead">Black background; amber replaces the teal. Each colour means one thing everywhere.</p>
+<div class="grid swatches">
+  <div class="sw"><div style="background:#ffb547"></div><div><b>Amber</b> #ffb547 · emphasis, the model</div></div>
+  <div class="sw"><div style="background:#6ea8fe"></div><div><b>Blue</b> #6ea8fe · context, data</div></div>
+  <div class="sw"><div style="background:#b794f6"></div><div><b>Violet</b> #b794f6 · tools, harness</div></div>
+  <div class="sw"><div style="background:#4ade80"></div><div><b>Green</b> #4ade80 · right</div></div>
+  <div class="sw"><div style="background:#ff6b6b"></div><div><b>Red</b> #ff6b6b · wrong, invented</div></div>
+  <div class="sw"><div style="background:#8e8e93"></div><div><b>Grey</b> #8e8e93 · secondary text</div></div>
+</div>
+
+<h2>Icons</h2>
+<p class="lead">The same set drawn five ways.</p>
+<div id="icon-styles"></div>
+
+<h2>Logos</h2>
+<p class="lead">From lobehub/icons (MIT; the marks belong to their owners).</p>
+<div class="grid logos" id="logos"></div>
+
+<h2>Charts</h2>
+<p class="lead">Published charts the talk uses, with their sources.</p>
+<div class="grid charts">
+  <div class="tile"><img src="shared/charts/metr-length-of-tasks-log.png" alt=""><div class="sub">METR, Task-completion time horizons (2026 update)</div></div>
+  <div class="tile"><img src="shared/charts/metr-time-horizons-domains.png" alt=""><div class="sub">METR, time horizons across domains</div></div>
+  <div class="tile"><img src="shared/charts/owid-ai-test-scores.svg" alt=""><div class="sub">Our World in Data (CC BY), Kiela et al. 2023</div></div>
+  <div class="tile"><img src="shared/charts/owid-ai-training-compute.svg" alt=""><div class="sub">Our World in Data (CC BY), Epoch AI</div></div>
+</div>
+
+<script type="module">
+  import { ICON_NAMES, PIXEL_NAMES, lineIcon, pixelIcon } from "./shared/icons.js";
+  const colors = ["#ffb547", "#6ea8fe", "#b794f6", "#4ade80", "#ff6b6b"];
+  const styles = [
+    ["Line", "the default: 1.75 px strokes", (n) => lineIcon(n, { size: 32 })],
+    ["Bold line", "heavier strokes for the projector", (n) => lineIcon(n, { size: 32, stroke: 2.6, color: "#ffb547" })],
+    ["Duotone", "line on a soft tile", (n) => `<span class="duo">${lineIcon(n, { size: 24 })}</span>`],
+    ["Corporate Memphis", "colour blob, bold line, a dot", (n, i) => `<span class="memphis" style="--c:${colors[i % colors.length]}"><i></i>${lineIcon(n, { size: 26, stroke: 2.2 })}</span>`],
+    ["Academic figure", "outlined discs, like a paper's schematic", (n) => `<span class="academic">${lineIcon(n, { size: 22, stroke: 1.6 })}</span>`],
+  ];
+  document.getElementById("icon-styles").innerHTML =
+    styles.map(([t, s, f]) => `<div class="style"><h3>${t} <span>· ${s}</span></h3><div class="icons">${ICON_NAMES.map((n, i) => `<div class="ic">${f(n, i)}<span class="lbl">${n}</span></div>`).join("")}</div></div>`).join("") +
+    `<div class="style"><h3>8-bit <span>· pixel versions of a few</span></h3><div class="icons">${PIXEL_NAMES.map((n, i) => `<div class="ic"><span style="color:${colors[i % colors.length]}">${pixelIcon(n, { size: 36 })}</span><span class="lbl">${n}</span></div>`).join("")}</div></div>`;
+  const logos = ["openai", "claude-color", "anthropic", "gemini-color", "gemma-color", "meta-color", "qwen-color", "deepseek-color", "mistral-color", "grok", "huggingface-color", "ollama", "claudecode-color", "codex-color", "langchain-color", "langgraph-color", "google-color"];
+  document.getElementById("logos").innerHTML = logos.map((l) => `<div class="tile"><img src="shared/logos/${l}.svg" alt=""><div class="sub">${l.replace("-color", "")}</div></div>`).join("");
+</script>
+</body>
+</html>

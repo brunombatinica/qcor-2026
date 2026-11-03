@@ -1,0 +1,24 @@
+{
+  "id": "rosa-meds-given",
+  "order": 3,
+  "kind": "rosa",
+  "label": "Rosa · medications · Is it given?",
+  "build": {
+    "sources": [
+      "medications"
+    ],
+    "tools": [
+      "read_records"
+    ],
+    "prompt": "Is this patient on a beta blocker?"
+  },
+  "criteria": [],
+  "model": "Qwen/Qwen3.6-35B-A3B-FP8",
+  "recorded": "2026-10-27T18:24:18.049Z",
+  "seconds": 1.3,
+  "cohort": "7a9fb28cb794",
+  "system": "53b659e8dc74",
+  "rows": [
+    {"start":5,"done":1281,"patientId":"p000","answer":null,"text":"No","trace":[{"kind":"act","tool":"read_records","args":{"record":"medications"},"t":951},{"kind":"observe","tool":"read_records","text":"sacubitril / valsartan 49/51 mg oral tablet: 49/51 mg by mouth twice daily. Status active, ordered 2023-08-14\ncarvedilol 12.5 mg oral tablet: 12.5 mg by mouth twice daily. Status stopped, ordered 2025-05-01, stopped 2026-05-14\nspironolactone 25 mg oral tablet: 25 mg by mouth once daily. Status active, ordered 2023-11-02\ndapagliflozin 10 mg oral tablet: 10 mg by mouth once daily. Status active, ordered 2024-03-20\nfurosemide 40 mg oral tablet: 40 mg by mouth once daily. Status active, ordered 2023-02-12\natorvastatin 40 mg oral tablet: 40 mg by mouth once daily. Status active, ordered 2019-05-01\nmetformin 500 mg oral tablet: 500 mg by mouth twice daily. Status active, ordered 2014-10-01","error":false,"details":{"request":"GET /fhir/MedicationRequest?patient=p000 → 200, 7 resources","count":7},"t":958},{"kind":"delta","text":"No","t":1049},{"kind":"think","text":"No","t":1054}],"usage":{"input":1363,"output":29,"modelCalls":2,"toolCalls":1},"status":"ok","error":null,"scope":"system/MedicationRequest.rs","seconds":1.1,"judged":{"given":"no","why":null,"whyMatches":null,"gap":null}}
+  ]
+}

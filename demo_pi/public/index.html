@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Build an agent · QCOR 2026</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <b class="brand">Build an agent</b>
+    <nav id="steps"></nav>
+    <div class="tools">
+      <span id="model" class="model">connecting…</span>
+      <button id="hoodBtn" class="hoodBtn" title="Under the hood (U)">&lt;/&gt;</button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <main>
+      <!-- 1 -->
+      <section class="view" data-view="brief" data-title="Brief">
+        <div class="brief">
+          <img src="/shared/rosa.svg" alt="">
+          <div>
+            <div class="pname" id="pname">Rosa Delgado, 71</div>
+            <div class="muted" id="pdx">Heart failure, ejection fraction 30%</div>
+          </div>
+          <h1>Is she on a beta blocker?<br><span class="muted">If not, is there a good reason?</span></h1>
+          <div class="outcomes"><span class="pill on">On a beta blocker</span><span class="pill gap">Care gap</span><span class="pill reason">Documented reason</span></div>
+          <p class="muted small">Build an agent to answer this for her, then for 100 patients.</p>
+        </div>
+      </section>
+
+      <!-- 2 -->
+      <section class="view" data-view="data" data-title="Data">
+        <div class="viewHead"><h2>What can it see?</h2><span class="meter" id="irbMeter"></span></div>
+        <div class="cards" id="dataCards"></div>
+      </section>
+
+      <!-- 3 -->
+      <section class="view" data-view="tools" data-title="Tools">
+        <div class="viewHead"><h2>What can it do?</h2><span class="meter" id="itMeter"></span></div>
+        <div class="cards" id="toolCards"></div>
+      </section>
+
+      <!-- 4 -->
+      <section class="view" data-view="prompt" data-title="Prompt">
+        <div class="split runSplit">
+          <div class="col">
+            <div class="agentSum" id="agentSum"></div>
+            <h2>What should it do?</h2>
+            <textarea id="prompt" rows="4" placeholder="Write the agent's instructions…"></textarea>
+            <div class="examples" id="examples"></div>
+            <div class="row"><button id="runRosa" class="primary">Run on Rosa</button><select id="recRosa" class="rec" hidden></select></div>
+            <div id="answer"></div>
+          </div>
+          <div class="col"><div class="term full" id="termRosa"></div></div>
+        </div>
+      </section>
+
+      <!-- 5 -->
+      <section class="view" data-view="criteria" data-title="Criteria">
+        <div class="split">
+          <div class="col">
+            <h2>What counts as a good reason?</h2>
+            <p class="muted small">Clinicians decide this, not the agent. It will follow whatever you tick.</p>
+            <div id="criteria"></div>
+            <div class="row"><button id="cmsBtn" class="ghost">Compare with CMS144</button></div>
+          </div>
+          <div class="col">
+            <div class="label">Added to the prompt</div>
+            <pre class="code" id="criteriaText"></pre>
+            <div class="row"><button id="useCriteria" class="primary">Use for the test →</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6 -->
+      <section class="view" data-view="test" data-title="Test">
+        <div class="split runSplit">
+          <div class="col">
+            <div class="agentSum" id="agentSumTest"></div>
+            <h2>Test on 100 patients</h2>
+            <textarea id="testPrompt" rows="8" placeholder="The prompt for every patient…"></textarea>
+            <div class="examples"><button class="chipBtn" id="actExample"></button></div>
+            <div class="row"><button id="runCohort" class="primary">Run</button><label class="muted small" id="freshLabel"><input type="checkbox" id="fresh"> ignore cache</label><select id="recCohort" class="rec" hidden></select></div>
+            <div id="results"></div>
+          </div>
+          <div class="col">
+            <div class="tally" id="tally"></div>
+            <div class="grid" id="grid"></div>
+            <div class="legend"><span><i class="sq right"></i>all three right</span><span><i class="sq wrong">✗</i>wrong</span><span><i class="sq wrong human">✗</i>flagged for a person</span><span class="muted">hover for the answers, click for the trace</span></div>
+            <div class="term short" id="termCohort"></div>
+          </div>
+        </div>
+        <table id="runs"></table>
+      </section>
+    </main>
+
+    <aside id="hood" hidden>
+      <div class="hoodHead"><b>Under the hood</b><span class="hoodCtl"><button id="zoomOut" title="Smaller text">A−</button><button id="zoomIn" title="Larger text">A+</button><button id="wideBtn" title="Widen">⤢</button><button id="hoodClose" class="x" title="Close (U)">×</button></span></div>
+      <div id="hoodBody"></div>
+    </aside>
+  </div>
+
+  <footer>
+    <button id="back" class="ghost">← Back</button>
+    <span id="buildSummary" class="muted small"></span>
+    <button id="next" class="primary">Next →</button>
+  </footer>
+
+  <div id="tip" class="tip" hidden></div>
+  <div id="inspect" class="overlay" hidden><div class="sheet"><button class="x" id="inspectClose">×</button><div id="inspectBody"></div></div></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

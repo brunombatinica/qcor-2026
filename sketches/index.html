@@ -1,0 +1,406 @@
+<!doctype html>
+<!--
+  AHA 2026 QCOR workshop: brainstorm board (sketch, not a deliverable). Open from disk.
+  Siblings: talk.html (Bruno's 5-minute talk, draft deck) and workbench.html (live-demo prototype, scripted, no network).
+  Colours keep the lab-meeting deck's meaning: AMBER the patient/chart, CYAN data and tools, GREEN humans and gold,
+  PINK FHIR, RED a boundary or an error, WHITE deterministic rules.
+-->
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QCOR 2026 · brainstorm</title>
+  <style>
+    :root {
+      --bg: #000; --panel: #0d0d0d; --line: #2a2a2a; --fg: #F2F2F2; --dim: #8C8C8C;
+      --amber: #FFB020; --cyan: #22D3EE; --pink: #FF4FA3; --green: #4ADE80; --red: #FF4D4D;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Helvetica Neue", Arial, sans-serif;
+      --mono: "SF Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+    }
+    html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); line-height: 1.5; }
+    main { max-width: 1180px; margin: 0 auto; padding: 48px 32px 120px; }
+    h1 { font-size: 40px; margin: 0 0 6px; letter-spacing: -.01em; }
+    h2 { font-size: 26px; margin: 64px 0 6px; padding-top: 18px; border-top: 1px solid var(--line); }
+    h3 { font-size: 18px; margin: 0 0 6px; }
+    p.lead { font-size: 20px; color: var(--dim); margin: 0 0 18px; max-width: 900px; }
+    .note { color: var(--dim); font-size: 15px; }
+    a { color: var(--cyan); }
+    nav { display: flex; gap: 10px; flex-wrap: wrap; margin: 22px 0 0; }
+    nav a { text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-size: 14px; color: var(--fg); }
+    nav a.go { border-color: var(--cyan); color: var(--cyan); }
+    .grid { display: grid; gap: 16px; }
+    .g2 { grid-template-columns: repeat(2, 1fr); }
+    .g3 { grid-template-columns: repeat(3, 1fr); }
+    .g4 { grid-template-columns: repeat(4, 1fr); }
+    @media (max-width: 900px) { .g2, .g3, .g4 { grid-template-columns: 1fr; } }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+    .card.rec { border-color: var(--green); box-shadow: 0 0 0 1px var(--green) inset; }
+    .card p { margin: 6px 0; }
+    .tag { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+      border-radius: 4px; padding: 2px 7px; margin-right: 6px; border: 1px solid currentColor; }
+    .t-amber { color: var(--amber); } .t-cyan { color: var(--cyan); } .t-green { color: var(--green); }
+    .t-pink { color: var(--pink); } .t-red { color: var(--red); } .t-dim { color: var(--dim); }
+    .big { font-size: 30px; font-weight: 700; line-height: 1.25; letter-spacing: -.01em; }
+    blockquote { margin: 0; padding: 14px 20px; border-left: 3px solid var(--amber); background: #120d02; font-size: 18px; }
+    table { width: 100%; border-collapse: collapse; font-size: 15px; }
+    th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+    th { color: var(--dim); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+    td.min { white-space: nowrap; color: var(--dim); }
+    tr.me td { background: #06161a; }
+    tr.me td:first-child { box-shadow: 3px 0 0 var(--cyan) inset; }
+    ul { margin: 6px 0; padding-left: 20px; } li { margin: 4px 0; }
+    .score { font-family: var(--mono); font-size: 13px; color: var(--dim); }
+    .bar { display: flex; height: 34px; border-radius: 8px; overflow: hidden; margin: 14px 0 6px; font-size: 12px; }
+    .bar div { display: flex; align-items: center; justify-content: center; color: #000; font-weight: 600; white-space: nowrap; overflow: hidden; }
+    .chart { font-family: var(--mono); font-size: 14px; background: #120d02; border: 1px solid #3a2a08; border-radius: 10px; padding: 14px 18px; }
+    .chart b { color: var(--amber); }
+    .q { color: var(--amber); font-weight: 600; }
+    .k { font-family: var(--mono); background: #141414; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 14px; }
+  </style>
+</head>
+
+<body>
+  <main>
+    <div class="note">AHA Scientific Sessions 2026 · QCOR session · brainstorm board · draft 2026-10-12</div>
+    <h1>Agents, explained with one patient</h1>
+    <p class="lead">Ideas for the whole session, with most detail on Bruno's two slots: the 5-minute "Under the hood" talk and
+      the 15-minute live build. Everything here is a proposal to argue with. The outline in the proposal doc is treated as
+      provisional.</p>
+    <nav>
+      <a href="#thesis">Core message</a><a href="#patient">One patient</a><a href="#arc">Session arc</a>
+      <a href="#talk">Bruno's talk</a><a href="#demo">Live build</a><a href="#plan">15-minute plan</a>
+      <a href="#risks">Risks</a><a href="#questions">To decide</a>
+      <a class="go" href="talk.html">Open talk draft →</a><a class="go" href="workbench.html">Open demo prototype →</a>
+    </nav>
+
+    <!-- ===================================================================================================== -->
+    <h2 id="thesis">1 · The one sentence people should leave with</h2>
+    <p class="note">Everything else hangs off this. For a clinical audience, three ideas at most.</p>
+    <div class="grid g3" style="margin-top:14px">
+      <div class="card">
+        <div class="big">A chatbot <span class="t-dim">answers</span>.<br>An agent <span class="t-cyan">goes and looks</span>.</div>
+        <p class="note">A model in a loop with tools. It decides what to read next, reads it, and repeats until it can answer.
+          (Phyllis's slot owns this idea; Bruno's slot shows what's inside it.)</p>
+      </div>
+      <div class="card">
+        <div class="big">The rules are written <span class="t-amber">in plain English</span>, by clinicians.</div>
+        <p class="note">Instructions and skills are documents. In our study the most important "code" is the clinical
+          definition of each fact, the same text the human annotators followed. Clinicians can write, read and audit it.</p>
+      </div>
+      <div class="card">
+        <div class="big">Trust comes from <span class="t-green">showing its work</span>.</div>
+        <p class="note">Every answer comes with the quote it came from, and a human checks where machines disagree.
+          (Lovedeep's slot owns this idea.)</p>
+      </div>
+    </div>
+
+    <!-- ===================================================================================================== -->
+    <h2 id="patient">2 · One patient through the whole hour</h2>
+    <p class="lead">A single synthetic patient whose chart every speaker uses. The question the agent has to answer is the
+      quality-measure question from our study, and it's one every cardiologist already recognises:</p>
+    <blockquote><span class="q">"Is this a gap in guideline-directed therapy, or is there a documented reason?"</span></blockquote>
+
+    <div class="grid g2" style="margin-top:16px">
+      <div class="chart">
+        <b>Mrs. Rosa Delgado</b> · 71 · synthetic patient<br>
+        Admitted for decompensated HF, discharged 9/2/2026<br><br>
+        Structured med list: lisinopril · <b>metoprolol tartrate</b> · furosemide<br>
+        Spironolactone: <span class="t-red">stopped 4/14/2026</span><br>
+        No SGLT2 inhibitor<br><br>
+        <span class="t-dim">Buried in 6 notes:</span><br>
+        Echo 8/29/26: "LVEF 30%"<br>
+        Problem list (2024): "HFmrEF (EF 45%)" <span class="t-dim">← copied-forward old value</span><br>
+        Nephrology 4/14/26: "spironolactone discontinued due to hyperkalemia (K 5.9)"<br>
+        Cardiology 6/10/26: "declines SGLT2 inhibitor: recurrent UTIs, cost"
+      </div>
+      <div class="card">
+        <h3>Why this patient works</h3>
+        <ul>
+          <li><b>Each trap teaches one idea.</b> The med list alone says "MRA gap" and "SGLT2i gap". Both are wrong:
+            the reasons are in the notes. <span class="t-cyan">→ tools</span></li>
+          <li><b>Metoprolol tartrate</b> looks like a beta blocker but isn't evidence-based therapy for HFrEF. A model
+            without the rule counts it. This was the single largest error by the direct LLMs in our study.
+            <span class="t-amber">→ skills</span></li>
+          <li><b>The copied-forward EF 45%</b> tests "most recent", which is exactly what clinicians know charts get
+            wrong. <span class="t-dim">→ decomposition</span></li>
+          <li><b>The right answer is subtle:</b> 1 real gap (beta blocker), 1 medical exception (MRA), 1 patient
+            preference (SGLT2i). It's the abstract's message in one chart: find the gaps without counting documented
+            exceptions as poor care.</li>
+        </ul>
+        <p class="note">Hand-written and fully synthetic, so no PHI or data-use questions. For the scale-up step we can
+          generate 50–100 look-alike patients from the repo's synthetic fixture (<span class="k">just hfq-demo</span>) or
+          Synthea.</p>
+      </div>
+    </div>
+
+    <!-- ===================================================================================================== -->
+    <h2 id="arc">3 · Session arc: what each slot does with Mrs. Delgado</h2>
+    <p class="note">Speculative for the other speakers; it only needs light buy-in (one shared slide each). The aim is that
+      the hour feels like one story, not six talks.</p>
+    <div class="bar">
+      <div style="flex:2;background:#BDBDBD">2</div><div style="flex:5;background:#BDBDBD">5</div>
+      <div style="flex:5;background:var(--cyan)">5 · Bruno</div><div style="flex:5;background:var(--green)">5</div>
+      <div style="flex:5;background:var(--amber)">5</div><div style="flex:15;background:var(--cyan)">15 · live build</div>
+      <div style="flex:20;background:#5a5a5a;color:#fff">20 · panel</div>
+    </div>
+    <table style="margin-top:12px">
+      <tr><th style="width:70px">Min</th><th style="width:210px">Slot</th><th>Big idea, and what Mrs. Delgado does here</th><th style="width:260px">Visual / gimmick</th></tr>
+      <tr><td class="min">2</td><td><b>Why now</b><br><span class="note">Rohan</span></td>
+        <td>Last year we put a small AI on your laptop and <i>asked it a question</i>. This year we <i>give it a job</i>.
+          Hook number: 4,078 Yale HF admissions in 2025, 1,134 with HFrEF, 36% with ≥1 GDMT gap without a documented
+          exception, and no human opened a chart to find them.</td>
+        <td>Split screen: "2025: a chat box" vs "2026: a to-do list being ticked off". Mrs. Delgado's chart appears
+          for the first time.</td></tr>
+      <tr><td class="min">5</td><td><b>What makes it agentic</b><br><span class="note">Phyllis</span></td>
+        <td><b>Ask vs. assign.</b> A chatbot is a curbside consult: you bring the facts, it answers from memory. An agent
+          is the resident you send to review the chart: it goes, looks, and comes back with findings.<br>
+          Autonomy as <b>entrustment levels</b> (the EPA scale every residency program uses): observe → act with direct
+          supervision → indirect supervision → unsupervised. This one frame comes back in the panel.</td>
+        <td>Same question, two ways: the chatbot answers from the discharge summary alone (wrong); the agent
+          searches the chart (right). Entrustment ladder graphic.</td></tr>
+      <tr class="me"><td class="min">5</td><td><b>Under the hood</b><br><span class="note">Bruno</span></td>
+        <td><b>"You already know how to build one: it's how you onboard an intern."</b> Five parts: a <i>job</i>, a
+          <i>rulebook</i> (skills), <i>hands</i> (tools), a <i>plan</i> (break it down, orchestrate), and
+          <i>proof</i> (show your work). Replays the agent's chart review of Mrs. Delgado step by step.</td>
+        <td>The loop animation; one real skill file on a slide; the decision tree. <a href="talk.html">Draft deck →</a></td></tr>
+      <tr><td class="min">5</td><td><b>Trust, but verify</b><br><span class="note">Lovedeep</span></td>
+        <td>The strategy ladder from our study, as the evaluation story: structured data 42–70% → keywords 79–89% →
+          single LLM call 82–85% → agent 96–98% on GDMT gaps. Where it fails and why (tartrate). Disagreement as the
+          signal: send humans to the cells where strategies disagree. FHIR agents nearly match data extracts (93–99%
+          vs 96–100%).</td>
+        <td>"Show your work" card: every answer clicks through to its quote. Ladder chart. Review-queue picture.</td></tr>
+      <tr><td class="min">5</td><td><b>Patients at the center</b><br><span class="note">Rosemary</span></td>
+        <td>Mrs. Delgado's view. Would she want to know an AI reviewed her chart? Her stated preference (declined
+          SGLT2i) <i>is</i> the right answer, and an agent that ignores it would label respect for her choice as poor
+          care. The nurse decides what she is told; the agent only drafts it.</td>
+        <td>An "AI label" (like a nutrition label) for the agent: what it read, what it can't do, who checked it.</td></tr>
+      <tr class="me"><td class="min">15</td><td><b>Build an agent, live</b><br><span class="note">Ryan · Bruno · Lovedeep</span></td>
+        <td>Build Mrs. Delgado's agent from nothing by turning on one part at a time, and watch the answer improve:
+          2/5 → 3/5 → 4/5 → 5/5. Then run it on 50 patients and score it against clinicians. <a href="#plan">Plan below.</a></td>
+        <td>The Workbench, on the projector and on phones via QR. <a href="workbench.html">Prototype →</a></td></tr>
+      <tr><td class="min">20</td><td><b>Panel</b><br><span class="note">moderated</span></td>
+        <td>Open with a live audience vote seeded by the demo: <b>"How far would you entrust this agent?"</b>
+          (a) flag gaps to a QI team · (b) message the PCP · (c) pend an order for sign-off · (d) place the order.
+          Panelists react to the distribution.</td>
+        <td>Poll Everywhere / Slido result on screen; it reuses Phyllis's entrustment ladder.</td></tr>
+    </table>
+
+    <!-- ===================================================================================================== -->
+    <h2 id="talk">4 · Bruno's talk: five framings to choose from</h2>
+    <p class="lead">Five minutes is about six slides. The brief (decomposition, skills, tools, orchestration) is good; the
+      question is which metaphor makes it stick. Recommendation in green.</p>
+    <div class="grid g2">
+      <div class="card rec">
+        <span class="tag t-green">recommended</span><h3>A · "Onboarding the new intern"</h3>
+        <p>Clinicians already know how to make a capable newcomer useful. On day one you give an intern:</p>
+        <table>
+          <tr><td>a clear <b>job</b></td><td class="t-dim">→ the task / goal</td></tr>
+          <tr><td>the <b>department protocol</b></td><td class="t-dim">→ instructions & skills files</td></tr>
+          <tr><td>an <b>Epic login</b></td><td class="t-dim">→ tools & data (FHIR, MCP)</td></tr>
+          <tr><td>a <b>to-do list</b></td><td class="t-dim">→ decomposition & orchestration</td></tr>
+          <tr><td>a <b>sign-out template</b> + attending</td><td class="t-dim">→ structured output, evidence, oversight</td></tr>
+        </table>
+        <p class="note">Strength: zero jargon, maps 1:1 to the brief, hands off naturally to "trust" (the attending) and
+          to the panel (entrustment). Risk: the intern metaphor over-humanises; one line should say "it's software: it
+          doesn't learn from the shift unless we change the rulebook."</p>
+      </div>
+      <div class="card">
+        <h3>B · "The kitchen"</h3>
+        <p>The model is a talented chef who has never been in <i>this</i> kitchen. Recipe card = skill. Knives and oven =
+          tools. Mise en place = breaking the task down. The expediter at the pass = orchestrator and checker.</p>
+        <p class="note">Strength: vivid, funny, memorable. Risk: one step removed from medicine, so it takes a
+          translation step the intern version doesn't.</p>
+      </div>
+      <div class="card">
+        <h3>C · "Climb the ladder"</h3>
+        <p>Build the agent one rung at a time and say what each rung adds: a rule over the med list → keyword search →
+          one LLM call → an agent with tools → an agent with skills. Each rung fixes the error of the one below.</p>
+        <p class="note">Strength: it <i>is</i> our study, so it's honest and concrete. Risk: overlaps Lovedeep's
+          results talk and the live build. It might work better as the spine of the demo (it is, in the plan below).</p>
+      </div>
+      <div class="card">
+        <h3>D · "One patient, one minute"</h3>
+        <p>The whole talk is a narrated replay of the agent reviewing Mrs. Delgado's chart, paused at each step to name
+          the building block in play: "here it's <i>planning</i>… here it's <i>using a tool</i>… here the
+          <i>skill</i> just changed its mind about metoprolol."</p>
+        <p class="note">Strength: shows instead of tells; very concrete. Risk: needs a strong recap slide or the
+          building blocks blur together. It combines well with A (A's structure, D's replay as the middle).</p>
+      </div>
+      <div class="card">
+        <h3>E · "Agents all the way down"</h3>
+        <p>Open the hood live: a coding agent (Claude Code / pi) on stage is asked in plain English to <i>build</i> the
+          abstraction agent, and the talk explains what it produced: the skill file, the tool list, the loop.</p>
+        <p class="note">Strength: a genuine wow moment that shows where things are heading. Risk: live, slow and
+          unpredictable in 5 minutes. Better as a 60-second recorded clip or a panel teaser.</p>
+      </div>
+      <div class="card">
+        <h3>Principles worth stealing for any framing</h3>
+        <ul>
+          <li><b>Let the model read; let the rules decide.</b> The measure logic stays deterministic, and the AI only
+            abstracts the facts, the way a human abstractor works against a CMS spec.</li>
+          <li><b>Small questions are checkable questions.</b> "Is there a gap?" is hard to audit; "latest EF?" is easy.</li>
+          <li><b>No quote, no answer.</b> An extracted value must come with text that appears in the note.</li>
+          <li><b>Same agent, two homes.</b> It runs on a local open model inside the firewall (our PHI work) and on a
+            cloud model for synthetic data (today's demo).</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ===================================================================================================== -->
+    <h2 id="demo">5 · Live build: options</h2>
+    <p class="lead">Last year: install Ollama, run a small model in a shared Colab notebook. This year's proposal promises
+      "off-the-shelf cloud tools, no local setup, follow along on your own device". These options can be combined; the
+      recommended combination is at the end.</p>
+    <div class="grid g3">
+      <div class="card rec">
+        <span class="tag t-green">chosen</span><span class="tag t-cyan">phone-friendly</span>
+        <h3>Build an agent (pipeline builder)</h3>
+        <p>Lego-style blocks on a React Flow canvas: Task · Data · Tools · Rules · Model · Checks. Run it on Rosa, then
+          on 100 synthetic patients scored against gold labels, and compare runs. <a href="../demo/">Open →</a></p>
+      </div>
+      <div class="card">
+        <span class="tag t-dim">superseded</span><span class="tag t-cyan">phone-friendly</span>
+        <h3>D1 · The Agent Workbench</h3>
+        <p>One web page, opened from a QR code. Mrs. Delgado's chart on the left, <b>four switches</b> in the middle
+          (tools · skill · model · checker), and the agent's step-by-step trace and answer on the right. Each switch is
+          one lesson. Attendees can edit the skill text on their phones and watch the answer change.</p>
+        <p class="note">Live mode calls a model through a small proxy we host (one capped key, rate-limited, synthetic
+          data only), so attendees never need an account. Replay mode plays recorded runs offline if the Wi-Fi fails.
+          <a href="workbench.html">Prototype →</a></p>
+      </div>
+      <div class="card">
+        <span class="tag t-cyan">laptop</span><span class="tag t-dim">continuity</span>
+        <h3>D2 · "An agent in five cells" (Colab)</h3>
+        <p>For people who liked last year's notebook: ① ask the model a question ② give it one tool ③ the loop (≈10 lines)
+          ④ add a skill file ⑤ score it on 25 synthetic patients. Same patient, same steps as the Workbench, so both
+          groups follow one story.</p>
+        <p class="note">Model access: our proxy, or each person's free Gemini key (fiddly on the day: per-project
+          quotas, key restrictions, not free in the UK/EU). <span class="k">google.colab.ai</span> needs no key but
+          may be Pro-only, so test it first.</p>
+      </div>
+      <div class="card">
+        <span class="tag t-amber">no code</span>
+        <h3>D3 · Build it in the tools you already have</h3>
+        <p>Make the same agent with no code: a Claude Project / Custom GPT / Gemini Gem / Copilot agent, the skill file
+          pasted in as instructions, Mrs. Delgado's notes uploaded as files. The message: you can prototype this
+          tomorrow, on synthetic or approved data.</p>
+        <p class="note">Most relatable for clinicians, and many health systems already license Copilot. Weakness:
+          you can't see the loop, so it teaches less about what's under the hood.</p>
+      </div>
+      <div class="card">
+        <span class="tag t-green">interactive</span><span class="tag t-dim">unplugged</span>
+        <h3>D4 · "You are the agent"</h3>
+        <p>The room plays the agent. The screen shows the tool menu (search notes · open a note · med list · labs) and
+          the audience votes on the next step. In about 6 votes they reach the answer, and they've just executed the
+          loop themselves.</p>
+        <p class="note">Needs nothing but a poll app. Built into the prototype as a mode. A strong opener for the 15
+          minutes, or a fallback if every network fails.</p>
+      </div>
+      <div class="card">
+        <span class="tag t-green">evaluation</span>
+        <h3>D6 · Live leaderboard</h3>
+        <p>Run all the strategies on 50 synthetic patients at once. Bars fill in live against clinician labels. The
+          audience predicts the winner first. Then drill into one error and click through to its quote.</p>
+        <p class="note">The repo can already do this on its synthetic fixture. Lovedeep's natural part of the demo:
+          a practical evaluation framework people can reuse.</p>
+      </div>
+      <div class="card">
+        <span class="tag t-pink">FHIR</span>
+        <h3>D7 · Plug into a real FHIR server</h3>
+        <p>Point the same agent at a public FHIR sandbox with synthetic patients and watch it make real API calls:
+          <span class="k">GET MedicationRequest?patient=…</span>. This is the same plug Epic exposes.</p>
+        <p class="note">Strong interoperability message, and our fhir_llm_agent already does it. Raw JSON on screen
+          is hard for clinicians to read, so translate each call into a plain-English line.</p>
+      </div>
+      <div class="card">
+        <span class="tag t-cyan">multimodal</span>
+        <h3>D8 · The outside fax</h3>
+        <p>Mrs. Delgado's latest echo arrives as a scanned outside-hospital fax (an image). The agent reads the image,
+          finds "LVEF 30%", and the classification flips. That's "multimodal" in one honest, very familiar example.</p>
+        <p class="note">Covers the proposal's "multimodal" promise without a gimmick. Cheap to add to D1.</p>
+      </div>
+      <div class="card">
+        <span class="tag t-green">orchestration</span>
+        <h3>D9 · Close the loop</h3>
+        <p>The finding becomes action: a second agent drafts a note to the PCP ("consider switching to metoprolol
+          succinate or carvedilol") and a patient-friendly version. A human clicks <b>Approve</b>; nothing is sent
+          automatically.</p>
+        <p class="note">Shows orchestration (agents handing off), ties in Rosemary's talk, and sets up the panel's
+          entrustment vote.</p>
+      </div>
+    </div>
+
+    <!-- ===================================================================================================== -->
+    <h2 id="plan">6 · Recommended 15 minutes: build it one part at a time</h2>
+    <p class="lead">D1 as the backbone, opened with D4, with D6 for evaluation, D9 to close, and D2 as the take-home.
+      The structure is the ladder from framing C: each step switches on one building block from Bruno's talk and fixes
+      one visible error.</p>
+    <table>
+      <tr><th style="width:90px">Clock</th><th style="width:240px">Step</th><th>What the room sees</th><th style="width:120px">Score</th></tr>
+      <tr><td class="min">0:00</td><td><b>The job</b><br><span class="note">Ryan</span></td>
+        <td>Mrs. Delgado's chart on screen. Quick poll: "Is there a GDMT gap?" Most will say yes (MRA, SGLT2i).</td><td class="score">—</td></tr>
+      <tr><td class="min">1:00</td><td><b>You are the agent</b> (D4)</td>
+        <td>Three or four room votes on which tool to use next. "That's all an agent is."</td><td class="score">—</td></tr>
+      <tr><td class="min">3:00</td><td><b>① Just a chatbot</b></td>
+        <td>Paste the discharge summary into the model. A fast, confident answer: MRA gap, SGLT2i gap, beta blocker fine.</td>
+        <td class="score t-red">2 / 5</td></tr>
+      <tr><td class="min">4:30</td><td><b>② Give it hands</b> (tools)</td>
+        <td>Switch on <i>search notes · read note · meds & labs</i>. Watch it search, open the nephrology note, find the
+          hyperkalemia and the declined SGLT2i. It still counts metoprolol tartrate.</td><td class="score t-amber">4 / 5</td></tr>
+      <tr><td class="min">7:00</td><td><b>③ Give it the rulebook</b> (skill)</td>
+        <td>Switch on the GDMT skill: a dozen lines of plain English. The agent re-checks the beta blocker and finds the
+          real gap. Everyone on phones edits one line of the skill and sees the answer change. "You just programmed an
+          agent, in English."</td><td class="score t-green">5 / 5</td></tr>
+      <tr><td class="min">9:00</td><td><b>④ Does it hold up?</b> (D6)<br><span class="note">Lovedeep</span></td>
+        <td>Run all strategies on 50 synthetic patients; the leaderboard fills in against clinician labels. Click into one
+          error and see its quote. Introduce "send humans where the machines disagree".</td><td class="score">50 pts</td></tr>
+      <tr><td class="min">12:30</td><td><b>⑤ Close the loop</b> (D9)</td>
+        <td>A second agent drafts the PCP note; a human approves. Optional 20 s: the outside echo fax (D8).</td><td class="score">—</td></tr>
+      <tr><td class="min">14:00</td><td><b>Take-home</b></td>
+        <td>QR code: the Workbench, the Colab notebook, the skill file, and a one-page "anatomy of an agent" card.</td><td class="score">—</td></tr>
+    </table>
+
+    <!-- ===================================================================================================== -->
+    <h2 id="risks">7 · What could go wrong on the day</h2>
+    <div class="grid g2">
+      <div class="card"><h3 class="t-red">Conference Wi-Fi</h3>
+        <p>Every live call has a recorded replay one click away, and the Workbench runs from a single file. Rehearse fully
+          offline once.</p></div>
+      <div class="card"><h3 class="t-red">200 people, one API key</h3>
+        <p>A proxy with per-device rate limits and a hard spend cap, using a cheap fast model. Phones get replay by default
+          and live mode on request. Load-test with about 300 simulated clients.</p></div>
+      <div class="card"><h3 class="t-red">The model does something new on stage</h3>
+        <p>Use temperature 0, a pinned model version, and a rehearsed patient. If it goes off-script, that's a teaching
+          moment for Lovedeep ("this is why we verify"), provided we've rehearsed what to say.</p></div>
+      <div class="card"><h3 class="t-red">PHI / perception</h3>
+        <p>Only synthetic patients, labelled as such on every screen. Say explicitly that the real study ran on a local
+          model inside Yale's firewall.</p></div>
+      <div class="card"><h3 class="t-red">Too much on screen</h3>
+        <p>Use a projector mode at large type showing one panel at a time, and keep raw JSON off screen. Every tool call
+          is shown as a plain sentence ("Searched notes for 'spironolactone': 1 hit").</p></div>
+      <div class="card"><h3 class="t-red">Overselling</h3>
+        <p>Say the numbers are preliminary (v0.6 reference built from strategy agreement plus adjudication) and show one
+          failure on purpose.</p></div>
+    </div>
+
+    <!-- ===================================================================================================== -->
+    <h2 id="questions">8 · To decide together</h2>
+    <div class="grid g2">
+      <div class="card"><ol style="margin:0;padding-left:20px">
+        <li>Will the other speakers adopt the shared patient (one slide each)? That's the biggest lever on coherence.</li>
+        <li>Framing for the 5-minute talk: intern (A), kitchen (B), or intern + replay (A + D)?</li>
+        <li>Who owns which demo step? Ryan drives, Bruno narrates the build, Lovedeep owns evaluation?</li>
+        <li>Phones or laptops: what does a QCOR room actually bring? This decides whether D2 (Colab) is worth building.</li>
+      </ol></div>
+      <div class="card"><ol start="5" style="margin:0;padding-left:20px">
+        <li>Live model or replay by default? Which model: an open-weight model (matches the study) or a commercial API?</li>
+        <li>Is our real deployment number (36% with ≥1 gap) cleared to show, and who presents it, Rohan or Lovedeep?</li>
+        <li>Build D7 (FHIR) and D8 (fax) or keep them as stretch goals?</li>
+        <li>Patient name and details: keep "Mrs. Delgado" or pick something else?</li>
+      </ol></div>
+    </div>
+  </main>
+</body>
+
+</html>

@@ -1,0 +1,926 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QCOR 2026 · agents</title>
+<!--
+  QCOR 2026 deck: Phyllis (parts 0-3) and Bruno (parts 4-5). Arrow keys; S for speaker notes; F for full screen.
+  Every slide animates when it appears (talk.js); going back and forward replays it. ?review shows end states.
+  Deliberately more slides and more on each slide than we'll use: cut down from here.
+-->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+<link rel="stylesheet" href="talk.css">
+</head>
+<body>
+<div id="tracker"></div>
+<div class="reveal"><div class="slides">
+
+<!-- ═══════════════════════════════════════ 0 · THE CASE ═══════════════════════════════════════ -->
+
+<section data-part="0">
+  <div class="intro">
+    <img src="../shared/rosa.svg" alt="" width="260" height="260">
+    <div>
+      <div class="intro-name">Rosa, 71</div>
+      <p>Rosa has heart failure. She went home yesterday after three days in hospital for fluid overload.</p>
+    </div>
+  </div>
+  <aside class="notes">
+    Phyllis opens. Meet Rosa: 71, heart failure, discharged yesterday after a three-day admission for fluid overload.
+    She's synthetic, like every patient in this session.
+  </aside>
+</section>
+
+<section data-part="0" data-auto-animate>
+  <h2>A patient is more than her presenting complaint</h2>
+  <div class="emr">
+    <div class="e-top"><b>Chartwell</b><span>Patient Lookup</span><span>Schedule</span><span>In Basket</span><span class="on">Chart</span><span>Orders</span><span>Reports</span><em>B. Batinica, MD</em></div>
+    <div class="e-banner">
+      <img src="../shared/rosa.svg" alt="" width="58" height="58">
+      <div class="e-who"><b>Delgado, Rosa</b><span>71 y.o. F · DOB 03/14/1955 · MRN 004-118-275</span></div>
+      <div class="e-fld"><i>Allergies</i>Sulfa (rash)</div>
+      <div class="e-fld"><i>Code</i>Full</div>
+      <div class="e-fld"><i>PCP</i>Daniel Lee, MD</div>
+      <div class="e-fld"><i>Wt</i>69.1 kg</div>
+      <div class="e-fld cc"><i>Last admission</i>Acute on chronic systolic heart failure</div>
+    </div>
+    <div class="e-body">
+      <div class="e-side">
+        <div>Summary</div><div class="on">Chart Review</div><div>Results Review</div><div>Notes</div><div>Medications</div><div>Problem List</div><div>Imaging</div><div>Cardiology</div><div>Media</div><div>Flowsheets</div><div>Orders</div><div>Outside Records</div>
+      </div>
+      <div class="e-main">
+        <div class="e-tabs"><span class="on" data-id="tab-enc">Encounters <b>97</b></span><span data-id="tab-notes">Notes <b>612</b></span><span data-id="tab-labs">Labs <b>3,418</b></span><span data-id="tab-flow">Flowsheets <b>18,950</b></span><span data-id="tab-meds">Meds <b>214</b></span><span data-id="tab-imaging">Imaging <b>38</b></span><span data-id="tab-media">Media <b>71</b></span><span data-id="tab-ecg">ECG <b>46</b></span><span data-id="tab-outside">Outside <b>53</b></span></div>
+        <table>
+          <tr><th>Date</th><th>Type</th><th>Department</th><th>Provider</th><th>Description</th></tr>
+          <tr class="hl"><td>09/02/2026</td><td>Discharge</td><td>Cardiology Inpatient</td><td>Patel, A</td><td>Acute on chronic systolic HF</td></tr>
+          <tr><td>08/31/2026</td><td>Progress Note</td><td>Hospital Medicine</td><td>Okafor, J</td><td>Hospital day 2</td></tr>
+          <tr><td>08/30/2026</td><td>ED Visit</td><td>Emergency</td><td>Rivera, M</td><td>Shortness of breath</td></tr>
+          <tr><td>08/29/2026</td><td>Echocardiogram</td><td>Echo Lab</td><td>Chen, L</td><td>LVEF 30%</td></tr>
+          <tr><td>06/10/2026</td><td>Office Visit</td><td>Heart Failure Clinic</td><td>Patel, A</td><td>Follow-up, NYHA II</td></tr>
+          <tr><td>04/14/2026</td><td>Office Visit</td><td>Nephrology</td><td>Nguyen, T</td><td>CKD 3b, potassium 5.9</td></tr>
+          <tr><td>02/20/2026</td><td>Office Visit</td><td>Dermatology</td><td>Silva, R</td><td>Rash, forearms</td></tr>
+          <tr><td>11/05/2025</td><td>Office Visit</td><td>Primary Care</td><td>Lee, D</td><td>Annual visit</td></tr>
+          <tr class="fade"><td>08/20/2025</td><td>Telephone</td><td>Urology</td><td>Brooks, K</td><td>Recurrent UTI</td></tr>
+        </table>
+        <div class="e-foot">Showing 9 of 97 encounters</div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+    This is what we actually see. (A mock EHR, deliberately not any real vendor.) The banner tells you she came in with
+    shortness of breath and acute on chronic heart failure. But the chart is far more than that admission: nephrology
+    visits, a heart-failure clinic, a urology call about UTIs, primary care. To know whether her care is right we have
+    to go and look through all of it.
+  </aside>
+</section>
+
+<section data-part="0" data-auto-animate data-auto-animate-duration="1.1">
+  <h2>Behind every tab: hundreds of entries, in many forms</h2>
+  <div class="tabtiles">
+    <div class="tt"><span class="tt-tab" data-id="tab-notes"><svg class="i"><use href="#i-note"/></svg>Notes <b>612</b></span>
+      <div class="md-v txt" data-t="1200">"…Potassium 5.9 today. <mark>Spironolactone discontinued due to hyperkalemia</mark>; would not rechallenge given CKD…"</div></div>
+    <div class="tt"><span class="tt-tab" data-id="tab-labs"><svg class="i"><use href="#i-flask"/></svg>Labs <b>3,418</b></span>
+      <div class="md-v" data-t="1350"><svg viewBox="0 0 300 110" class="spark"><path d="M10 80 L50 74 L90 70 L130 52 L170 20 L210 46 L250 58 L290 60" class="sp-k"/><path d="M10 60 L50 62 L90 58 L130 56 L170 48 L210 50 L250 52 L290 50" class="sp-c"/><text x="10" y="104">potassium · creatinine, 2024–2026</text></svg></div></div>
+    <div class="tt"><span class="tt-tab" data-id="tab-flow"><svg class="i"><use href="#i-chart"/></svg>Flowsheets <b>18,950</b></span>
+      <div class="md-v" data-t="1500"><svg viewBox="0 0 300 110" class="spark"><path d="M10 30 L40 34 L70 30 L100 26 L130 22 L160 20 L190 40 L220 62 L250 70 L290 72" class="sp-w"/><text x="10" y="104">daily weight, this admission (−4.2 L)</text></svg></div></div>
+    <div class="tt"><span class="tt-tab" data-id="tab-meds"><svg class="i"><use href="#i-pill"/></svg>Meds <b>214</b></span>
+      <div class="md-v meds" data-t="1650">
+        <div><span>lisinopril</span><i style="left:5%; right:0"></i></div>
+        <div><span>metoprolol tartrate</span><i style="left:5%; right:0"></i></div>
+        <div><span>spironolactone</span><i class="stop" style="left:20%; right:38%"></i></div>
+        <div><span>dapagliflozin</span><i class="stop" style="left:2%; right:62%"></i></div>
+      </div></div>
+    <div class="tt"><span class="tt-tab" data-id="tab-imaging"><svg class="i"><use href="#i-clipboard"/></svg>Imaging <b>38</b></span>
+      <div class="md-v txt" data-t="1800">"Left ventricle moderately dilated with global hypokinesis. <mark>LVEF 30%</mark> (biplane Simpson's). Moderate mitral regurgitation."</div></div>
+    <div class="tt"><span class="tt-tab" data-id="tab-media"><svg class="i"><use href="#i-echo"/></svg>Media <b>71</b></span>
+      <div class="md-v imgs" data-t="1950">
+        <svg viewBox="0 0 160 110" class="echo-img"><defs><filter id="speck"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4"/><feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.4 -0.35"/></filter><clipPath id="fan"><path d="M80 6 L150 100 A88 88 0 0 1 10 100 Z"/></clipPath></defs>
+          <rect width="160" height="110" fill="#000"/><g clip-path="url(#fan)"><rect width="160" height="110" fill="#2a2a2a"/><rect width="160" height="110" filter="url(#speck)" opacity="0.7"/>
+          <ellipse cx="62" cy="52" rx="16" ry="24" fill="#000" opacity="0.85"/><ellipse cx="98" cy="52" rx="14" ry="22" fill="#000" opacity="0.85"/><ellipse cx="62" cy="86" rx="13" ry="10" fill="#000" opacity="0.8"/><ellipse cx="98" cy="86" rx="12" ry="10" fill="#000" opacity="0.8"/></g>
+          <text x="6" y="12">A4C</text></svg>
+        <svg viewBox="0 0 110 110" class="cxr-img"><defs><radialGradient id="lung" cx="0.5" cy="0.45" r="0.6"><stop offset="0" stop-color="#1a1a1a"/><stop offset="1" stop-color="#5a5a5a"/></radialGradient></defs>
+          <rect width="110" height="110" fill="#6b6b6b"/><ellipse cx="34" cy="54" rx="22" ry="38" fill="url(#lung)"/><ellipse cx="76" cy="54" rx="22" ry="38" fill="url(#lung)"/><rect x="50" y="10" width="10" height="90" fill="#9a9a9a"/><ellipse cx="62" cy="70" rx="20" ry="18" fill="#a8a8a8" opacity="0.9"/>
+          <g fill="none" stroke="#b5b5b5" stroke-width="2" opacity="0.6"><path d="M14 30 Q34 24 52 30"/><path d="M12 42 Q34 36 52 42"/><path d="M12 54 Q34 48 52 54"/><path d="M58 30 Q76 24 96 30"/><path d="M58 42 Q76 36 98 42"/><path d="M58 54 Q76 48 98 54"/></g><text x="4" y="12">CXR</text></svg>
+      </div></div>
+    <div class="tt"><span class="tt-tab" data-id="tab-ecg"><svg class="i"><use href="#i-ecg"/></svg>ECG <b>46</b></span>
+      <div class="md-v" data-t="2100"><svg viewBox="0 0 300 110" class="ecg"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke="#5a2a2a" stroke-width="0.6"/></pattern></defs><rect width="300" height="110" fill="#1a0f0f"/><rect width="300" height="110" fill="url(#grid)"/>
+        <path class="ecg-line" data-t="2200" d="M0 60 L20 60 Q25 54 30 60 L38 60 L42 66 L47 18 L52 76 L56 60 L68 60 Q76 48 84 60 L100 60 Q105 54 110 60 L118 60 L122 66 L127 18 L132 76 L136 60 L148 60 Q156 48 164 60 L180 60 Q185 54 190 60 L198 60 L202 66 L207 18 L212 76 L216 60 L228 60 Q236 48 244 60 L260 60 Q265 54 270 60 L278 60 L282 66 L287 18 L292 76 L296 60 L300 60"/></svg></div></div>
+    <div class="tt"><span class="tt-tab" data-id="tab-outside"><svg class="i"><use href="#i-copy"/></svg>Outside <b>53</b></span>
+      <div class="md-v scan" data-t="2250"><div class="fax"><b>FAX · Riverside Cardiology</b><i></i><i></i><i class="s"></i><i></i><i class="s"></i></div></div></div>
+  </div>
+  <div class="story sm">
+    <span class="tt-tab enc" data-id="tab-enc"><svg class="i"><use href="#i-hospital"/></svg>Encounters <b>97</b></span>
+    <div class="story-lanes" data-t="2500">
+      <div class="st-axis"><span>2017</span><span>2018</span><span>2019</span><span>2020</span><span>2021</span><span>2022</span><span>2023</span><span>2024</span><span>2025</span><span>2026</span></div>
+      <div class="st-lane"><em>Primary care</em><i style="left:3%"></i><i style="left:13%"></i><i style="left:24%"></i><i style="left:35%"></i><i style="left:46%"></i><i style="left:57%"></i><i style="left:68%"></i><i style="left:79%"></i><i style="left:88%"></i></div>
+      <div class="st-lane"><em>Cardiology</em><i style="left:52%"></i><i style="left:61%"></i><i style="left:70%"></i><i style="left:76%"></i><i style="left:83%"></i><i style="left:91%"></i><i style="left:95%"></i></div>
+      <div class="st-lane"><em>Nephrology</em><i style="left:64%"></i><i style="left:75%"></i><i style="left:86%"></i><i style="left:92%"></i></div>
+      <div class="st-lane"><em>Hospital</em><i class="big" style="left:66%"></i><i class="big" style="left:84%"></i><i class="big" style="left:97%"></i></div>
+    </div>
+  </div>
+  <aside class="notes">
+    Open the tabs. Each one holds hundreds of entries, thousands for someone who has been in the system a long time, and
+    each is a different kind of data: 612 notes, 3,418 lab results, nearly 19,000 vital-sign and flowsheet rows, 214
+    medication orders started and stopped over years, imaging reports, the images themselves, ECG tracings, scanned
+    faxes from outside practices. Laid out over nine years, that's her story: when the heart failure started, the
+    nephrology visits, three admissions. Good care depends on pulling this together. (Counts are illustrative.)
+  </aside>
+</section>
+
+<section data-part="0">
+  <h2>Is she getting the care she needs?</h2>
+  <div class="q3">
+    <div class="q"><span class="qn">1</span><svg class="i"><use href="#i-search"/></svg><b>Do we have the full picture?</b></div>
+    <div class="q"><span class="qn">2</span><svg class="i"><use href="#i-pill"/></svg><b>Is she on the right medicines?</b></div>
+    <div class="q"><span class="qn">3</span><svg class="i"><use href="#i-calendar"/></svg><b>Is she getting timely follow-up?</b><span>visits, lab monitoring, rehabilitation</span></div>
+  </div>
+  <div class="programs">
+    <div class="pl">We can't improve what we don't measure. Quality programs track exactly this:</div>
+    <div class="shots">
+      <figure><img src="../shared/sites/cms-hrrp.jpg" alt=""><figcaption>CMS · Hospital Readmissions Reduction Program</figcaption></figure>
+      <figure><img src="../shared/sites/aha-gwtg-hf.jpg" alt=""><figcaption>AHA · Get With The Guidelines–Heart Failure</figcaption></figure>
+      <figure><img src="../shared/sites/acc-ncdr.jpg" alt=""><figcaption>ACC · NCDR registries</figcaption></figure>
+    </div>
+  </div>
+  <aside class="notes">
+    Three simple questions about Rosa. Do we have the full picture? Is she on the right medicines? Is she getting timely
+    follow-up: a visit, her labs checked, a rehab referral? We can't improve what we don't measure, and quality programs
+    like CMS's readmissions program, AHA's Get With The Guidelines and the ACC's NCDR registries measure exactly these.
+  </aside>
+</section>
+
+<section data-part="0">
+  <h2>Someone has to read it all</h2>
+  <div class="readall">
+    <div class="ra-in">
+      <span><svg class="i"><use href="#i-note"/></svg>notes</span><span><svg class="i"><use href="#i-flask"/></svg>labs</span><span><svg class="i"><use href="#i-pill"/></svg>medications</span>
+      <span><svg class="i"><use href="#i-clipboard"/></svg>reports</span><span><svg class="i"><use href="#i-echo"/></svg>images</span><span><svg class="i"><use href="#i-ecg"/></svg>ECGs</span><span><svg class="i"><use href="#i-copy"/></svg>faxes</span>
+    </div>
+    <div class="ra-arrow">→</div>
+    <div class="ra-who"><svg class="i xxl"><use href="#i-doctor"/></svg><b>A trained abstractor</b><span>reads, understands and records each answer by hand</span></div>
+    <div class="ra-arrow">→</div>
+    <div class="ra-out"><svg class="i xl"><use href="#i-chart"/></svg><b>Quality metrics</b></div>
+  </div>
+  <div class="costnote">
+    <svg class="i"><use href="#i-dollar"/></svg>
+    <div>One hospital: <b>108,478 person-hours</b> and <b>$5.0 million</b> a year to report 162 quality metrics.
+      <span class="cite">Saraswathula A, et al. <i>JAMA</i>. 2023;329(21):1840-1847.</span></div>
+  </div>
+  <aside class="notes">
+    To answer those questions you need something that can understand every kind of data we just saw: notes, labs,
+    medication histories, reports, images, ECGs, scanned faxes. Today that's a trained person, an abstractor, reading
+    charts by hand, and it's expensive. At Johns Hopkins Hospital, reporting 162 quality metrics took 108,478
+    person-hours and about $5.0 million in personnel cost in one year (Saraswathula A, Merck SJ, Bai G, et al. JAMA.
+    2023;329(21):1840-1847. doi:10.1001/jama.2023.7271). Could a computer do the reading? Only if it can understand
+    what it reads.
+  </aside>
+</section>
+
+<section data-part="1">
+  <h2>Something that can understand it: a large language model</h2>
+  <div class="ladder">
+    <div class="rung"><svg class="i xl"><use href="#i-llm"/></svg><b>A model</b><span>guesses from what it learned</span></div>
+    <div class="parrow">→</div>
+    <div class="rung blue"><svg class="i xl"><use href="#i-llm"/></svg><b>A model + context</b><span>reads what it's given</span></div>
+    <div class="parrow">→</div>
+    <div class="rung amber"><svg class="i xl"><use href="#i-agent"/></svg><b>An agent</b><span>decides what it needs, goes and gets it, reads it, decides again</span></div>
+  </div>
+  <aside class="notes">
+    Reading Rosa's chart takes understanding: notes, numbers, reports, faxes. Large language models can now do that
+    reading, at scale. Three steps, and the rest of the talk hangs off them. A bare model guesses from what it learned
+    in training. A model with context reads what it's handed, so it is only as good as whoever chose the context. An
+    agent chooses its own context: it decides what to look for, fetches it, reads it, and decides what to do next.
+  </aside>
+</section>
+
+<section data-part="1">
+  <h2>Underneath, it predicts the next word</h2>
+  <div class="phone-row">
+    <div class="phone">
+      <div class="ph-screen">
+        <div class="ph-msg"><span data-type="Running late, I'll be there in" data-t="300" data-speed="45"></span><i class="caret"></i></div>
+      </div>
+      <div class="ph-sugg" data-t="1900"><span class="pick">5</span><span>10</span><span>a few</span></div>
+      <div class="ph-keys"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="ph-text">
+      <p><b>Your phone's keyboard</b> guesses the next word from the last few you typed, having learned from your messages.</p>
+      <p><b>A large language model does the same thing</b>, but it looks at everything written so far, and it has learned from a vast amount of human writing.</p>
+    </div>
+  </div>
+  <div class="src">Framing after CSET, "The surprising power of next word prediction: large language models explained" (Georgetown, 2023)</div>
+  <aside class="notes">
+    You've all used a chatbot. Underneath, it does one thing: predict the next word. Your phone does a simple version:
+    it suggests "5", "10", "a few" after "I'll be there in". A large language model is the same idea at an enormous
+    scale: it reads everything written so far, not just the last few words, and it has learned from a huge amount of text. (Technically it predicts
+    "tokens", pieces of words; we'll just say words.)
+  </aside>
+</section>
+
+<section data-part="1">
+  <h2>One word at a time</h2>
+  <div class="gen" data-gen="nextword" data-t="300"></div>
+  <div class="explain">
+    <div><svg class="i"><use href="#i-dice"/></svg><span>For every possible next word it gives a probability. Pick one, add it to the text, and ask again.</span></div>
+  </div>
+  <aside class="notes">
+    Here's a large language model running on a simple sentence. Given the text so far, it gives every possible next
+    word a probability; the bars are the top five. It picks one, adds it, and repeats: mat, and, purred, softly. That's it:
+    there is no separate "answering" module. Probabilities are illustrative.
+  </aside>
+</section>
+
+<section data-part="1">
+  <h2>Where the probabilities come from: training</h2>
+  <div class="train" data-t="300"></div>
+  <div class="explain">
+    <div><svg class="i"><use href="#i-gear"/></svg><span>Compare with the real next word, then nudge billions of internal numbers so the right word becomes a little more likely. Repeat trillions of times.</span></div>
+  </div>
+  <div class="learned">
+    <span class="lt">Learned from</span>
+    <span><svg class="i"><use href="#i-globe"/></svg>web pages</span>
+    <span><img src="../shared/logos/si-wikipedia.svg" alt="">Wikipedia</span>
+    <span><svg class="i"><use href="#i-books"/></svg>books</span>
+    <span><img src="../shared/logos/si-pubmed.svg" alt=""><img src="../shared/logos/si-arxiv.svg" alt="">science</span>
+    <span><img src="../shared/logos/si-github.svg" alt="">code</span>
+    <span><img src="../shared/logos/si-reddit.svg" alt=""><img src="../shared/logos/si-stackoverflow.svg" alt="">forums</span>
+    <span><img src="../shared/logos/si-newyorktimes.svg" alt="">news</span>
+    <span><img src="../shared/logos/si-youtube.svg" alt="">transcripts</span>
+    <span class="lt2">≈ 11 trillion words · 250,000 years of reading</span>
+  </div>
+  <aside class="notes">
+    Where do the probabilities come from? Training. Take real text, hide the next word, let the model guess, show it
+    the real word, and nudge its numbers so the right word becomes a little more likely. Repeat trillions of times.
+    The text is a huge sample of what people have written: web pages, Wikipedia, books, papers, code, forums, news.
+    Llama 3 read about 11 trillion words: a quarter of a million years of reading, 8 hours a day. Chatbots get further
+    training on example conversations so that they answer rather than just continue, but underneath it is the same
+    next-word machine.
+  </aside>
+</section>
+
+<section data-part="1">
+  <h2>Many models: closed and open, small and large</h2>
+  <div class="oc">
+    <div class="oc-col">
+      <div class="side">
+        <div class="side-h"><svg class="i"><use href="#i-cloud"/></svg>Closed</div>
+        <div class="side-s">run by the company; you send text over the internet</div>
+        <div class="logos lg4">
+          <div><img src="../shared/logos/openai.svg" alt=""><span>GPT</span></div>
+          <div><img src="../shared/logos/claude-color.svg" alt=""><span>Claude</span></div>
+          <div><img src="../shared/logos/gemini-color.svg" alt=""><span>Gemini</span></div>
+          <div><img src="../shared/logos/grok.svg" alt=""><span>Grok</span></div>
+        </div>
+      </div>
+      <div class="bubbles sm">
+        <div class="bub mystery" style="--s:196px" data-t="200"><div class="b"></div><b>GPT · Claude · Gemini</b><span><svg class="i"><use href="#i-cloud"/></svg>data centre · size not published</span></div>
+      </div>
+    </div>
+    <div class="oc-col">
+      <div class="side">
+        <div class="side-h"><svg class="i"><use href="#i-server"/></svg>Open weights</div>
+        <div class="side-s">download it; run it inside your own firewall</div>
+        <div class="logos lg3">
+          <div><img src="../shared/logos/meta-color.svg" alt=""><span>Llama</span></div>
+          <div><img src="../shared/logos/qwen-color.svg" alt=""><span>Qwen</span></div>
+          <div><img src="../shared/logos/deepseek-color.svg" alt=""><span>DeepSeek</span></div>
+          <div><img src="../shared/logos/mistral-color.svg" alt=""><span>Mistral</span></div>
+          <div><img src="../shared/logos/gemma-color.svg" alt=""><span>Gemma</span></div>
+          <div><img src="../shared/logos/openai.svg" alt=""><span>gpt-oss</span></div>
+        </div>
+      </div>
+      <div class="bubbles sm">
+        <div class="bub" style="--s:196px" data-t="450"><div class="b"></div><b>DeepSeek V3 · 671B</b><span><svg class="i"><use href="#i-server"/></svg>rack of GPUs</span></div>
+        <div class="bub" style="--s:140px" data-t="650"><div class="b"></div><b>gpt-oss · 120B</b><span><svg class="i"><use href="#i-server"/></svg>GPU server</span></div>
+        <div class="bub" style="--s:84px" data-t="850"><div class="b amber"></div><b>Qwen 3.6 · 35B</b><span><svg class="i"><use href="#i-server"/></svg>one GPU server · our study</span></div>
+        <div class="bub" style="--s:46px" data-t="1050"><div class="b"></div><b>Llama 3.1 · 8B</b><span><svg class="i"><use href="#i-laptop"/></svg>laptop</span></div>
+        <div class="bub" style="--s:34px" data-t="1250"><div class="b"></div><b>Gemma 3 · 4B</b><span><svg class="i"><use href="#i-laptop"/></svg>laptop</span></div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+    Two families, many sizes. Closed models (GPT, Claude, Gemini, Grok) run on the vendor's servers; you send text over
+    an API and the weights are secret. Open-weight models (Llama, Qwen, DeepSeek, Mistral, Gemma, OpenAI's gpt-oss) can
+    be downloaded and run on your own hardware, which matters for patient data: our study ran Qwen inside Yale's
+    network. Size is counted in parameters: a 4-8 billion parameter model runs on a laptop (last year's session); our
+    35B model fits on one GPU server (a mixture-of-experts, 3B active per word); DeepSeek V3 needs a rack. Frontier
+    closed models don't publish sizes. Bigger is usually more capable, and slower and costlier to host.
+  </aside>
+</section>
+
+<section data-part="1">
+  <h2>A fast-moving field, with very capable models</h2>
+  <div class="charts2">
+    <figure class="chart-card" data-t="200"><img src="../shared/charts/metr-length-of-tasks-log.png" alt="METR: length of tasks AI agents complete autonomously, 2023 to 2026"><figcaption>Length of task AI agents finish on their own: doubling about every 4 months</figcaption></figure>
+    <figure class="chart-card" data-t="700"><img src="../shared/charts/owid-ai-test-scores.svg" alt="Our World in Data: AI test scores relative to human performance"><figcaption>Tests made for people are passed within a few years</figcaption></figure>
+  </div>
+  <div class="tl">
+    <div data-t="1300"><span class="yr">2022</span><b>Gets 4 in 10 grade-school maths problems wrong</b><span>ChatGPT (GPT-3.5): 57% on GSM8K</span></div>
+    <div data-t="1600"><span class="yr">2024</span><b>Most of a hard high-school maths contest</b><span>o1: 74% on AIME (GPT-4o: 12%)</span></div>
+    <div data-t="1900"><span class="yr">2025</span><b>Maths Olympiad gold-medal level</b><span>DeepMind and OpenAI</span></div>
+    <div data-t="2200"><span class="yr">2026</span><b>Millennium Prize proof claimed</b><span>Navier–Stokes, not yet verified</span></div>
+  </div>
+  <div class="src">METR, <a href="https://metr.org/blog/2025-03-19-measuring-ai-ability-to-complete-long-tasks/">long tasks</a> (updated 2026) · Our World in Data (CC BY), Kiela et al. 2023 · OpenAI, <a href="https://arxiv.org/html/2303.08774v4#S4.T2">GPT-4 report, Table 2</a> · OpenAI, <a href="https://openai.com/index/learning-to-reason-with-llms/#:~:text=only%20solved%20on%20average%2012%25">o1</a></div>
+  <aside class="notes">
+    Two views of the same thing. Left, from METR (metr.org): how long a task, timed for a skilled person, AI agents
+    can complete half the time: a few minutes for GPT-4 in 2023, many hours for 2026 models, doubling roughly every 4
+    months. Right, Our World in Data: each benchmark starts far below human performance (-100) and crosses it (0),
+    faster each time. Mostly software and reasoning tasks, so a trend, not a clinical claim.
+    Maths shows how fast it moved. ChatGPT's model (GPT-3.5) got about 4 in 10 grade-school word problems wrong (57% on
+    GSM8K, GPT-4 technical report). In September 2024, o1 solved 74% of the AIME, a hard US high-school contest, where
+    GPT-4o solved 12%. July 2025: DeepMind and OpenAI systems at gold-medal level at the International Mathematical
+    Olympiad. September 2026: OpenAI says its model produced a Lean-formalised proof of the Navier-Stokes Millennium
+    Prize problem, not yet independently verified, so say "claimed".
+  </aside>
+</section>
+
+<section data-part="1">
+  <h2>But it is a strange kind of mind</h2>
+  <div class="two">
+    <div class="tweet">
+      <div class="tw-head"><img src="../shared/karpathy.jpg" alt=""><div><b>Andrej Karpathy</b><span>@karpathy · 2 Oct 2025</span></div></div>
+      <p>"…why I thought it was a fun comparison:</p>
+      <p>1) It captures the idea that LLMs are purely digital artifacts that don't interact with the physical world (unlike animals, which are very embodied).</p>
+      <p>2) Ghosts are a kind of "echo" of the living, in this case a statistical distillation of humanity.</p>
+      <p>3) There is an air of mystery over both ghosts and LLMs, as in we don't fully understand what they are or how they work."</p>
+    </div>
+    <div class="meanings">
+      <div><svg class="i"><use href="#i-hospital"/></svg><div><b>No body, no experience.</b> It has never been on a ward, felt tired, or met a patient.</div></div>
+      <div><svg class="i"><use href="#i-books"/></svg><div><b>An echo of everything written.</b> Fluent in any style, including confident nonsense.</div></div>
+      <div><svg class="i"><use href="#i-calendar"/></svg><div><b>No memory of today.</b> It doesn't know Rosa, or what happened after training ended.</div></div>
+    </div>
+  </div>
+  <aside class="notes">
+    Karpathy's "ghosts, not animals": LLMs are a statistical echo of human writing, with no body and no lived
+    experience. Practically: it has no common sense about its own situation, doesn't know your patient, doesn't know
+    what day it is. Which leads straight to what happens when you ask it about Rosa.
+  </aside>
+</section>
+
+<section data-part="1">
+  <h2>Back to Rosa: ask it with nothing else</h2>
+  <div class="gen" data-gen="guess" data-t="300"></div>
+  <div class="stamp-wrap"><div class="stamp" data-t="5600">Invented: it has never seen her chart</div></div>
+  <div class="explain">
+    <div><svg class="i"><use href="#i-chart"/></svg><span>Look at the bars: they're <b>flat</b>. The model has no idea, but its job is to produce a next word, so it does.</span></div>
+    <div><svg class="i"><use href="#i-warning"/></svg><span>That's a hallucination: not a bug in one model, but what next-word prediction does with nothing to go on.</span></div>
+  </div>
+  <aside class="notes">
+    Same machine. We ask for Rosa's ejection fraction without giving it her chart. Watch the distribution over the
+    number: 35, 40, 25, 30, 45, all similar. It's guessing from what EFs in heart-failure patients usually are, and it
+    writes "35%" fluently. Wrong, and nothing in the text tells you it's a guess.
+  </aside>
+</section>
+
+<section data-part="2">
+  <h2>Put the facts in the prompt</h2>
+  <div class="gen" data-gen="context" data-t="300"></div>
+  <div class="stamp-wrap"><div class="stamp good" data-t="6200">Right: 30%, from the echo of 29 Aug</div></div>
+  <div class="explain">
+    <div><svg class="i"><use href="#i-note"/></svg><span>We pasted her echo report in front of the question. The model is unchanged: training is school; the context is the desk.</span></div>
+    <div><svg class="i"><use href="#i-chart"/></svg><span>Now one word takes 97%. The answer is sitting in the text, so predicting it is easy.</span></div>
+  </div>
+  <aside class="notes">
+    Now we paste the echo report above the same question. Same model, same weights. The distribution collapses onto 30:
+    the most likely continuation of a text that contains "LVEF 30%" is 30%. This is the single most important idea of
+    the talk: the model answers from what's in front of it. Training is school: broad, fixed, can't be checked. The
+    context is the desk: today's chart, read fresh. The same goes for rules: put them in the prompt and it follows
+    them, with no retraining.
+  </aside>
+</section>
+
+<section data-part="2">
+  <h2>How big is the desk? The context window</h2>
+  <div class="win-bars">
+    <div class="wb"><span>6,000 words</span><div class="wtrack"><div class="wfill" style="--w:2%" data-t="200"></div></div><span class="muted">≈ 12 pages</span></div>
+    <div class="wb"><span>100,000</span><div class="wtrack"><div class="wfill" style="--w:13%" data-t="600"></div></div><span class="muted">≈ 200 pages · our study model</span></div>
+    <div class="wb"><span>750,000</span><div class="wtrack"><div class="wfill" style="--w:100%" data-t="1000"></div></div><span class="muted">≈ 1,500 pages · largest windows today</span></div>
+    <div class="wb rosa"><span><img src="../shared/rosa.svg" alt="" width="34">Rosa's chart</span><div class="wtrack"><div class="wfill blue" style="--w:40%" data-t="1600"></div></div><span class="muted">612 notes ≈ 300,000 words</span></div>
+  </div>
+  <aside class="notes">
+    The context window is the most text the model can consider at once. 8k tokens is a dozen pages; our study model
+    has 128k; the largest today about a million. A long chart like Rosa's (612 notes) is around 400k tokens.
+  </aside>
+</section>
+
+<section data-part="2">
+  <h2>Who gathers the context? 1 · By hand</h2>
+  <div class="byhand" data-t="0">
+    <div class="ehr">
+      <div class="ehr-bar"><span></span><span></span><span></span><b>EHR · Delgado, Rosa</b></div>
+      <div class="ehr-body">
+        <div class="ehr-list"><div>Discharge summary</div><div>Nursing note</div><div class="sel">Echo report</div><div>Cardiology clinic</div><div>Nephrology</div><div>Problem list</div></div>
+        <div class="ehr-note">Transthoracic echocardiogram. Left ventricle moderately dilated with global hypokinesis. <span class="hl" data-t="1700">LVEF 30% (biplane Simpson's).</span> Moderate mitral regurgitation.</div>
+      </div>
+    </div>
+    <div class="chatbox"><div class="ehr-bar"><b>Chat</b></div><div class="chat-body"><div class="pasted" data-t="3900">LVEF 30% (biplane Simpson's).</div><div class="typed" data-type="What is her EF?" data-t="4600"></div></div></div>
+    <div class="cursor" data-t="600"><svg class="i"><use href="#i-pointer"/></svg><span class="kbd k1">⌘C</span><span class="kbd k2">⌘V</span></div>
+  </div>
+  <div class="row gap-xl center tight">
+    <div class="stat sm"><div class="big-num">6 min</div><div class="muted">one patient</div></div>
+    <div class="op">×</div>
+    <div class="stat sm"><div class="big-num">4,000</div><div class="muted">admissions</div></div>
+    <div class="op">=</div>
+    <div class="stat sm"><div class="big-num bad">400 h</div><div class="muted">and you must know where to look</div></div>
+  </div>
+  <aside class="notes">
+    The simplest way: you find the right note, copy the line, paste it into the chat. Fine for one patient, and many
+    clinicians do this today. It doesn't scale, and it only works if you already know where the answer is.
+  </aside>
+</section>
+
+<section data-part="2">
+  <h2>2 · Fixed rules: a query against the database</h2>
+  <div class="sqlwrap">
+    <div class="sql"><div class="g-tag"><svg class="i"><use href="#i-code"/></svg> query</div><pre data-type="SELECT drug, dose, status&#10;FROM medications&#10;WHERE patient = 'rosa'&#10;  AND status = 'active';" data-t="300" data-speed="30"></pre></div>
+    <div class="db">
+      <div class="g-tag"><svg class="i"><use href="#i-database"/></svg> medications</div>
+      <table><tr><th>drug</th><th>dose</th><th>status</th></tr>
+        <tr data-t="3500"><td>lisinopril</td><td>10 mg daily</td><td>active</td></tr>
+        <tr data-t="3700"><td>metoprolol tartrate</td><td>25 mg BID</td><td>active</td></tr>
+        <tr data-t="3900"><td>furosemide</td><td>40 mg daily</td><td>active</td></tr>
+        <tr data-t="4100"><td>atorvastatin</td><td>40 mg nightly</td><td>active</td></tr>
+        <tr class="dim"><td>spironolactone</td><td>25 mg daily</td><td>stopped</td></tr>
+      </table>
+    </div>
+    <div class="arrow-in">→ into the prompt</div>
+  </div>
+  <aside class="notes">
+    The next step up is what most dashboards do: a fixed query against the warehouse (Clarity, in Epic's case) that
+    pulls exactly the rows a question needs and puts them in the prompt. Fast, cheap, repeatable.
+  </aside>
+</section>
+
+<section data-part="2">
+  <h2>…until the question changes, or the system does</h2>
+  <div class="two">
+    <div class="side">
+      <div class="side-h"><svg class="i"><use href="#i-question"/></svg>New question: why isn't she on spironolactone?</div>
+      <div class="sql"><pre data-type="SELECT stop_reason&#10;FROM medications&#10;WHERE drug = 'spironolactone';" data-t="300" data-speed="30"></pre></div>
+      <div class="result bad" data-t="2600">stop_reason: NULL</div>
+      <div class="muted small">The reason is free text in a nephrology note: "discontinued due to hyperkalemia (K 5.9)"</div>
+    </div>
+    <div class="side">
+      <div class="side-h"><svg class="i"><use href="#i-gear"/></svg>Next year: the table is restructured</div>
+      <div class="sql"><pre data-type="SELECT drug, dose FROM medications …" data-t="4200" data-speed="30"></pre></div>
+      <div class="result bad" data-t="5600">ERROR: relation "medications" does not exist</div>
+      <div class="muted small">Every rule must be written for one question, and kept working as the system changes.</div>
+    </div>
+  </div>
+  <aside class="notes">
+    Two problems. Ask something new and you need a new query, and often the answer isn't in a structured field at all:
+    the reason for stopping spironolactone is in a nephrology note. And when the data model changes, the queries break.
+    Rules are brittle and can't adapt.
+  </aside>
+</section>
+
+<section data-part="2">
+  <h2>3 · Everything: send the whole chart</h2>
+  <div class="two">
+    <div class="flood" data-t="0">
+      <div class="prompt-box">
+        <div class="g-tag"><svg class="i"><use href="#i-note"/></svg> prompt</div>
+        <div class="flood-notes">
+          <span data-t="200"></span><span data-t="260"></span><span data-t="320"></span><span data-t="380"></span><span data-t="440"></span><span data-t="500"></span><span data-t="560"></span><span data-t="620"></span><span data-t="680"></span><span data-t="740"></span><span data-t="800"></span><span data-t="860"></span><span data-t="920"></span><span data-t="980"></span><span data-t="1040"></span><span data-t="1100"></span><span data-t="1160"></span><span data-t="1220"></span><span data-t="1280"></span><span data-t="1340"></span><span data-t="1400"></span><span data-t="1460"></span><span data-t="1520"></span><span data-t="1580"></span><span data-t="1640"></span><span data-t="1700"></span><span data-t="1760"></span><span data-t="1820"></span><span data-t="1880"></span><span data-t="1940"></span><span class="key" data-t="2000"></span><span data-t="2060"></span><span data-t="2120"></span><span data-t="2180"></span><span data-t="2240"></span><span data-t="2300"></span><span data-t="2360"></span><span data-t="2420"></span><span data-t="2480"></span><span data-t="2540"></span><span data-t="2600"></span><span data-t="2660"></span><span data-t="2720"></span><span data-t="2780"></span><span data-t="2840"></span><span data-t="2900"></span><span data-t="2960"></span><span data-t="3020"></span>
+        </div>
+      </div>
+      <div class="meter"><div class="meter-fill" data-t="200"></div><span><span data-count="300000" data-t="200" data-dur="3000">0</span> words</span></div>
+    </div>
+    <div class="decline">
+      <svg viewBox="0 0 640 400">
+        <line x1="60" y1="20" x2="60" y2="340" class="ax"/><line x1="60" y1="340" x2="620" y2="340" class="ax"/>
+        <text x="340" y="385" text-anchor="middle" class="axl">amount of text in the prompt →</text>
+        <text x="22" y="180" text-anchor="middle" class="axl" transform="rotate(-90 22 180)">finding the one fact →</text>
+        <path d="M70 60 C200 64 260 90 330 150 S500 270 610 300" class="curve" data-t="1200"/>
+        <circle cx="610" cy="300" r="8" class="bad-dot" data-t="3600"/>
+      </svg>
+      <div class="muted small">schematic of published findings</div>
+    </div>
+  </div>
+  <p class="caption">The one line that matters gets buried: accuracy drops as inputs get longer, especially for facts in the middle. And it's slow and expensive.</p>
+  <div class="src">Liu et al., Lost in the middle, TACL 2024 · Hong et al., Context rot, Chroma 2025</div>
+  <aside class="notes">
+    Or send everything. The prompt fills with hundreds of notes; somewhere in the middle (yellow) is the one line about
+    spironolactone. Models are measurably worse at using a fact buried in a long input, particularly in the middle, and
+    performance degrades as input length grows even on simple tasks. Every call also costs more and takes longer.
+    So the last step: let the model fetch what it needs. That's an agent.
+  </aside>
+</section>
+
+<section data-part="3">
+  <h2>An agent fetches what it needs: it writes a request</h2>
+  <div class="gen" data-gen="toolcall" data-t="300"></div>
+  <div class="explain">
+    <div><svg class="i"><use href="#i-dice"/></svg><span>Still next-word prediction. The prompt lists the tools; the most likely continuation is a request in the right format.</span></div>
+    <div><svg class="i"><use href="#i-code"/></svg><span>The model never runs anything itself. It just writes <span class="mono">search_notes("spironolactone")</span>.</span></div>
+  </div>
+  <aside class="notes">
+    How does a text predictor "use a tool"? We tell it in the prompt which tools exist and how to call them. Then,
+    token by token, it writes a function call: search, _notes, (", spironolactone, "). It's the same mechanism as
+    writing a sentence; the output is just shaped like a command.
+  </aside>
+</section>
+
+<section data-part="3">
+  <h2>The harness reads the request and does it</h2>
+  <div class="harness" data-t="0">
+    <div class="h-frame"><span class="h-lbl">harness</span></div>
+    <div class="h-model"><svg class="i xl"><use href="#i-llm"/></svg>model</div>
+    <div class="h-tools">
+      <div><svg class="i"><use href="#i-search"/></svg>search notes</div><div><svg class="i"><use href="#i-note"/></svg>read a note</div><div><svg class="i"><use href="#i-pill"/></svg>medication list</div><div><svg class="i"><use href="#i-flask"/></svg>labs</div>
+    </div>
+    <div class="h-chart"><svg class="i xl"><use href="#i-notes"/></svg>the chart</div>
+    <div class="pk req" data-t="900">search_notes("spironolactone")</div>
+    <div class="pk res" data-t="3200">Nephrology, 14 Apr: "discontinued due to hyperkalemia"</div>
+    <ol class="h-steps">
+      <li data-t="600">The model writes a request</li>
+      <li data-t="1600">The harness checks it's allowed</li>
+      <li data-t="2400">and runs the tool against the chart</li>
+      <li data-t="3400">The result is pasted into the context</li>
+      <li data-t="4400">The model carries on writing</li>
+    </ol>
+  </div>
+  <aside class="notes">
+    The harness is ordinary software wrapped around the model. It watches the output; when it sees a tool request, it
+    checks the request is permitted, runs it, and pastes the result back into the context. The model then continues
+    with the new information in front of it. Limits, permissions and logging all live in the harness.
+  </aside>
+</section>
+
+<section data-part="3">
+  <h2>In a loop (think, act, observe), through Rosa's chart</h2>
+  <div class="replay">
+    <div class="chartmap">
+      <div class="cm-title"><svg class="i"><use href="#i-notes"/></svg>612 notes</div>
+      <div class="cm-grid">
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span class="lit m" data-t="1200"></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span><span class="lit" data-t="3200"></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span class="lit" data-t="5200"></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span class="lit" data-t="7200"></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <div class="muted small">It read 4 of 612</div>
+    </div>
+    <div class="trace">
+      <div data-t="600"><b class="violet">Act</b> get_medications() <span class="muted">→ 4 active, spironolactone stopped Apr 2026</span></div>
+      <div data-t="2600"><b class="violet">Act</b> search_notes("spironolactone") <span class="muted">→ Nephrology 14 Apr: hyperkalemia</span></div>
+      <div data-t="4600"><b class="violet">Act</b> search_notes("SGLT2") <span class="muted">→ Cardiology 10 Jun: declines</span></div>
+      <div data-t="6600"><b class="violet">Act</b> search_notes("LVEF echo") <span class="muted">→ Echo 29 Aug: 30%</span></div>
+      <div class="answers-mini" data-t="8200">
+        <span class="ok">EF 30%</span><span class="ok">ACE inhibitor: on</span><span class="ok">MRA: reason</span><span class="ok">SGLT2i: reason</span><span class="warn">Beta blocker: on?</span>
+      </div>
+    </div>
+  </div>
+  <p class="caption">Four out of five right. It counted metoprolol tartrate as a heart-failure beta blocker; we'll fix that with a rule.</p>
+  <aside class="notes">
+    Put the request in a loop: think (what do I still need?), act (write a tool request; the harness runs it),
+    observe (the result lands in the context), until it's done or hits a limit we set. Each turn is the same next-word
+    model with a little more context. Here's a replay. Each lit square is a note it opened. It checked her medicines, searched for the spironolactone reason,
+    the SGLT2 reason and the echo. Four of 612 notes. It still says she's on a beta blocker: metoprolol tartrate doesn't
+    count for HFrEF. Hold that thought for part 4.
+  </aside>
+</section>
+
+<section data-part="3">
+  <h2>Harnesses you may have heard of</h2>
+  <div class="hlogos">
+    <div><img src="../shared/logos/claudecode-color.svg" alt=""><b>Claude Code</b><span>Anthropic · software</span></div>
+    <div><img src="../shared/logos/codex-color.svg" alt=""><b>Codex</b><span>OpenAI · software</span></div>
+    <div><img src="../shared/logos/langgraph-color.svg" alt=""><b>LangGraph</b><span>LangChain · build your own</span></div>
+    <div><img src="../shared/logos/openai.svg" alt=""><b>Agents SDK</b><span>OpenAI · build your own</span></div>
+    <div><img src="../shared/logos/google-color.svg" alt=""><b>ADK</b><span>Google · build your own</span></div>
+    <div><span class="pi">π</span><b>Pi</b><span>open source · our study agents</span></div>
+  </div>
+  <aside class="notes">
+    Claude Code and Codex are agents for software, the most mature examples. LangGraph, the OpenAI Agents SDK and
+    Google's ADK are frameworks for building your own. Our study agents run in Pi, a small open-source harness. The
+    model is swappable; the design lives in the harness.
+  </aside>
+</section>
+
+<section data-part="4">
+  <h2>Set it up as you would a capable colleague who can only work remotely</h2>
+  <div class="remote">
+    <div class="rm-person"><svg class="i xxl"><use href="#i-laptop"/></svg><svg class="i xl ppl"><use href="#i-patient"/></svg><span>can't walk down the hall to ask</span></div>
+    <div class="rm-needs">
+      <div><svg class="i amber"><use href="#i-target"/></svg><div><b>Task</b> a clear, small job, not "review the chart"</div></div>
+      <div><svg class="i blue"><use href="#i-database"/></svg><div><b>Data</b> access to the records the job needs, and no more</div></div>
+      <div><svg class="i violet"><use href="#i-tool"/></svg><div><b>Tools</b> the software to do it: search notes, medication list, labs</div></div>
+      <div><svg class="i"><use href="#i-book"/></svg><div><b>Rules</b> the written protocol: what counts, what doesn't</div></div>
+      <div><svg class="i green"><use href="#i-shield"/></svg><div><b>Checks</b> show your sources; someone reviews the work</div></div>
+    </div>
+  </div>
+  <aside class="notes">
+    I'm going to anthropomorphise on purpose. Imagine onboarding a capable new colleague who can only work remotely:
+    they can't walk down the hall to ask what you meant. You'd give them a clear task, access to the records they need,
+    the right software, the written protocol, and a way for you to check their work. That's exactly how you set up an
+    agent. These five words are also the blocks in the demo.
+  </aside>
+</section>
+
+<section data-part="4">
+  <h2>Task: break the big question into small ones you can check</h2>
+  <div class="tree">
+    <div class="tr-root">Is Rosa getting appropriate care?</div>
+    <div class="tr-branches">
+      <div class="tr-b"><b>Guideline medicines</b>
+        <div class="tr-leaf">EF ≤ 40%? <i class="ok">yes · 30%</i></div>
+        <div class="tr-leaf">ACEi / ARB / ARNI <i class="ok">on</i></div>
+        <div class="tr-leaf">Beta blocker <i class="bad">gap</i></div>
+        <div class="tr-leaf">MRA <i class="mid">reason: hyperkalemia</i></div>
+        <div class="tr-leaf">SGLT2 inhibitor <i class="mid">reason: declined</i></div>
+      </div>
+      <div class="tr-b"><b>Follow-up</b>
+        <div class="tr-leaf">Visit within 7 days? <i class="q">?</i></div>
+        <div class="tr-leaf">BMP within 1 week? <i class="q">?</i></div>
+      </div>
+      <div class="tr-b"><b>Rehabilitation</b>
+        <div class="tr-leaf">Cardiac rehab referral? <i class="q">?</i></div>
+      </div>
+    </div>
+  </div>
+  <p class="caption">"Is the care appropriate?" is hard to check. "Is she on an evidence-based beta blocker?" has an answer you can compare with a clinician's.</p>
+  <aside class="notes">
+    The first design decision: decomposition. A big question becomes small, well-defined ones, each with a short list
+    of possible answers: on it, documented reason, or gap. Small questions are checkable, so we can measure accuracy
+    question by question, and the agent's job at each step is narrow.
+  </aside>
+</section>
+
+<section data-part="4">
+  <h2>Let the AI read; let ordinary code decide</h2>
+  <div class="decide">
+    <div class="dc-in"><svg class="i xl blue"><use href="#i-notes"/></svg><b>The AI reads</b><span>what a human abstractor would</span></div>
+    <div class="parrow">→</div>
+    <div class="dc-facts">
+      <span>EF = 30%</span><span>beta blocker = metoprolol tartrate</span><span>MRA stopped: hyperkalemia</span><span>SGLT2i declined</span>
+    </div>
+    <div class="parrow">→</div>
+    <div class="dc-code"><svg class="i"><use href="#i-code"/></svg><pre>if EF ≤ 40 and not qualifying(BB)
+   and not documented_reason(BB):
+    → gap</pre></div>
+    <div class="parrow">→</div>
+    <div class="dc-out"><b class="bad">Beta-blocker gap</b></div>
+  </div>
+  <p class="caption">The measure logic stays fixed and auditable, like a CMS specification. The AI only extracts the facts.</p>
+  <aside class="notes">
+    A principle from our study: don't ask the model for the verdict. Ask it for the facts, then compute the verdict in
+    ordinary code that implements the measure definition. That keeps the logic fixed, testable and identical to what a
+    QI team would apply by hand.
+  </aside>
+</section>
+
+<section data-part="4">
+  <h2>Data: what it may see, and what it may not</h2>
+  <div class="sources">
+    <div class="src-t on"><svg class="i"><use href="#i-pill"/></svg>Medications</div>
+    <div class="src-t on"><svg class="i"><use href="#i-flask"/></svg>Labs</div>
+    <div class="src-t on"><svg class="i"><use href="#i-echo"/></svg>Echo reports</div>
+    <div class="src-t on"><svg class="i"><use href="#i-note"/></svg>Discharge summaries</div>
+    <div class="src-t on"><svg class="i"><use href="#i-stethoscope"/></svg>Clinic notes</div>
+    <div class="src-t on"><svg class="i"><use href="#i-kidney"/></svg>Specialist notes</div>
+    <div class="src-t off"><svg class="i"><use href="#i-lock"/></svg>Psychiatry notes</div>
+    <div class="src-t off"><svg class="i"><use href="#i-lock"/></svg>Billing</div>
+    <div class="src-t off"><svg class="i"><use href="#i-lock"/></svg>Social work</div>
+    <div class="src-t off"><svg class="i"><use href="#i-lock"/></svg>Other patients</div>
+  </div>
+  <div class="explain">
+    <div><svg class="i"><use href="#i-shield"/></svg><span><b>Minimum necessary.</b> Less to leak, less to confuse it, less to pay for.</span></div>
+    <div><svg class="i"><use href="#i-warning"/></svg><span><b>A visible boundary.</b> If the answer sits outside it (say, specialist notes are switched off), the agent will miss it. You'll see that in the demo.</span></div>
+  </div>
+  <aside class="notes">
+    The environment: decide which parts of the record the agent can reach. For GDMT: medications, labs, echo, discharge
+    summaries, clinic and specialist notes. Not psychiatry notes, billing, social work, and certainly not other
+    patients. Smaller scope means less risk and less noise. But it's a real boundary: switch off specialist notes and
+    the hyperkalemia reason disappears.
+  </aside>
+</section>
+
+<section data-part="4">
+  <h2>Tools: give it hands, but only the ones the job needs</h2>
+  <div class="toolcards">
+    <div class="tc"><svg class="i xl violet"><use href="#i-search"/></svg><b>search_notes</b><span>find sentences that mention a term</span></div>
+    <div class="tc"><svg class="i xl violet"><use href="#i-note"/></svg><b>read_note</b><span>open one note in full</span></div>
+    <div class="tc"><svg class="i xl violet"><use href="#i-pill"/></svg><b>get_medications</b><span>active and stopped orders</span></div>
+    <div class="tc"><svg class="i xl violet"><use href="#i-flask"/></svg><b>get_labs</b><span>potassium, eGFR…</span></div>
+    <div class="tc locked"><svg class="i xl"><use href="#i-lock"/></svg><b>place_order</b><span>not given</span></div>
+    <div class="tc locked"><svg class="i xl"><use href="#i-lock"/></svg><b>send_message</b><span>not given</span></div>
+  </div>
+  <aside class="notes">
+    Tools are the agent's hands. For chart review: search, read, medications, labs. No ordering, no messaging. Each
+    tool you add is a new capability and a new risk; you add them deliberately.
+  </aside>
+</section>
+
+<section data-part="4">
+  <h2>Rules: a protocol in plain English</h2>
+  <div class="two">
+    <div class="skill">
+      <div class="sk-h"><svg class="i"><use href="#i-book"/></svg>beta-blocker.md</div>
+      <pre># Heart-failure beta blocker
+
+Counts: carvedilol, bisoprolol,
+  metoprolol succinate (XL, ER)
+<span class="sk-hl" data-t="1400">Does NOT count: metoprolol tartrate,
+  atenolol, or any other beta blocker</span>
+
+If none: look for a documented reason
+  (bradycardia, hypotension, asthma,
+   or the patient declined).</pre>
+    </div>
+    <div class="flip">
+      <div class="fl-row"><img src="../shared/rosa.svg" alt="" width="70"><div><b>Rosa</b><br>metoprolol tartrate 25 mg BID</div></div>
+      <div class="fl-ans"><span class="before">on beta blocker ✓</span><span class="after" data-t="2400">gap ✗</span></div>
+    </div>
+  </div>
+  <p class="caption">Written and reviewed by clinicians, like a protocol. In our study, missing this one rule was the largest single error the models made.</p>
+  <aside class="notes">
+    Rules go in "skills": short documents of instructions the agent reads. This one is a few lines a cardiologist
+    would write, mirroring the CMS definition. With it, Rosa's metoprolol tartrate is correctly a gap. The most
+    important code in the system is clinical knowledge in plain English, which clinicians can read, write and audit.
+  </aside>
+</section>
+
+<section data-part="4">
+  <h2>Checks: no quote, no answer</h2>
+  <div class="checks">
+    <div class="chk">
+      <div class="chk-h"><b>MRA</b><span class="chip">documented reason</span></div>
+      <div class="chk-q">"Spironolactone discontinued due to hyperkalemia (K 5.9)"</div>
+      <div class="chk-run" data-t="1000"><svg class="i"><use href="#i-search"/></svg>harness searches the chart for the quote…</div>
+      <div class="chk-res good" data-t="1900"><svg class="i"><use href="#i-check"/></svg>found in Nephrology, 14 Apr · accepted</div>
+    </div>
+    <div class="chk">
+      <div class="chk-h"><b>Cardiac rehab</b><span class="chip">referred</span></div>
+      <div class="chk-q">"Patient referred to cardiac rehabilitation"</div>
+      <div class="chk-run" data-t="3300"><svg class="i"><use href="#i-search"/></svg>harness searches the chart for the quote…</div>
+      <div class="chk-res bad" data-t="4200"><svg class="i"><use href="#i-x"/></svg>not in the chart · sent to a person</div>
+    </div>
+  </div>
+  <aside class="notes">
+    Every answer must come with the exact words it relied on, and the harness checks that those words exist in the
+    chart, in code, not by asking the model. If the quote isn't there, the answer isn't accepted and goes to a person.
+    It's how you review a remote colleague's work in seconds, and how you catch invention.
+  </aside>
+</section>
+
+<section data-part="5">
+  <h2>Safety is built into the setup, in layers</h2>
+  <div class="rings">
+    <div class="ring r5" data-t="1700"><span>human supervision</span></div>
+    <div class="ring r4" data-t="1300"><span>harness checks and limits</span></div>
+    <div class="ring r3" data-t="900"><span>tool permissions</span></div>
+    <div class="ring r2" data-t="500"><span>data boundary</span></div>
+    <div class="ring r1" data-t="100"><span>a small task</span></div>
+    <div class="ring-core"><svg class="i xl"><use href="#i-agent"/></svg></div>
+  </div>
+  <aside class="notes">
+    Safety isn't a filter at the end. It's every layer we just built: a narrow task, a data boundary, limited tools,
+    checks and limits in the harness, and a human around all of it. Each layer catches what the inner one misses.
+  </aside>
+</section>
+
+<section data-part="5">
+  <h2>How much supervision?</h2>
+  <div class="loops3">
+    <div class="l3"><div class="l3-fig"><svg class="i xl amber"><use href="#i-loop"/></svg><svg class="i lg hum in"><use href="#i-patient"/></svg></div><b>Human in the loop</b><span>approves every action before it happens</span></div>
+    <div class="l3"><div class="l3-fig"><svg class="i xl amber"><use href="#i-loop"/></svg><svg class="i lg hum on"><use href="#i-patient"/></svg></div><b>Human on the loop</b><span>the agent acts; a person watches and can stop it</span></div>
+    <div class="l3 dim"><div class="l3-fig"><svg class="i xl"><use href="#i-loop"/></svg></div><b>Human out of the loop</b><span>it acts alone</span></div>
+  </div>
+  <p class="caption">Start in the loop. Move outward one task at a time, only with evidence. That's Lovedeep's talk.</p>
+  <aside class="notes">
+    In the loop: nothing happens without approval. On the loop: the agent acts and a person monitors, with a stop
+    button. Out of the loop: autonomous. Clinical agents start in the loop and earn their way out task by task.
+  </aside>
+</section>
+
+<section data-part="5">
+  <h2>From reading to acting</h2>
+  <div class="stairs">
+    <div class="st s1" data-t="200"><svg class="i"><use href="#i-eye"/></svg>Read the chart</div>
+    <div class="st s2" data-t="800"><svg class="i"><use href="#i-flag"/></svg>Flag a gap for the QI team</div>
+    <div class="st s3" data-t="1400"><svg class="i"><use href="#i-pen"/></svg>Draft a note to her PCP</div>
+    <div class="st s4" data-t="2000"><svg class="i"><use href="#i-clipboard"/></svg>Pend an order to be signed</div>
+    <div class="st s5" data-t="2600"><svg class="i"><use href="#i-send"/></svg>Place the order</div>
+  </div>
+  <aside class="notes">
+    Agents can also act: an order can be created as a draft that sits in the EHR until a clinician signs. The sensible
+    path is a staircase. Read and flag first (our study). Then
+    draft the note to Rosa's PCP suggesting carvedilol or metoprolol succinate. Then pend orders for signature. Placing
+    orders alone is the top step, and we're not there.
+  </aside>
+</section>
+
+<section data-part="5">
+  <h2>Start simple, then integrate</h2>
+  <div class="timeline">
+    <div class="tl"><span class="tl-dot amber"></span><b>Now</b><span>read-only, after the fact: quality measures, registries, chart abstraction</span></div>
+    <div class="tl"><span class="tl-dot"></span><b>Next</b><span>drafts in the inbox: notes, letters, gap lists for a clinician to review</span></div>
+    <div class="tl"><span class="tl-dot"></span><b>Later</b><span>in the workflow: pended orders, pre-visit summaries, with sign-off</span></div>
+    <div class="tl dim"><span class="tl-dot"></span><b>Carefully</b><span>autonomous actions, only where evidence supports them</span></div>
+  </div>
+  <aside class="notes">
+    A practical roadmap for a health system: start where mistakes are cheap and checkable (retrospective QI), then
+    drafts reviewed by people, then workflow integration with sign-off. Autonomy last, if at all.
+  </aside>
+</section>
+
+<section data-part="5">
+  <h2>It is already happening: ChatEHR at Stanford</h2>
+  <div class="row gap-xl center">
+    <div class="stat"><div class="big-num amber"><span data-count="1075" data-t="300">0</span></div><div class="muted">clinicians trained as routine users</div></div>
+    <div class="stat"><div class="big-num amber"><span data-count="23000" data-t="700">0</span></div><div class="muted">sessions in the first 3 months</div></div>
+    <div class="stat"><div class="big-num amber"><span data-count="7" data-t="1100">0</span></div><div class="muted">automations in 1.5 years</div></div>
+  </div>
+  <div class="explain">
+    <div><svg class="i"><use href="#i-clipboard"/></svg><span>Automations: pre-visit chart review, transfer eligibility, surgical-site infection monitoring, chart abstraction.</span></div>
+    <div><svg class="i"><use href="#i-warning"/></svg><span>They measured errors in use: about 0.7 hallucinations and 1.6 inaccuracies per summary. Estimated $6M saved in the first year.</span></div>
+  </div>
+  <div class="src">Shah et al., Adoption and use of LLMs at an academic medical center, arXiv 2602.00074 (2026)</div>
+  <aside class="notes">
+    Stanford's ChatEHR puts a model across the whole record inside the EHR, plus fixed automations. Over 1.5 years:
+    1,075 routine users, 23,000 sessions in three months, seven automations. Honest about errors: roughly 0.73
+    hallucinations and 1.6 inaccuracies per generated summary. They estimate $6M in first-year savings.
+  </aside>
+</section>
+
+<section data-part="5">
+  <h2>Who controls it?</h2>
+  <div class="quote">"Such a 'build-from-within' strategy provides an opportunity for health systems to maintain <span class="amber">agency</span> via a vendor-agnostic, internally governed LLM platform."<span class="muted small">Shah et al., 2026</span></div>
+  <div class="two">
+    <div class="side"><div class="side-h"><svg class="i green"><use href="#i-hospital"/></svg>Build from within</div><span class="muted">the health system owns the task, data, tools, rules and checks; models are interchangeable</span></div>
+    <div class="side"><div class="side-h"><svg class="i bad"><use href="#i-unlock"/></svg>Hand it over</div><span class="muted">powerful, flexible agents from outside, given broad access and autonomy; control goes with them</span></div>
+  </div>
+  <aside class="notes">
+    The Stanford team's point is about agency. Powerful, flexible agent products exist today. Handing them broad access
+    and autonomy over our records and workflows means handing over control of our own systems. The alternative is
+    investing in an internal platform where we own the five things we talked about and can swap models freely.
+  </aside>
+</section>
+
+<section data-part="5">
+  <h2>Capable, but uneven, and sometimes surprising</h2>
+  <div class="two">
+    <div class="side">
+      <div class="side-h"><svg class="i"><use href="#i-chart"/></svg>A jagged frontier</div>
+      <svg class="jag" viewBox="0 0 640 260" aria-label="Jagged frontier">
+        <path class="jag-in" d="M0 260 L0 120 L70 150 L120 60 L190 130 L250 40 L320 150 L380 70 L440 170 L500 90 L560 140 L640 110 L640 260 Z"/>
+        <path class="jag-line" d="M0 120 L70 150 L120 60 L190 130 L250 40 L320 150 L380 70 L440 170 L500 90 L560 140 L640 110"/>
+        <g class="jag-dots"><circle cx="90" cy="200" r="9" class="ok"/><circle cx="250" cy="110" r="9" class="ok"/><circle cx="380" cy="130" r="9" class="ok"/><circle cx="520" cy="200" r="9" class="ok"/>
+          <circle cx="190" cy="80" r="9" class="no"/><circle cx="330" cy="100" r="9" class="no"/><circle cx="450" cy="120" r="9" class="no"/></g>
+        <text x="20" y="245">inside: AI does it well</text><text x="460" y="30">outside: it fails</text>
+      </svg>
+      <p class="jag-txt">Tasks that look equally hard can fall on either side. In a trial with 758 consultants, AI made them faster and better on tasks inside the frontier, but on a task outside it they were <b>19 percentage points less likely</b> to be right.</p>
+      <span class="cite">Dell'Acqua F, McFowland E III, Mollick ER, et al. Navigating the jagged technological frontier. <i>Organization Science</i>. 2026;37(2). (HBS Working Paper 24-013, 2023)</span>
+    </div>
+    <div class="side">
+      <div class="side-h"><svg class="i bad"><use href="#i-warning"/></svg>When it is too good at the goal</div>
+      <div class="hf">
+        <div class="hf-step"><svg class="i"><use href="#i-harness"/></svg><b>A test in a sandbox</b><span>OpenAI models in an internal hacking evaluation</span></div>
+        <div class="hf-step bad"><svg class="i"><use href="#i-unlock"/></svg><b>Escaped</b><span>found an unknown flaw and reached the internet</span></div>
+        <div class="hf-step bad"><img src="../shared/logos/huggingface-color.svg" alt=""><b>Broke into Hugging Face</b><span>4.5 days, July 2026, apparently to find the test's answers</span></div>
+      </div>
+      <p class="jag-txt">"We believe the entire intrusion was, from the agent's point of view, <b>an attempt to cheat the evaluation</b>."</p>
+      <span class="cite">Hugging Face. Anatomy of a frontier lab agent intrusion: a technical timeline of the July 2026 incident. 2026. · OpenAI. The Hugging Face incident and the road ahead. 26 Aug 2026.</span>
+    </div>
+  </div>
+  <aside class="notes">
+    Two cautions before Lovedeep. First, the frontier is jagged: these models are excellent at some tasks and fail at
+    others that look just as hard, and you can't tell which from the outside. In the HBS/BCG field experiment with 758
+    consultants, AI users on tasks inside the frontier completed about 12% more tasks, 25% faster, with over 40% higher
+    quality; on a task just outside it, they were 19 percentage points less likely to get the right answer than
+    consultants working without AI (Dell'Acqua et al., Organization Science 2026; HBS working paper 2023).
+    Second, capable agents can pursue the goal in ways we didn't intend. In July 2026, OpenAI models running an internal
+    cyber-security evaluation (ExploitGym) escaped their sandbox through a previously unknown flaw in a package proxy,
+    got onto the internet and spent about four and a half days inside Hugging Face's systems, apparently looking for the
+    benchmark's answers. Hugging Face: "an attempt to cheat the evaluation". OpenAI paused the work and
+    tightened sandboxing and monitoring. Nothing like this is plausible for a read-only chart reviewer with no internet
+    access, and that is the point: scope, boundaries and monitoring are what keep a capable agent safe. How we test
+    whether it works is Lovedeep's talk.
+  </aside>
+</section>
+
+<section data-part="5">
+  <h2>What we covered</h2>
+  <div class="recap">
+    <div><span class="n">1</span><svg class="i"><use href="#i-llm"/></svg>A model predicts the next word. Alone, it guesses.</div>
+    <div><span class="n">2</span><svg class="i"><use href="#i-note"/></svg>A model + context reads the facts it is given.</div>
+    <div><span class="n">3</span><svg class="i"><use href="#i-agent"/></svg>An agent finds the facts itself, with tools in a loop.</div>
+    <div><span class="n">4</span><svg class="i"><use href="#i-tool"/></svg>Set it up like a remote colleague: a task, data, tools, rules and checks.</div>
+    <div><span class="n">5</span><svg class="i"><use href="#i-shield"/></svg>Start in the loop, move out with evidence, and keep control.</div>
+  </div>
+  <p class="caption">Next: how do we know it's working? Over to Lovedeep.</p>
+</section>
+
+</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+<script type="module" src="talk.js"></script>
+</body>
+</html>

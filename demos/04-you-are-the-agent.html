@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<!--
+  QCOR 2026 · Demo 04 · You are the agent
+  The one idea: an agent cannot see the chart. Its whole world is what its tools return,
+  and it has a limited turn budget, so choosing good searches matters.
+  How it plays: dark screen, a task card, four tool buttons (search_notes, read_note,
+  get_medications, get_labs). Each call costs one of 8 turns. Tap sentences to pin evidence,
+  answer five questions, submit, and compare your path with the agent's 6-call path.
+  Controls: Right arrow / Space / "Next" advance (during play: the agent's next move, presenter
+  walkthrough); Left arrow back; R restart; F fullscreen. "Watch the agent play" auto-plays.
+  Patient and notes are synthetic. No PHI.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>04 · You are the agent · QCOR 2026</title>
+<style>
+:root{--bg:#05070a;--tx:#F2F2F2;--dim:#8C8C8C;--ln:#2a2a2a;--am:#FFB020;--cy:#22D3EE;--gr:#4ADE80;--pk:#FF4FA3;--rd:#FF4D4D;
+--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,"Helvetica Neue",Arial,sans-serif;
+--mono:"SF Mono",ui-monospace,Menlo,Consolas,"DejaVu Sans Mono",monospace;--t:1}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--tx);font-family:var(--sans);-webkit-tap-highlight-color:transparent}
+body{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+button{font-family:inherit;cursor:pointer}
+svg.i{width:1em;height:1em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.15em;flex:none}
+.mono{font-family:var(--mono)}
+.dim{color:var(--dim)}
+/* header */
+header{height:52px;flex:none;display:flex;align-items:center;gap:18px;padding:0 18px;border-bottom:1px solid var(--ln)}
+header .back{color:var(--dim);text-decoration:none;font-size:13px;display:flex;align-items:center;gap:6px}
+header .back:hover{color:var(--tx)}
+header h1{font-size:17px;font-weight:650;margin:0;letter-spacing:.2px;display:flex;align-items:center;gap:8px}
+header h1 .num{color:var(--dim);font-weight:500;font-family:var(--mono);font-size:13px}
+#budget{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--dim)}
+#budget .pips{display:flex;gap:5px}
+#budget .pip{width:14px;height:14px;border-radius:4px;background:var(--cy);box-shadow:0 0 8px rgba(34,211,238,.6);transition:background .4s,box-shadow .4s}
+#budget .pip.spent{background:#1a2024;box-shadow:none}
+#budget .left{font-family:var(--mono);color:var(--cy);font-size:15px;min-width:42px}
+#budget.flash{animation:shake .4s}
+@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+#budget.hide{visibility:hidden}
+main{flex:1;min-height:0;position:relative}
+.screen{position:absolute;inset:0;display:none}
+.screen.on{display:flex}
+/* controls bar */
+#ctrl{flex:none;height:50px;display:flex;align-items:center;gap:10px;padding:0 14px;border-top:1px solid var(--ln)}
+#ctrl button{background:#0d1116;border:1px solid #333;color:var(--tx);border-radius:9px;height:36px;padding:0 14px;font-size:14px;display:flex;align-items:center;gap:6px}
+#ctrl button:hover{border-color:#666}
+#ctrl #nextBtn{border-color:var(--cy);color:var(--cy)}
+#dots{display:flex;gap:6px;align-items:center;margin:0 6px}
+#dots i{width:8px;height:8px;border-radius:50%;background:#333;display:block}
+#dots i.on{background:var(--tx)}
+#stepLbl{font-size:12px;color:var(--dim);font-family:var(--mono)}
+#ctrl .sp{flex:1}
+footer{font-size:11px;color:#5d5d5d;text-align:right;white-space:nowrap}
+#ctrl .keys{font-size:11px;color:#555;font-family:var(--mono)}
+
+/* intro */
+#s-intro,#s-take{align-items:center;justify-content:center;flex-direction:column;padding:24px;text-align:center;overflow:auto}
+.big{font-size:clamp(40px,7vw,96px);font-weight:750;letter-spacing:-1.5px;line-height:1.02;margin:0}
+.big .cy{color:var(--cy)}
+.lede{font-size:clamp(17px,1.8vw,24px);color:#cfcfcf;max-width:820px;margin:18px auto 0;line-height:1.4}
+.unpacks{display:flex;gap:16px;margin-top:30px;flex-wrap:wrap;justify-content:center;max-width:1100px}
+.unpack{border:1px solid var(--ln);border-left:3px solid var(--cy);border-radius:10px;padding:12px 16px;text-align:left;max-width:340px;font-size:15px;line-height:1.4;background:#080b0f}
+.unpack b{display:block;font-family:var(--mono);color:var(--cy);font-size:14px;margin-bottom:4px;font-weight:600}
+.unpack .an{color:var(--dim);font-size:13.5px;margin-top:4px;display:block}
+.cta{display:flex;gap:14px;margin-top:30px;flex-wrap:wrap;justify-content:center}
+.btn{border-radius:12px;padding:14px 24px;font-size:18px;font-weight:600;border:1px solid var(--cy);background:rgba(34,211,238,.12);color:var(--cy);display:inline-flex;align-items:center;gap:10px}
+.btn:hover{background:rgba(34,211,238,.22)}
+.btn.ghost{background:transparent;border-color:#444;color:var(--tx)}
+.btn.ghost:hover{border-color:#888}
+.i.eyeHero{width:96px;height:96px;margin-bottom:18px;color:var(--cy);opacity:.9}
+
+/* play */
+#s-play{display:none;gap:14px;padding:14px}
+#s-play.on{display:grid;grid-template-columns:330px minmax(0,1fr) 400px}
+.col{min-height:0;display:flex;flex-direction:column;gap:12px}
+.colL{overflow:auto}
+.task{border:1px solid #3a3a3a;border-radius:12px;padding:12px 14px;background:#0a0d11}
+.task .lbl{font-size:11px;letter-spacing:1.4px;color:var(--dim);font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.task p{margin:0;font-size:15.5px;line-height:1.38}
+.task p b{color:var(--am);font-weight:650}
+details.skill{margin-top:9px;font-size:13px;color:var(--dim)}
+details.skill summary{cursor:pointer;color:#cfcfcf;list-style:none;display:flex;align-items:center;gap:6px}
+details.skill summary::-webkit-details-marker{display:none}
+details.skill pre{white-space:pre-wrap;font-family:var(--mono);font-size:11.5px;color:#e8e8e8;background:#000;border:1px solid var(--ln);border-radius:8px;padding:8px;margin:8px 0 2px;line-height:1.4}
+details.skill .an{font-size:12px;margin-top:6px;color:var(--dim)}
+.tools{display:grid;grid-template-columns:minmax(0,1fr);gap:7px}
+.tool{border:1px solid rgba(34,211,238,.45);background:rgba(34,211,238,.06);color:var(--cy);border-radius:12px;padding:8px 12px;min-height:52px;display:flex;align-items:center;gap:11px;text-align:left;font-size:13px;transition:background .2s,transform .1s,box-shadow .3s}
+.tool svg.i{width:24px;height:24px}
+.tool>span{min-width:0}
+.tool .tn{font-family:var(--mono);font-size:14px;overflow-wrap:anywhere;font-weight:600;display:block}
+.tool .td{color:#9bb;font-size:12px;display:block;margin-top:1px}
+.tool:hover:not(:disabled){background:rgba(34,211,238,.15)}
+.tool:active:not(:disabled){transform:scale(.97)}
+.tool:disabled{opacity:.35;cursor:not-allowed}
+.tool.hot{box-shadow:0 0 0 2px var(--cy),0 0 24px rgba(34,211,238,.5);background:rgba(34,211,238,.2)}
+.searchBox{border:1px solid rgba(34,211,238,.45);border-radius:12px;padding:10px;background:rgba(34,211,238,.04)}
+.searchBox .row{display:flex;gap:6px}
+.searchBox input{flex:1;min-width:0;background:#000;border:1px solid #2f3a40;color:var(--tx);border-radius:8px;padding:10px;font-size:16px;font-family:var(--mono)}
+.searchBox input:focus{outline:none;border-color:var(--cy)}
+.searchBox .go{min-height:0;padding:0 12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{border:1px solid #2f3a40;background:#0b1013;color:#bfe;border-radius:999px;padding:6px 11px;font-size:13px;font-family:var(--mono)}
+.chip:hover:not(:disabled){border-color:var(--cy)}
+.chip:disabled{opacity:.35}
+.searchBox .note{font-size:11.5px;color:var(--dim);margin-top:7px}
+.sideBtns{display:flex;gap:8px}
+.sideBtns button{flex:1;border:1px solid #3a3a3a;background:#0b0e12;color:var(--tx);border-radius:10px;padding:10px 8px;font-size:14px;display:flex;align-items:center;justify-content:center;gap:7px}
+.sideBtns button:hover{border-color:#777}
+.sideBtns .hintB{border-color:rgba(34,211,238,.5);color:var(--cy)}
+
+/* world */
+.world{position:relative;border:1px solid #161b20;border-radius:14px;overflow:hidden;background:radial-gradient(ellipse at 50% 35%,#0b1117 0%,#040506 70%);min-height:0}
+.world::before,.world::after{content:"";position:absolute;inset:-30%;pointer-events:none;background:radial-gradient(circle at 30% 40%,rgba(120,140,160,.07),transparent 40%),radial-gradient(circle at 70% 60%,rgba(120,140,160,.06),transparent 45%);animation:drift 22s ease-in-out infinite alternate;z-index:0}
+.world::after{animation-duration:31s;animation-direction:alternate-reverse;opacity:.8}
+@keyframes drift{from{transform:translate(-4%,-3%) rotate(0)}to{transform:translate(5%,4%) rotate(8deg)}}
+.worldHead{position:relative;z-index:2;display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #12171c;font-size:12.5px;color:var(--dim);background:rgba(5,7,10,.7)}
+.worldHead b{color:#cfcfcf;font-weight:600}
+.worldHead .agentOn{margin-left:auto;color:var(--cy);display:none;align-items:center;gap:8px}
+.worldHead .agentOn.on{display:flex}
+.worldHead .agentOn button{background:none;border:1px solid var(--cy);color:var(--cy);border-radius:7px;padding:3px 9px;font-size:12px}
+.feed{position:relative;z-index:1;overflow:auto;height:calc(100% - 41px);padding:14px;display:flex;flex-direction:column;gap:12px}
+.empty{margin:auto;text-align:center;color:#4b535a;font-size:17px;line-height:1.5;max-width:420px;padding:20px}
+.empty svg{width:64px;height:64px;color:#2b3238;display:block;margin:0 auto 12px}
+.card{border:1px solid rgba(255,176,32,.35);background:rgba(255,176,32,.045);border-radius:12px;padding:10px 13px 12px;animation:emerge calc(1.1s*var(--t)) ease-out both;flex:none}
+@keyframes emerge{from{opacity:0;filter:blur(12px);transform:translateY(14px) scale(.98)}60%{opacity:.8}to{opacity:1;filter:none;transform:none}}
+.card .ch{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13px;color:var(--cy);margin-bottom:8px}
+.card .ch .turn{margin-left:auto;color:var(--dim);font-size:11.5px}
+.card .ch svg.i{width:17px;height:17px}
+.doc{margin-top:6px}
+.doc + .doc{border-top:1px dashed rgba(255,176,32,.2);padding-top:9px;margin-top:9px}
+.doc .dh{font-size:12.5px;color:#c99a4a;display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:4px}
+.doc .dh b{color:var(--am);font-weight:650;font-size:13.5px}
+.doc .dh .date{font-family:var(--mono);background:rgba(255,176,32,.12);border-radius:5px;padding:1px 6px;color:var(--am)}
+.doc .dh .date.old{background:rgba(255,77,77,.14);color:#ff9a9a}
+.sent{color:#ffd58a;font-size:15.5px;line-height:1.5;cursor:pointer;border-radius:4px;padding:1px 2px;transition:background .2s;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.sent:hover{background:rgba(255,176,32,.12)}
+.sent.pinned{background:rgba(255,176,32,.28);color:#fff3da;box-shadow:inset 0 -2px 0 var(--am)}
+.sent.pinned::before{content:"";display:inline-block;width:.8em;height:.8em;margin-right:4px;vertical-align:-.05em;background:var(--am);-webkit-mask:var(--pinmask) center/contain no-repeat;mask:var(--pinmask) center/contain no-repeat}
+.sent mark{background:none;color:#fff;text-decoration:underline;text-decoration-color:var(--cy);text-underline-offset:3px;text-decoration-thickness:2px}
+.lines .sent{display:block;font-family:var(--mono);font-size:14px;padding:4px 6px}
+.lines .none{font-family:var(--mono);font-size:13px;color:#a0865a;padding:4px 6px}
+.readB{margin-top:7px;border:1px solid rgba(34,211,238,.5);background:rgba(34,211,238,.06);color:var(--cy);border-radius:8px;padding:6px 11px;font-size:12.5px;font-family:var(--mono)}
+.readB:disabled{opacity:.4;cursor:default}
+.readB.hot{box-shadow:0 0 0 2px var(--cy),0 0 18px rgba(34,211,238,.5)}
+.zero{color:#d0a060;font-size:15px}
+.zero small{display:block;color:var(--dim);font-size:13px;margin-top:4px}
+.tip{font-size:12px;color:var(--dim);margin-top:8px;display:flex;gap:6px;align-items:center}
+.sysmsg{border:1px solid rgba(255,77,77,.5);color:#ffb3b3;background:rgba(255,77,77,.07);border-radius:10px;padding:10px 12px;font-size:14px;flex:none;animation:emerge .5s both}
+/* think bubble */
+#think{position:absolute;left:14px;right:14px;bottom:14px;z-index:5;border:1px solid var(--cy);background:rgba(3,14,18,.96);border-radius:14px;padding:12px 14px 12px 14px;box-shadow:0 10px 40px rgba(0,0,0,.7),0 0 30px rgba(34,211,238,.18);display:none}
+#think.on{display:block;animation:emerge .35s both}
+#think .tl{font-family:var(--mono);font-size:11px;letter-spacing:1.5px;color:var(--cy);display:flex;align-items:center;gap:7px;margin-bottom:5px}
+#think .tl svg{width:16px;height:16px}
+#think .tt{font-size:17px;line-height:1.42;color:#e9fbff;min-height:1.4em}
+#think .tt .caret{display:inline-block;width:8px;height:1em;background:var(--cy);vertical-align:-.12em;margin-left:2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+#think .ta{display:flex;gap:8px;margin-top:8px;justify-content:flex-end}
+#think .ta button{border:1px solid var(--cy);background:rgba(34,211,238,.12);color:var(--cy);border-radius:8px;padding:6px 12px;font-size:13px;font-family:var(--mono)}
+#think .ta .x{background:none;border-color:#444;color:var(--dim);font-family:var(--sans)}
+
+/* answers */
+.colR{overflow:auto}
+.ansHead{display:flex;align-items:baseline;gap:8px;font-size:12px;letter-spacing:1.3px;font-weight:700;color:var(--dim)}
+.ansHead .pc{margin-left:auto;letter-spacing:0;font-weight:500;color:var(--am)}
+.arow{border:1px solid var(--ln);border-radius:11px;padding:9px 10px;background:#080a0d;transition:box-shadow .4s,border-color .4s}
+.arow.flash{border-color:var(--cy);box-shadow:0 0 0 1px var(--cy),0 0 22px rgba(34,211,238,.35)}
+.arow .q{font-size:15px;font-weight:650;display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}
+.arow .q small{font-weight:400;color:var(--dim);font-size:12px}
+.seg{display:flex;gap:4px;margin-top:7px}
+.seg button{flex:1;min-width:0;border:1px solid #2e2e2e;background:#0d1014;color:#bdbdbd;border-radius:8px;padding:8px 2px;font-size:12.5px;line-height:1.15}
+.seg button:hover{border-color:#666}
+.seg button.sel{border-color:var(--cy);background:rgba(34,211,238,.16);color:#fff;font-weight:600}
+.seg button.sel.gap{border-color:var(--rd);background:rgba(255,77,77,.16)}
+.ev{margin-top:6px;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim)}
+.ev svg{color:var(--am);width:14px;height:14px}
+.ev select{flex:1;min-width:0;background:#000;color:#ffd58a;border:1px solid #2e2e2e;border-radius:7px;padding:5px 6px;font-size:12.5px;font-family:var(--sans)}
+.ev select:disabled{color:#555}
+.submit{border:1px solid var(--gr);background:rgba(74,222,128,.1);color:var(--gr);border-radius:12px;padding:13px;font-size:16px;font-weight:650;display:flex;align-items:center;justify-content:center;gap:9px;flex:none}
+.submit:hover{background:rgba(74,222,128,.2)}
+.submit:disabled{opacity:.4}
+
+/* results */
+#s-result{overflow:auto;padding:16px 20px;gap:22px}
+#s-result.on{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);align-content:start}
+.scoreLine{grid-column:1/-1;display:flex;align-items:baseline;gap:22px;flex-wrap:wrap;font-size:clamp(24px,2.6vw,38px);font-weight:750;letter-spacing:-.5px}
+.scoreLine .you{color:var(--tx)}
+.scoreLine .ag{color:var(--cy)}
+.scoreLine .sep{color:#444;font-weight:400}
+.scoreLine small{font-size:14px;font-weight:400;color:var(--dim);letter-spacing:0}
+.grades{display:flex;flex-direction:column;gap:8px}
+.grade{display:grid;grid-template-columns:34px minmax(0,1fr);gap:4px 10px;border:1px solid var(--ln);border-radius:11px;padding:9px 12px;background:#080a0d;opacity:0;transform:translateX(-12px);transition:opacity .5s,transform .5s}
+.grade.in{opacity:1;transform:none}
+.grade .mk{grid-row:span 2;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px}
+.grade.ok .mk{background:rgba(74,222,128,.15);color:var(--gr);border:1px solid var(--gr)}
+.grade.bad .mk{background:rgba(255,77,77,.15);color:var(--rd);border:1px solid var(--rd)}
+.grade .gh{font-size:15px;display:flex;gap:8px;flex-wrap:wrap;align-items:baseline}
+.grade .gh b{font-weight:650}
+.grade .gh .yours{font-family:var(--mono);font-size:13px}
+.grade.bad .gh .yours{color:#ff9a9a;text-decoration:line-through}
+.grade.ok .gh .yours{color:var(--gr)}
+.grade .gh .gold{font-family:var(--mono);font-size:13px;color:var(--gr)}
+.grade .why{font-size:13.5px;color:#bdbdbd;line-height:1.4}
+.grade .qv{font-size:11.5px;font-family:var(--mono);margin-left:auto}
+.qv.y{color:var(--am)}.qv.n{color:#666}
+.mapBox{border:1px solid var(--ln);border-radius:12px;background:#030405;padding:10px 12px}
+.mapBox h3{margin:0 0 4px;font-size:13px;letter-spacing:1.2px;color:var(--dim);font-weight:700;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.lg{display:inline-flex;align-items:center;gap:6px;letter-spacing:0;font-weight:500;font-size:12.5px}
+.lg i{display:inline-block;width:22px;height:0;border-top:3px solid var(--cy)}
+.lg.p i{border-top:3px dashed #fff}
+#map{width:100%;height:auto;display:block}
+#map .nd rect{fill:#0a0b0d;stroke:#2a2a2a;stroke-width:1.5;transition:all 1s}
+#map .nd text{fill:#4a4a4a;font-family:var(--sans);font-size:14px;transition:fill 1s}
+#map .nd .sub{font-size:11px;font-family:var(--mono)}
+#map .nd.lift rect{stroke:rgba(255,176,32,.55)}
+#map .nd.lift text{fill:#d9b26a}
+#map .nd.lift .sub{fill:#8c7448}
+#map .nd.read rect{fill:#2a1f08;stroke:var(--am)}
+#map .nd.read text{fill:#ffe1a6}
+#map .nd.hub rect{stroke:rgba(34,211,238,.5);fill:#04161a}
+#map .nd.hub text{fill:var(--cy)}
+#map .nd.start circle{fill:#04161a;stroke:var(--cy);stroke-width:2}
+#map .pth{fill:none;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+#map .pth.a{stroke:var(--cy);filter:drop-shadow(0 0 4px rgba(34,211,238,.6))}
+#map .pth.p{stroke:#fff;stroke-dasharray:7 6;opacity:.85}
+#map .bdg circle{stroke-width:1.5}
+#map .bdg text{font-family:var(--mono);font-size:11px;font-weight:700;text-anchor:middle;dominant-baseline:central}
+#map .bdg.a circle{fill:#03181c;stroke:var(--cy)}#map .bdg.a text{fill:var(--cy)}
+#map .bdg.p circle{fill:#111;stroke:#fff}#map .bdg.p text{fill:#fff}
+#map .never{font-size:10.5px;fill:#ff7b7b;font-family:var(--mono)}
+.calls{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.calls h4{margin:0 0 4px;font-size:12px;letter-spacing:1px;color:var(--dim)}
+.calls ol{margin:0;padding-left:20px;font-family:var(--mono);font-size:12px;line-height:1.55}
+.calls .a li{color:var(--cy)}
+.calls .p li{color:#e6e6e6}
+.resBtns{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.resBtns .btn{font-size:15px;padding:10px 16px}
+.rcol{display:flex;flex-direction:column;gap:10px;min-width:0}
+.lesson{font-size:14px;color:#cfcfcf;line-height:1.45;border-left:3px solid var(--cy);padding:4px 0 4px 12px}
+.prelim{font-size:12px;color:var(--dim)}
+/* takeaway */
+.take{font-size:clamp(34px,5.4vw,78px);font-weight:750;letter-spacing:-1px;line-height:1.08;max-width:1300px;margin:0}
+.take .cy{color:var(--cy)}
+.take2{font-size:clamp(16px,1.6vw,22px);color:#bdbdbd;margin-top:22px;max-width:900px;line-height:1.45}
+.nextDemo{margin-top:32px;color:var(--tx);text-decoration:none;border:1px solid #555;border-radius:12px;padding:12px 20px;font-size:17px;display:inline-flex;align-items:center;gap:8px}
+.nextDemo:hover{border-color:#aaa}
+
+@media (prefers-reduced-motion: reduce){:root{--t:.15}.world::before,.world::after{animation:none}*{transition-duration:.05s!important}}
+
+/* tablet: answers below */
+@media (max-width:1250px) and (min-width:861px){
+  #s-play.on{grid-template-columns:300px minmax(0,1fr) 340px}
+  .seg button{font-size:11.5px}
+}
+/* phone */
+@media (max-width:860px){
+  body{height:auto;min-height:100vh;overflow:auto}
+  main{flex:none}
+  .screen{position:static}
+  #s-intro,#s-take{min-height:calc(100vh - 110px);padding:24px 16px}
+  header{gap:10px;padding:0 10px;position:sticky;top:0;background:var(--bg);z-index:20}
+  header .back span{display:none}
+  header h1{font-size:15px}
+  header h1 .num{display:none}
+  #budget .lbl{display:none}
+  #budget .pip{width:11px;height:11px;border-radius:3px}
+  #budget .pips{gap:4px}
+  #s-play.on{display:flex;flex-direction:column;padding:10px;gap:10px}
+  .tools{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .tool{padding:8px 9px;gap:8px}.tool .tn{font-size:12.5px}.tool .td{display:none}
+  .world{height:min(60vh,520px);min-height:300px;flex:none}
+  .world::before,.world::after{inset:0}
+  #think{position:fixed;left:8px;right:8px;bottom:60px;z-index:50}
+  #s-result.on{display:flex;flex-direction:column;padding:12px}
+  .scoreLine{gap:8px 14px}
+  #ctrl{position:sticky;bottom:0;background:var(--bg);z-index:20;padding:0 8px;gap:6px}
+  #ctrl .keys,footer.wide{display:none}
+  #stepLbl{display:none}
+  #ctrl button{padding:0 10px}
+  .unpacks{margin-top:20px}
+  .unpack{max-width:none}
+  .calls{grid-template-columns:1fr}
+}
+.foot2{display:none;font-size:11px;color:#5d5d5d;text-align:center;padding:8px 0 4px}
+@media (max-width:860px){.foot2{display:block}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="ic-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></symbol>
+    <symbol id="ic-note" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 15.5h6M9 9h3"/></symbol>
+    <symbol id="ic-pill" viewBox="0 0 24 24"><rect x="2.8" y="8.2" width="18.4" height="7.6" rx="3.8" transform="rotate(-35 12 12)"/><path d="m9.3 8.1 5.4 7.8"/></symbol>
+    <symbol id="ic-lab" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6.5L4.8 18.4A1.8 1.8 0 0 0 6.4 21h11.2a1.8 1.8 0 0 0 1.6-2.6L14 9.5V3"/><path d="M7.5 15h9"/></symbol>
+    <symbol id="ic-agent" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="4"/><path d="M12 7V4"/><circle cx="12" cy="3.2" r=".9"/><circle cx="9" cy="13" r="1.2"/><circle cx="15" cy="13" r="1.2"/><path d="M2 12v3M22 12v3"/></symbol>
+    <symbol id="ic-pin" viewBox="0 0 24 24"><path d="M9 3h6l-1 6 4 4H6l4-4z"/><path d="M12 13v8"/></symbol>
+    <symbol id="ic-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
+    <symbol id="ic-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="ic-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></symbol>
+    <symbol id="ic-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></symbol>
+    <symbol id="ic-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="ic-eyeoff" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3 3.9M6.6 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7c1.9 0 3.6-.6 5-1.5"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></symbol>
+    <symbol id="ic-left" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+    <symbol id="ic-right" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+    <symbol id="ic-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></symbol>
+    <symbol id="ic-redo" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></symbol>
+    <symbol id="ic-full" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+    <symbol id="ic-book" viewBox="0 0 24 24"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10"/></symbol>
+    <symbol id="ic-heart" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 7.4 4.2 4.2 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z"/><path d="M4.8 12.5h3.4l1.6-2.5 2.4 4.5 1.6-2h5.4"/></symbol>
+  </defs>
+</svg>
+
+<header>
+  <a class="back" href="index.html" title="All demos"><svg class="i"><use href="#ic-grid"/></svg><span>All demos</span></a>
+  <h1><span class="num">04</span>You are the agent</h1>
+  <div id="budget" class="hide" title="Turn budget: real agents have budgets (time and cost). Every tool call spends one turn.">
+    <span class="lbl">turn budget</span><div class="pips"></div><span class="left mono">8/8</span>
+  </div>
+</header>
+
+<main>
+  <!-- STEP 0: intro -->
+  <section class="screen" id="s-intro">
+    <svg class="i eyeHero" style="stroke-width:1.4"><use href="#ic-eyeoff"/></svg>
+    <h2 class="big">You are <span class="cy">the agent.</span></h2>
+    <p class="lede">You can't see Mrs. Delgado's chart. You only have tools. Whatever they hand back is your whole world.</p>
+    <div class="unpacks">
+      <div class="unpack"><b>tool</b>A button the agent can press to fetch one thing from the chart: a search, a note, the medication list.<span class="an">Like asking the unit clerk for one specific page.</span></div>
+      <div class="unpack"><b>the agent only sees what its tools return</b>No glance at the whole chart. If no tool brings a sentence back, for the agent that sentence doesn't exist.</div>
+      <div class="unpack"><b>turn budget</b>Real agents have budgets: time and cost. Here you get 8 tool calls, so choosing good searches matters.<span class="an">Like a busy clinic: you can't read every page.</span></div>
+    </div>
+    <div class="cta">
+      <button class="btn" id="playBtn"><svg class="i"><use href="#ic-play"/></svg>Play</button>
+      <button class="btn ghost" id="watchBtn0"><svg class="i"><use href="#ic-agent"/></svg>Watch the agent play</button>
+    </div>
+  </section>
+
+  <!-- STEP 1: play -->
+  <section class="screen" id="s-play">
+    <div class="col colL">
+      <div class="task">
+        <div class="lbl"><svg class="i"><use href="#ic-heart"/></svg>TASK CARD</div>
+        <p><b>Mrs. Delgado, 71.</b> Heart failure type, then each of the 4 guideline heart-failure drug classes: <b>on therapy, medical exception, patient preference, or GAP?</b> Quote your evidence.</p>
+        <details class="skill"><summary><svg class="i"><use href="#ic-book"/></svg>Your protocol (the "skill"), free to read</summary>
+<pre>HF type: use the most recent dated EF.
+Ignore old values copied into problem
+lists. HFrEF = EF 40% or less.
+
+Beta blocker counts only if carvedilol,
+bisoprolol or metoprolol succinate.
+Metoprolol tartrate does not count.
+
+Before calling anything a GAP, search
+the notes for a documented reason.
+Quote the sentence for every answer.</pre>
+<div class="an">Skill: a protocol in plain English, written by clinicians, handed to the agent before it starts.</div></details>
+      </div>
+      <div class="tools">
+        <button class="tool" data-tool="meds"><svg class="i"><use href="#ic-pill"/></svg><span><span class="tn">get_medications</span><span class="td">her medication list</span></span></button>
+        <button class="tool" data-tool="labs"><svg class="i"><use href="#ic-lab"/></svg><span><span class="tn">get_labs</span><span class="td">labs and vitals</span></span></button>
+        <button class="tool" data-tool="readinfo"><svg class="i"><use href="#ic-note"/></svg><span><span class="tn">read_note</span><span class="td">open a full note (ids come from search hits)</span></span></button>
+        <button class="tool" data-tool="searchfocus"><svg class="i"><use href="#ic-search"/></svg><span><span class="tn">search_notes</span><span class="td">keyword search of all notes (type below)</span></span></button>
+      </div>
+      <div class="searchBox">
+        <div class="row"><input id="q" type="text" placeholder="search the notes..." autocomplete="off" enterkeyhint="search" aria-label="search_notes query"><button class="tool go" id="goBtn" title="search_notes (1 turn)"><svg class="i"><use href="#ic-search"/></svg></button></div>
+        <div class="chips"></div>
+        <div class="note">Each tool call costs 1 turn. Hints are free.</div>
+      </div>
+      <div class="sideBtns">
+        <button class="hintB" id="hintBtn"><svg class="i"><use href="#ic-bulb"/></svg>Hint</button>
+        <button id="watchBtn1"><svg class="i"><use href="#ic-agent"/></svg>Watch the agent</button>
+      </div>
+    </div>
+
+    <div class="world" id="world">
+      <div class="worldHead"><svg class="i"><use href="#ic-eye"/></svg><span><b>Your whole world</b> = what your tools return</span>
+        <span class="agentOn" id="agentOn"><svg class="i"><use href="#ic-agent"/></svg>the agent is playing<button id="stopBtn">stop</button></span></div>
+      <div class="feed" id="feed"></div>
+      <div id="think"><div class="tl"><svg class="i"><use href="#ic-agent"/></svg>THINK</div><div class="tt"></div><div class="ta"></div></div>
+    </div>
+
+    <div class="col colR" id="ansCol">
+      <div class="ansHead">YOUR ANSWERS <span class="pc" id="pinCount">0 quotes pinned</span></div>
+      <div id="ansRows" style="display:flex;flex-direction:column;gap:8px"></div>
+      <button class="submit" id="submitBtn"><svg class="i"><use href="#ic-check"/></svg>Submit for grading</button>
+    </div>
+  </section>
+
+  <!-- STEP 2: results -->
+  <section class="screen" id="s-result">
+    <div class="scoreLine" id="scoreLine"></div>
+    <div class="grades" id="grades"></div>
+    <div class="rcol">
+      <div class="mapBox">
+        <h3>WHAT WAS IN THE CHART ALL ALONG <span class="lg"><i></i>agent</span><span class="lg p" id="lgYou"><i></i>you</span></h3>
+        <svg id="map"></svg>
+        <div class="calls" id="calls"></div>
+      </div>
+      <div class="lesson" id="lesson"></div>
+      <div class="resBtns">
+        <button class="btn ghost" id="againBtn"><svg class="i"><use href="#ic-redo"/></svg>Play again</button>
+        <button class="btn ghost" id="watchBtn2"><svg class="i"><use href="#ic-agent"/></svg>Watch the agent play</button>
+        <button class="btn" id="toTake">Takeaway<svg class="i"><use href="#ic-right"/></svg></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 3: takeaway -->
+  <section class="screen" id="s-take">
+    <p class="take">An agent's world is only <span class="cy">what its tools can show it.</span></p>
+    <p class="take2">The reasons for the MRA and the SGLT2 inhibitor were never on the medication list. They lived in two notes, and only a search could find them. Give an agent the right tools, a clear protocol, and a budget, then check its quotes.</p>
+    <a class="nextDemo" href="05-the-intern.html">Next demo: the intern <svg class="i"><use href="#ic-right"/></svg></a>
+  </section>
+</main>
+<div class="foot2">QCOR 2026 · synthetic patient · illustrative simulation</div>
+<nav id="ctrl">
+  <button id="backBtn" title="Back (Left arrow)"><svg class="i"><use href="#ic-left"/></svg><span>Back</span></button>
+  <div id="dots"></div><span id="stepLbl"></span>
+  <span class="sp"></span>
+  <span class="keys">← → space · R restart · F fullscreen</span>
+  <footer class="wide">QCOR 2026 · synthetic patient · illustrative simulation</footer>
+  <button id="restartBtn" title="Restart (R)"><svg class="i"><use href="#ic-redo"/></svg></button>
+  <button id="fsBtn" title="Fullscreen (F)"><svg class="i"><use href="#ic-full"/></svg></button>
+  <button id="nextBtn" title="Next (Right arrow / Space)"><span id="nextLbl">Next</span><svg class="i"><use href="#ic-right"/></svg></button>
+</nav>
+
+<script>
+(()=>{
+'use strict';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const T=RM?.15:1;
+const isPhone=()=>innerWidth<=860;
+const ic=(n,c='')=>`<svg class="i ${c}"><use href="#ic-${n}"/></svg>`;
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+document.documentElement.style.setProperty('--pinmask',`url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l-1 6 4 4H6l4-4z"/><path d="M12 13v8"/></svg>')}")`);
+
+/* ---------- the chart (synthetic, verbatim from the shared spec) ---------- */
+const DOCS={
+ dc:{t:'Discharge summary',short:'Discharge',d:'9/2/2026',a:'Hospital Medicine',s:["71-year-old woman with HFrEF (EF 30% on TTE 8/29/2026), CKD stage 3, hypertension, admitted with acute on chronic systolic heart failure.","Diuresed with IV furosemide, net -4.2 L.","Discharge medications: lisinopril 10 mg daily; metoprolol tartrate 25 mg twice daily; furosemide 40 mg daily.","Follow-up: cardiology clinic in 2 weeks, BMP in 1 week."]},
+ echo:{t:'Echocardiogram report',short:'Echo',d:'8/29/2026',a:'Cardiology',s:["Left ventricle moderately dilated with global hypokinesis.","LVEF 30% (biplane Simpson's).","Moderate mitral regurgitation.","RV systolic function mildly reduced."]},
+ nurse:{t:'Nursing note',short:'Nursing',d:'8/31/2026',a:'Nursing',s:["Patient ambulated 150 ft in hallway with walker, no shortness of breath at rest.","Tolerating low-sodium diet.","Daily weight 69.1 kg."]},
+ cardio:{t:'Cardiology clinic',short:'Cardiology',d:'6/10/2026',a:'Cardiology',s:["HFrEF follow-up, NYHA class II.","We discussed adding an SGLT2 inhibitor (empagliflozin).","Patient declines: she had recurrent urinary tract infections on dapagliflozin in 2025 and is worried about cost.","Will revisit at next visit.","Continue lisinopril and metoprolol."]},
+ neph:{t:'Nephrology clinic',short:'Nephrology',d:'4/14/2026',a:'Nephrology',s:["CKD stage 3b, eGFR 38.","Potassium 5.9 today.","Spironolactone discontinued due to hyperkalemia; would not rechallenge given CKD.","Low-potassium diet education provided.","Repeat BMP in 1 week."]},
+ prob:{t:'Problem list',short:'Problem list',d:'last edited 3/2024',a:'',old:true,s:["Heart failure with mildly reduced ejection fraction, HFmrEF (EF 45%).","Hypertension.","Chronic kidney disease stage 3."]}
+};
+const NOTE_ORDER=['dc','echo','nurse','cardio','neph','prob'];
+const MEDS=["lisinopril 10 mg daily · active","metoprolol tartrate 25 mg twice daily · active","furosemide 40 mg daily · active","spironolactone 25 mg daily · stopped 4/14/2026"];
+const LABS=["potassium 5.9 mmol/L · 4/14/2026","potassium 4.6 mmol/L · 9/1/2026","eGFR 38 · 9/1/2026","systolic BP 112 mmHg · 9/2/2026"];
+function sentText(id){const [d,i]=id.split(':');if(d==='med')return MEDS[i];if(d==='labs')return LABS[i];return DOCS[d].s[i];}
+function srcLabel(id){const d=id.split(':')[0];if(d==='med')return 'Med list';if(d==='labs')return 'Labs';return DOCS[d].short+' '+DOCS[d].d.replace('last edited ','');}
+
+/* ---------- questions and gold ---------- */
+const DRUG=[['on','On therapy'],['med','Medical exception'],['pref','Patient preference'],['gap','GAP']];
+const Q=[
+ {k:'hf',label:'HF type',sub:'HFrEF = EF 40% or less',opts:[['HFrEF','HFrEF'],['HFmrEF','HFmrEF'],['HFpEF','HFpEF']]},
+ {k:'ras',label:'ACEi / ARB / ARNI',sub:'e.g. lisinopril',opts:DRUG},
+ {k:'bb',label:'Beta blocker',sub:'e.g. carvedilol',opts:DRUG},
+ {k:'mra',label:'MRA',sub:'e.g. spironolactone',opts:DRUG},
+ {k:'sglt',label:'SGLT2 inhibitor',sub:'e.g. empagliflozin',opts:DRUG}];
+const GOLD={hf:'HFrEF',ras:'on',bb:'gap',mra:'med',sglt:'pref'};
+const GOLD_EV={hf:['echo:1','dc:0'],ras:['med:0','dc:2','cardio:4'],bb:['med:1','dc:2'],mra:['neph:2'],sglt:['cardio:2']};
+const optLabel=(k,v)=>v==null?'no answer':(Q.find(q=>q.k===k).opts.find(o=>o[0]===v)||[,v])[1];
+function why(k,v){
+ const ok=v===GOLD[k];
+ switch(k){
+  case 'hf': return ok?"Latest dated EF is 30% (echo 8/29/2026). The 45% is a stale 2024 problem-list value.":v==='HFmrEF'?"Trap: the problem list's EF 45% was last edited 3/2024. The echo from 8/29/2026 says LVEF 30%.":"Her most recent EF is 30% (echo 8/29/2026): reduced, so HFrEF.";
+  case 'ras': return ok?"Lisinopril 10 mg daily, active on the medication list.":"Lisinopril 10 mg daily is active on the medication list: on therapy.";
+  case 'bb': return ok?"Metoprolol tartrate isn't an evidence-based HF beta blocker (only carvedilol, bisoprolol, metoprolol succinate count). No reason documented: a real gap.":v==='on'?"Trap: \"metoprolol\" looks right, but it's tartrate, which doesn't count. The single biggest error of plain AI in the study.":"No reason is documented anywhere. Metoprolol tartrate doesn't count, so it's a GAP.";
+  case 'mra': return ok?"Nephrology 4/14/2026: stopped for hyperkalemia, would not rechallenge.":v==='gap'?"Stopped is not a gap. The reason (hyperkalemia) lives only in the nephrology note; only a search finds it.":v==='pref'?"It was a medical decision (hyperkalemia), not her choice.":"Spironolactone was stopped 4/14/2026: she's not on it. The reason is medical.";
+  case 'sglt': return ok?"Cardiology 6/10/2026: she declined (UTIs on dapagliflozin, cost).":v==='gap'?"The med list shows nothing, but she declined it. That reason is only in the cardiology note.":v==='med'?"It was her choice: the note says \"Patient declines\". That's patient preference.":"She isn't on one; the cardiology note says she declined.";
+ }
+}
+
+/* ---------- state ---------- */
+let S, runId=0;
+function fresh(){return {budget:8,calls:[],pins:new Map(),ans:{hf:null,ras:null,bb:null,mra:null,sglt:null},link:{},seen:new Set(),glimpsed:new Set(),read:new Set(),agentMode:false,agentIdx:0,busy:false,auto:false,submitted:false,cards:0};}
+let step=0;
+const STEPS=['intro','play','results','takeaway'];
+
+/* ---------- search engine (simulated: keyword + a few synonyms) ---------- */
+function rxFor(part){
+ const p=part.toLowerCase().trim();
+ if(/^(ejection fraction|ejection|ef|lvef|lv ef)$/.test(p))return {rx:/ejection fraction|\b(?:LV)?EF\b/gi,lit:/ejection fraction/i};
+ if(/^sglt2?i?( inhibitors?)?$|^sglt-2/.test(p))return {rx:/sglt2|gliflozin/gi,lit:/sglt2/i};
+ if(/^(mra|mras|mineralocorticoid.*)$/.test(p))return {rx:/spironolactone|eplerenone/gi,lit:/mra/i};
+ if(/^(potassium|hyperkalemia|k)$/.test(p))return {rx:/potassium|hyperkalemia/gi,lit:new RegExp(p,'i')};
+ if(/^(declin|refus|prefer)/.test(p))return {rx:/declin\w*|refus\w*/gi,lit:/declin/i};
+ const e=p.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+ const rx=new RegExp(p.length<=3?'\\b'+e+'\\b':e,'gi');
+ return {rx,lit:rx};
+}
+function search(q){
+ const parts=q.split(/\s+OR\s+|,/i).map(s=>s.trim()).filter(Boolean);
+ const out=[];
+ NOTE_ORDER.forEach((d,oi)=>{
+  const doc=DOCS[d];let score=0,sents=new Set();
+  parts.forEach(pt=>{const {rx,lit}=rxFor(pt);
+   doc.s.forEach((s,i)=>{rx.lastIndex=0;if(rx.test(s)){sents.add(i);lit.lastIndex=0;score+=lit.test(s)?3:1;}});
+   rx.lastIndex=0;if(!sents.size&&rx.test(doc.t)){sents.add(0);score+=1;}
+  });
+  if(sents.size)out.push({d,score,oi,sents:[...sents].sort((a,b)=>a-b).slice(0,2),parts});
+ });
+ out.sort((a,b)=>b.score-a.score||a.oi-b.oi);
+ return out;
+}
+function highlight(text,parts){
+ let h=esc(text);
+ parts.forEach(pt=>{const {rx}=rxFor(pt);rx.lastIndex=0;h=h.replace(new RegExp(rx.source,'gi'),m=>`<mark>${m}</mark>`);});
+ return h;
+}
+
+/* ---------- UI: budget ---------- */
+function renderBudget(){
+ const pips=$('#budget .pips');pips.innerHTML='';
+ for(let i=0;i<8;i++){const p=document.createElement('div');p.className='pip'+(i>=S.budget?' spent':'');pips.appendChild(p);}
+ $('#budget .left').textContent=S.budget+'/8';
+ const out=S.budget<=0||S.auto;
+ $$('.tool[data-tool="meds"],.tool[data-tool="labs"],.tool[data-tool="readinfo"],#goBtn,.tool[data-tool="searchfocus"],.chip').forEach(b=>b.disabled=out);
+ $('#q').disabled=out;
+ $$('.readB').forEach(b=>{b.disabled=out||S.read.has(b.dataset.doc);});
+ $('#hintBtn').disabled=S.auto;$('#submitBtn').disabled=S.auto;
+}
+function flashBudget(){const b=$('#budget');b.classList.remove('flash');void b.offsetWidth;b.classList.add('flash');}
+
+/* ---------- UI: sentences ---------- */
+function sentHTML(id,inner){return `<span class="sent${S.pins.has(id)?' pinned':''}" data-id="${id}">${inner??esc(sentText(id))}</span>`;}
+function togglePin(id,force){
+ const on=force??!S.pins.has(id);
+ if(on)S.pins.set(id,true);else{S.pins.delete(id);for(const k in S.link)if(S.link[k]===id)delete S.link[k];}
+ $$(`.sent[data-id="${id}"]`).forEach(e=>e.classList.toggle('pinned',on));
+ renderAnswers();
+}
+
+/* ---------- tools ---------- */
+function addCard(html,cls='card'){
+ const f=$('#feed');const e=f.querySelector('.empty');if(e)e.remove();
+ const c=document.createElement('div');c.className=cls;c.innerHTML=html;f.prepend(c);f.scrollTop=0;
+ if(isPhone())setTimeout(()=>$('#world').scrollIntoView({behavior:RM?'auto':'smooth',block:'start'}),60);
+ return c;
+}
+function emptyState(){$('#feed').innerHTML=`<div class="empty">${ic('eyeoff')}Darkness.<br>Nothing exists for you until a tool brings it back.</div>`;}
+function callTool(tool,arg){
+ if(S.budget<=0){flashBudget();addCard(`Turn budget spent. Answer with what you've seen, then submit.`,'sysmsg');return false;}
+ S.budget--;const n=8-S.budget;S.cards++;
+ const head=(name,icon)=>`<div class="ch">${ic(icon)}<span>${name}</span><span class="turn">turn ${n}/8</span></div>`;
+ const tip=S.cards===1?`<div class="tip">${ic('pin')}Tap a sentence to pin it as evidence.</div>`:'';
+ let html='';
+ if(tool==='meds'){
+  S.seen.add('med');S.calls.push({tool,label:'get_medications()',node:'med'});
+  html=head('get_medications()','pill')+`<div class="doc lines"><div class="dh"><b>Medication list</b></div>${MEDS.map((m,i)=>sentHTML('med:'+i)).join('')}<div class="none">(no SGLT2 inhibitor on file)</div></div>`+tip;
+ }else if(tool==='labs'){
+  S.seen.add('labs');S.calls.push({tool,label:'get_labs()',node:'labs'});
+  html=head('get_labs()','lab')+`<div class="doc lines"><div class="dh"><b>Labs and vitals</b></div>${LABS.map((m,i)=>sentHTML('labs:'+i)).join('')}</div>`+tip;
+ }else if(tool==='search'){
+  const q=arg.trim();const hits=search(q);
+  S.calls.push({tool,label:`search_notes("${q}")`,node:'hub',q,hits:hits.map(h=>h.d)});
+  hits.forEach(h=>S.glimpsed.add(h.d));
+  html=head(`search_notes("${esc(q)}")`,'search');
+  if(!hits.length){
+   const bb=/beta|blocker|\bbb\b/i.test(q);
+   html+=`<div class="zero">0 notes match.<small>${bb?'Notes name the drug (for example, metoprolol), not the drug class.':'Try a drug name or a clinical word the note would actually contain.'}</small></div>`;
+  }else{
+   html+=`<div class="dim" style="font-size:12.5px">${hits.length} note${hits.length>1?'s':''} match · showing matching sentences only</div>`;
+   hits.forEach(h=>{const D=DOCS[h.d];
+    html+=`<div class="doc"><div class="dh"><b>${D.t}</b><span class="date${D.old?' old':''}">${D.d}</span>${D.a?`<span>${D.a}</span>`:''}</div>${h.sents.map(i=>sentHTML(h.d+':'+i,highlight(D.s[i],h.parts))).join(' ')}<br><button class="readB" data-doc="${h.d}">read_note("${h.d}") · 1 turn</button></div>`;});
+  }
+  html+=tip;
+ }else if(tool==='read'){
+  const D=DOCS[arg];S.read.add(arg);S.glimpsed.add(arg);S.calls.push({tool,label:`read_note("${arg}")`,node:arg});
+  html=head(`read_note("${arg}")`,'note')+`<div class="doc"><div class="dh"><b>${D.t}</b><span class="date${D.old?' old':''}">${D.d}</span>${D.a?`<span>${D.a}</span>`:''}</div>${D.s.map((s,i)=>sentHTML(arg+':'+i)).join(' ')}</div>`+tip;
+ }
+ addCard(html);
+ renderBudget();
+ if(S.budget===0&&!S.agentMode)setTimeout(()=>addCard(`Turn budget spent. Real agents stop here too. Answer with what you've seen, then submit.`,'sysmsg'),500);
+ return true;
+}
+
+/* ---------- answers panel ---------- */
+function buildAnswers(){
+ $('#ansRows').innerHTML=Q.map(q=>`<div class="arow" data-k="${q.k}"><div class="q">${q.label}<small>${q.sub}</small></div>
+  <div class="seg">${q.opts.map(o=>`<button data-v="${o[0]}" class="${o[0]==='gap'?'gapo':''}">${o[1]}</button>`).join('')}</div>
+  <div class="ev">${ic('pin')}<select aria-label="evidence for ${q.label}"></select></div></div>`).join('');
+}
+function renderAnswers(){
+ Q.forEach(q=>{
+  const row=$(`.arow[data-k="${q.k}"]`);
+  row.querySelectorAll('.seg button').forEach(b=>{const on=S.ans[q.k]===b.dataset.v;b.classList.toggle('sel',on);b.classList.toggle('gap',on&&b.dataset.v==='gap');});
+  const sel=row.querySelector('select');const ids=[...S.pins.keys()];
+  const cur=S.link[q.k]||'';
+  sel.innerHTML=`<option value="">${ids.length?'link a pinned quote...':'pin a sentence to quote it'}</option>`+ids.map(id=>{const t=sentText(id);return `<option value="${id}">${esc(srcLabel(id))}: “${esc(t.length>58?t.slice(0,56)+'…':t)}”</option>`;}).join('');
+  sel.value=cur;sel.disabled=!ids.length||S.auto;
+ });
+ const n=S.pins.size;$('#pinCount').textContent=n+' quote'+(n===1?'':'s')+' pinned';
+}
+function setAnswer(k,v,pin){
+ S.ans[k]=v;if(pin){if(!S.pins.has(pin))togglePin(pin,true);S.link[k]=pin;}
+ renderAnswers();const r=$(`.arow[data-k="${k}"]`);r.classList.add('flash');setTimeout(()=>r.classList.remove('flash'),1400);
+}
+
+/* ---------- think bubble ---------- */
+let typeTok=0;
+async function think(text,actions){
+ const tk=++typeTok;const b=$('#think'),tt=b.querySelector('.tt'),ta=b.querySelector('.ta');
+ b.classList.add('on');ta.innerHTML='';tt.innerHTML='<span class="caret"></span>';
+ const speed=RM?0:16;
+ for(let i=1;i<=text.length;i++){
+  if(tk!==typeTok)return;
+  if(speed&&(i%2===0||i===text.length)){tt.innerHTML=esc(text.slice(0,i))+'<span class="caret"></span>';await sleep(speed*2,true);}
+ }
+ tt.innerHTML=esc(text);
+ (actions||[]).forEach(([lbl,fn,cls])=>{const x=document.createElement('button');x.textContent=lbl;if(cls)x.className=cls;x.onclick=fn;ta.appendChild(x);});
+}
+function hideThink(){typeTok++;$('#think').classList.remove('on');}
+function sleep(ms,raw){const id=runId;return new Promise((res,rej)=>setTimeout(()=>id===runId?res():rej('cancel'),raw?ms:ms*T));}
+
+/* ---------- hint: what the agent would think next ---------- */
+function hint(){
+ const h=nextHint();
+ const acts=[];
+ if(h.act&&S.budget>0)acts.push([h.btn,()=>{hideThink();h.act();}]);
+ acts.push(['got it',hideThink,'x']);
+ think(h.t,acts).catch(()=>{});
+}
+function nextHint(){
+ const seenEF=S.read.has('echo')||S.glimpsed.has('echo')||S.glimpsed.has('dc')||S.read.has('dc');
+ if(!S.seen.has('med'))return {t:"I can't see anything yet. Cheapest first look: what is she actually on?",btn:'get_medications()',act:()=>callTool('meds')};
+ if(!seenEF)return {t:"Heart failure type first: every other answer depends on it. Find her ejection fraction.",btn:'search_notes("ejection fraction")',act:()=>callTool('search','ejection fraction')};
+ if(S.ans.hf!=='HFrEF')return {t:"I've seen more than one EF. 45% is from a problem list last edited 3/2024. The echo (8/29/2026) says 30%. The most recent dated value wins: HFrEF.",btn:'answer HFrEF',act:()=>setAnswer('hf','HFrEF',S.glimpsed.has('echo')?'echo:1':'dc:0')};
+ if(!S.glimpsed.has('neph'))return {t:"Spironolactone was stopped 4/14/2026. Stopped is not the same as a gap. Why was it stopped? Only a note would say.",btn:'search_notes("spironolactone")',act:()=>callTool('search','spironolactone')};
+ if(S.ans.mra!=='med')return {t:"Nephrology: stopped for hyperkalemia, would not rechallenge. That's a documented medical reason: MRA = medical exception.",btn:'answer it',act:()=>setAnswer('mra','med','neph:2')};
+ if(!S.glimpsed.has('cardio'))return {t:"No SGLT2 inhibitor on the list. Before I call it a gap, I search the notes for a reason.",btn:'search_notes("SGLT2")',act:()=>callTool('search','SGLT2')};
+ if(!S.read.has('cardio'))return {t:"The snippet says they discussed an SGLT2 inhibitor. Discussed is not decided. Read the full note.",btn:'read_note("cardio")',act:()=>callTool('read','cardio')};
+ if(S.ans.sglt!=='pref')return {t:"\"Patient declines.\" Her choice, documented: SGLT2 inhibitor = patient preference.",btn:'answer it',act:()=>setAnswer('sglt','pref','cardio:2')};
+ if(S.ans.bb!=='gap')return {t:"Metoprolol TARTRATE. My protocol: only carvedilol, bisoprolol or metoprolol succinate count, and no reason is documented. Beta blocker = GAP.",btn:'answer it',act:()=>setAnswer('bb','gap','med:1')};
+ if(S.ans.ras!=='on')return {t:"Lisinopril 10 mg daily is active. ACEi/ARB/ARNI = on therapy.",btn:'answer it',act:()=>setAnswer('ras','on','med:0')};
+ const missing=Q.filter(q=>!S.link[q.k]).length;
+ if(missing)return {t:`${missing} answer${missing>1?'s have':' has'} no quote linked yet. No quote, no answer: a reviewer needs to check me.`};
+ return {t:"Every answer has a quote. Submit it for clinician review.",btn:'submit',act:submit};
+}
+
+/* ---------- the agent's scripted path: 6 calls ---------- */
+const AGENT=[
+ {t:"I can't see anything yet. Cheapest first look: what is she actually on?",tool:'meds',
+  after:[['ras','on','med:0'],['bb','gap','med:1']],t2:"Lisinopril: on therapy. Metoprolol TARTRATE: my protocol says only succinate counts. Beta blocker = GAP."},
+ {t:"Heart failure type first. Search the notes for the ejection fraction.",tool:'search',arg:'ejection fraction',
+  t2:"Three EFs. The 45% comes from a problem list last edited 3/2024. The newest source should win: read the echo.",hot:'echo'},
+ {t:"Read the echo report to confirm the value and its date.",tool:'read',arg:'echo',after:[['hf','HFrEF','echo:1']],t2:"Echo 8/29/2026: LVEF 30%. Most recent dated EF, so HFrEF."},
+ {t:"Spironolactone was stopped 4/14/2026. Stopped isn't the same as a gap. Why?",tool:'search',arg:'spironolactone',after:[['mra','med','neph:2']],t2:"Nephrology: stopped for hyperkalemia, no rechallenge. MRA = medical exception."},
+ {t:"No SGLT2 inhibitor on the list. Before calling it a gap, search for a documented reason.",tool:'search',arg:'SGLT2',t2:"They 'discussed' it. Discussed is not decided. Read the full note.",hot:'cardio'},
+ {t:"Read the cardiology note.",tool:'read',arg:'cardio',after:[['sglt','pref','cardio:2']],t2:"\"Patient declines.\" SGLT2 inhibitor = patient preference. Every answer has a quote: submit."}
+];
+async function agentStep(){
+ if(S.busy)return;
+ if(!S.agentMode){newBoard(true);}
+ if(S.agentIdx>=AGENT.length){submit();return;}
+ S.busy=true;const a=AGENT[S.agentIdx++];
+ try{
+  await think(a.t);await sleep(500);
+  if(a.tool==='search'){const q=$('#q');q.value='';for(const ch of a.arg){q.value+=ch;await sleep(45,true);}highlightTool('#goBtn');}
+  else if(a.tool==='read'){const b=$(`.readB[data-doc="${a.arg}"]`);if(b){b.classList.add('hot');}}
+  else highlightTool(`.tool[data-tool="${a.tool}"]`);
+  await sleep(650);
+  callTool(a.tool,a.arg);$('#q').value='';
+  await sleep(1100);
+  for(const [k,v,p] of (a.after||[])){togglePin(p,true);await sleep(350);setAnswer(k,v,p);await sleep(450);}
+  if(a.hot){const b=$(`.readB[data-doc="${a.hot}"]`);if(b)b.classList.add('hot');}
+  await think(a.t2);
+ }catch(e){if(e!=='cancel')throw e;}
+ S.busy=false;updateCtrl();
+}
+function highlightTool(sel){const b=$(sel);if(!b)return;b.classList.add('hot');setTimeout(()=>b.classList.remove('hot'),900*T+300);}
+async function watchAgent(){
+ goStep(1,true);newBoard(true);S.auto=true;$('#agentOn').classList.add('on');renderBudget();renderAnswers();
+ const id=runId;
+ try{
+  while(S.agentIdx<AGENT.length){await agentStep();if(id!==runId)return;await sleep(1300);}
+  await sleep(600);if(id===runId){S.auto=false;submit();}
+ }catch(e){}
+}
+function stopAgent(){runId++;S.busy=false;S.auto=false;$('#agentOn').classList.remove('on');hideThink();renderBudget();renderAnswers();updateCtrl();}
+
+/* ---------- board ---------- */
+function newBoard(agent){
+ runId++;S=fresh();S.agentMode=!!agent;
+ emptyState();hideThink();$('#q').value='';$('#agentOn').classList.toggle('on',false);
+ renderBudget();renderAnswers();updateCtrl();
+}
+
+/* ---------- submit + results ---------- */
+function submit(){
+ if(S.busy)return;S.submitted=true;S.auto=false;$('#agentOn').classList.remove('on');hideThink();goStep(2);
+}
+function renderResults(){
+ const score=Q.filter(q=>S.ans[q.k]===GOLD[q.k]).length, n=S.calls.length;
+ const who=S.agentMode?'Agent':'You';
+ $('#scoreLine').innerHTML=S.agentMode
+  ?`<span class="ag">Agent: <span id="sc">0</span>/5 in ${n} turns</span><small>graded against two clinicians' review</small>`
+  :`<span class="you">You: <span id="sc">0</span>/5 in ${n} turn${n===1?'':'s'}</span><span class="sep">·</span><span class="ag">Agent: 5/5 in 6 turns</span><small>graded against two clinicians' review</small>`;
+ const g=$('#grades');g.innerHTML='';
+ Q.forEach(q=>{const v=S.ans[q.k],ok=v===GOLD[q.k];const l=S.link[q.k];const qok=l&&GOLD_EV[q.k].includes(l);
+  const d=document.createElement('div');d.className='grade '+(ok?'ok':'bad');
+  d.innerHTML=`<div class="mk">${ic(ok?'check':'x')}</div><div class="gh"><b>${q.label}</b><span class="yours">${esc(optLabel(q.k,v))}</span>${ok?'':`<span class="gold">→ ${esc(optLabel(q.k,GOLD[q.k]))}</span>`}<span class="qv ${qok?'y':'n'}">${qok?(ok?'quote ✓':'right quote, wrong call'):l?'quote off-target':'no quote'}</span></div><div class="why">${esc(why(q.k,v))}</div>`;
+  g.appendChild(d);});
+ let c=0;
+ [...g.children].forEach((d,i)=>setTimeout(()=>{d.classList.add('in');if(d.classList.contains('ok')){c++;const e=$('#sc');if(e)e.textContent=c;}},(250+i*420)*T));
+ $('#lgYou').style.display=S.agentMode?'none':'';
+ // lesson
+ const missed=[];
+ if(S.ans.mra!=='med'&&!S.glimpsed.has('neph'))missed.push('the nephrology note (MRA reason)');
+ if(S.ans.sglt!=='pref'&&!S.read.has('cardio'))missed.push('the cardiology note (SGLT2 inhibitor decision)');
+ let L;
+ if(S.agentMode)L="The agent never saw the chart either. It chose 6 calls, read only what came back, and quoted a sentence for every answer. Its protocol (the skill) caught the metoprolol tartrate trap. Note: this is a scripted replay; real agents still make mistakes, which is why clinicians check the quotes.";
+ else if(score===5)L=`Perfect, in ${n} turn${n===1?'':'s'}. You did what a good agent does: searched before calling anything a gap, preferred the newest dated source, and followed the protocol.`;
+ else if(missed.length)L=`You never saw ${missed.join(' or ')}. For you, those reasons did not exist. That is exactly the agent's situation: its world is only what its tools return.`;
+ else L="You found the right documents; the misses were in the rules. That's what the skill (the plain-English protocol) is for.";
+ $('#lesson').innerHTML=esc(L)+(S.agentMode?'':`<div class="prelim" style="margin-top:6px">In the team's study (preliminary), agents got GDMT gaps right 96–98% of the time; a single AI call (one question, no tools), 82–85%.</div>`);
+ // calls list
+ const agentCalls=['get_medications()','search_notes("ejection fraction")','read_note("echo")','search_notes("spironolactone")','search_notes("SGLT2")','read_note("cardio")'];
+ $('#calls').innerHTML=`<div class="a"><h4>AGENT · 6 CALLS</h4><ol>${agentCalls.map(x=>`<li>${esc(x)}</li>`).join('')}</ol></div>`+(S.agentMode?'':`<div class="p"><h4>YOU · ${n} CALL${n===1?'':'S'}</h4>${n?`<ol>${S.calls.map(x=>`<li>${esc(x.label)}</li>`).join('')}</ol>`:'<div class="dim" style="font-size:13px">no tool calls: you answered in the dark</div>'}</div>`);
+ drawMap();
+}
+function drawMap(){
+ const svg=$('#map');const narrow=svg.parentElement.clientWidth<560;
+ const W=narrow?380:760,H=narrow?520:350;svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+ const P=narrow?{
+  start:[190,30],med:[95,100],labs:[285,100],hub:[190,190],
+  dc:[100,280],echo:[280,280],nurse:[100,360],cardio:[280,360],neph:[100,440],prob:[280,440]}:{
+  start:[60,175],med:[170,70],labs:[170,280],hub:[380,175],
+  dc:[630,35],echo:[630,91],nurse:[630,147],cardio:[630,203],neph:[630,259],prob:[630,315]};
+ const NW=narrow?164:190,NH=narrow?50:44;
+ const lbl={med:['Medication list','get_medications'],labs:['Labs and vitals','get_labs'],hub:['search_notes','the notes index']};
+ NOTE_ORDER.forEach(d=>lbl[d]=[DOCS[d].t,DOCS[d].d]);
+ const agSeen={med:1,hub:1,echo:2,cardio:2,dc:1,prob:1,neph:1};
+ const mySeen=S.agentMode?agSeen:(()=>{const o={};if(S.seen.has('med'))o.med=1;if(S.seen.has('labs'))o.labs=1;if(S.calls.some(c=>c.tool==='search'))o.hub=1;S.glimpsed.forEach(d=>o[d]=1);S.read.forEach(d=>o[d]=2);return o;})();
+ let h='',nodesH='';
+ Object.keys(P).forEach(k=>{if(k==='start')return;const [x,y]=P[k];const cls=k==='hub'?'hub':'';
+  const nv=!(S.agentMode?agSeen:mySeen)[k]&&k!=='hub';
+  nodesH+=`<g class="nd ${cls}" data-k="${k}"><rect x="${x-NW/2}" y="${y-NH/2}" width="${NW}" height="${NH}" rx="9"/><text x="${x}" y="${y-3}" text-anchor="middle">${esc(lbl[k][0])}</text><text class="sub" x="${x}" y="${y+13}" text-anchor="middle">${esc(lbl[k][1])}</text>${nv?`<text class="never" x="${x}" y="${y+13}" text-anchor="middle" opacity="0">${S.agentMode?'agent never saw this':'you never saw this'}</text>`:''}</g>`;});
+ nodesH+=`<g class="nd start"><circle cx="${P.start[0]}" cy="${P.start[1]}" r="17"/><svg x="${P.start[0]-11}" y="${P.start[1]-11}" width="22" height="22" viewBox="0 0 24 24" style="stroke:#22D3EE;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><use href="#ic-agent"/></svg></g>`;
+ const pts=(nodes,off)=>nodes.map((k,i)=>{const [x,y]=P[k];return [x+off,y+off];});
+ const pathD=pp=>pp.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+ const agNodes=['start','med','hub','echo','hub','hub','cardio'];
+ const myNodes=['start',...S.calls.map(c=>c.node)];
+ const paths=[['a',agNodes,-4]];if(!S.agentMode)paths.push(['p',myNodes,5]);
+ let badges='';
+ paths.forEach(([c,nodes,off])=>{if(nodes.length<2)return;
+  const pp=pts(nodes,off);
+  // bend repeated hub visits slightly so the path stays readable
+  const curve=[];for(let i=0;i<pp.length;i++){curve.push(pp[i]);}
+  let d='M'+curve[0].join(' ');
+  for(let i=1;i<curve.length;i++){const [x0,y0]=curve[i-1],[x1,y1]=curve[i];
+   if(x0===x1&&y0===y1){const r=(narrow?30:34)*(c==='p'?1.25:1);d+=` C ${x0-r*1.6} ${y0-r*2.6} ${x0+r*1.6} ${y0-r*2.6} ${x1} ${y1}`;continue;}
+   const mx=(x0+x1)/2,my=(y0+y1)/2,dx=x1-x0,dy=y1-y0,len=Math.hypot(dx,dy)||1,b=(i%2?1:-1)*Math.min(26,len*.12)*(c==='p'?-1:1);
+   d+=` Q ${(mx-dy/len*b).toFixed(1)} ${(my+dx/len*b).toFixed(1)} ${x1} ${y1}`;}
+  h+=`<path class="pth ${c}" d="${d}" pathLength="100" style="stroke-dasharray:${c==='p'?'2.2 1.6':'100'};stroke-dashoffset:${c==='p'?0:100};opacity:${c==='p'?0:1}"/>`;
+  nodes.slice(1).forEach((k,i)=>{const [x,y]=P[k];
+   const rep=nodes.slice(1,i+1).filter(z=>z===k).length;
+   const sx=c==='a'?x-NW/2+12+rep*19:x+NW/2-12-rep*19, by=c==='a'?y-NH/2:y+NH/2;
+   badges+=`<g class="bdg ${c}" opacity="0" data-i="${i}"><circle cx="${sx}" cy="${by}" r="9"/><text x="${sx}" y="${by+.5}">${i+1}</text></g>`;});
+ });
+ svg.innerHTML=h+nodesH+badges;
+ // animate: fog lifts on seen nodes, then paths draw
+ const lift=()=>{svg.querySelectorAll('.nd[data-k]').forEach(g=>{const k=g.dataset.k;if(k==='hub')return;
+   const st=(S.agentMode?agSeen:mySeen)[k];if(st)g.classList.add(st===2?'read':'lift');});};
+ const reveal=()=>{svg.querySelectorAll('.nd[data-k]').forEach(g=>{if(!g.classList.contains('read')&&!g.classList.contains('lift')&&g.dataset.k!=='hub'){g.classList.add('lift');}});svg.querySelectorAll('.never').forEach(t=>{t.setAttribute('opacity','1');const sb=t.parentNode.querySelector('.sub');if(sb)sb.setAttribute('opacity','0');});};
+ setTimeout(lift,300*T);
+ const pa=svg.querySelector('.pth.a'),pm=svg.querySelector('.pth.p');
+ const anim=(el,dur,delay,cb)=>{if(!el){cb&&cb();return;}const t0=performance.now()+delay;const isP=el.classList.contains('p');const nb=isP?myNodes.length-1:6;
+  const f=now=>{const k=Math.max(0,Math.min(1,(now-t0)/dur));
+   if(isP)el.style.opacity=(.85*k).toFixed(3);else el.style.strokeDashoffset=100-100*k;
+   svg.querySelectorAll(`.bdg.${isP?'p':'a'}`).forEach(b=>{if(k>0&&+b.dataset.i<Math.ceil(k*nb))b.setAttribute('opacity','1');});
+   if(k<1)requestAnimationFrame(f);else cb&&cb();};requestAnimationFrame(f);};
+ anim(pm,2200*T,600*T,()=>{});
+ anim(pa,2200*T,(pm?1400:600)*T,()=>setTimeout(reveal,400*T));
+}
+
+/* ---------- steps / navigation ---------- */
+function goStep(n,keep){
+ step=Math.max(0,Math.min(3,n));
+ $$('.screen').forEach(s=>s.classList.remove('on'));
+ $('#'+['s-intro','s-play','s-result','s-take'][step]).classList.add('on');
+ $('#budget').classList.toggle('hide',step!==1);
+ if(step===2)renderResults();
+ if(step!==1)hideThink();
+ updateCtrl();
+ if(isPhone())scrollTo(0,0);
+}
+function updateCtrl(){
+ $('#dots').innerHTML=STEPS.map((s,i)=>`<i class="${i===step?'on':''}"></i>`).join('');
+ $('#stepLbl').textContent=`${step+1}/4 · ${STEPS[step]}`;
+ let l='Next';
+ if(step===0)l='Play';
+ else if(step===1){l=S&&S.agentMode&&S.agentIdx>=AGENT.length?'Submit':`Agent move ${S&&S.agentMode?S.agentIdx+1:1}/6`;if(isPhone())l=S&&S.agentMode&&S.agentIdx>=AGENT.length?'Submit':'Agent move';}
+ else if(step===2)l='Takeaway';
+ $('#nextLbl').textContent=l;
+ $('#nextBtn').style.visibility=step===3?'hidden':'visible';
+ $('#backBtn').style.visibility=step===0?'hidden':'visible';
+}
+function next(){
+ if(step===0){goStep(1);return;}
+ if(step===1){if(S.auto)return;agentStep().then(updateCtrl).catch(()=>{});return;}
+ if(step===2){goStep(3);return;}
+}
+function back(){if(S.auto)stopAgent();if(step===2&&S.submitted)goStep(1);else goStep(step-1);}
+function restart(){stopAgent();newBoard(false);goStep(0);}
+
+/* ---------- wiring ---------- */
+const CHIPS=['ejection fraction','spironolactone','SGLT2','beta blocker','metoprolol','potassium'];
+$('.chips').innerHTML=CHIPS.map(c=>`<button class="chip" data-q="${c}">${c}</button>`).join('');
+document.addEventListener('click',e=>{
+ const t=e.target.closest('button,.sent');if(!t)return;
+ if(t.classList.contains('sent')){if(!S.auto)togglePin(t.dataset.id);return;}
+ if(t.classList.contains('chip')){if(!S.auto){hideThink();callTool('search',t.dataset.q);}return;}
+ if(t.classList.contains('readB')){if(!S.auto&&!t.disabled){hideThink();callTool('read',t.dataset.doc);}return;}
+ if(t.dataset.tool){if(S.auto)return;const k=t.dataset.tool;
+  if(k==='meds'||k==='labs'){hideThink();callTool(k);}
+  else if(k==='searchfocus'){const q=$('#q');if(q.value.trim()){hideThink();callTool('search',q.value);q.value='';}else{q.focus();q.placeholder='type a search, e.g. echo';}}
+  else if(k==='readinfo'){const b=$('.readB:not(:disabled)');if(b){b.classList.add('hot');b.scrollIntoView({block:'nearest',behavior:'smooth'});setTimeout(()=>b.classList.remove('hot'),1500);}else think("read_note needs a note id. I only learn note ids from search results. Search first.",[['got it',hideThink,'x']]).catch(()=>{});}
+  return;}
+ const seg=t.closest('.seg');
+ if(seg){if(S.auto)return;const k=t.closest('.arow').dataset.k;S.ans[k]=S.ans[k]===t.dataset.v?null:t.dataset.v;
+  renderAnswers();return;}
+});
+$('#ansRows').addEventListener('change',e=>{if(e.target.tagName==='SELECT'){const k=e.target.closest('.arow').dataset.k;if(e.target.value)S.link[k]=e.target.value;else delete S.link[k];}});
+$('#goBtn').onclick=e=>{e.stopPropagation();if(S.auto)return;const q=$('#q');if(!q.value.trim()){q.focus();return;}hideThink();callTool('search',q.value);q.value='';};
+$('#q').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#goBtn').click();}});
+$('#hintBtn').onclick=hint;
+$('#submitBtn').onclick=submit;
+$('#playBtn').onclick=()=>{newBoard(false);goStep(1);};
+[$('#watchBtn0'),$('#watchBtn1'),$('#watchBtn2')].forEach(b=>b.onclick=e=>{e.stopPropagation();watchAgent();});
+$('#stopBtn').onclick=e=>{e.stopPropagation();stopAgent();};
+$('#againBtn').onclick=()=>{newBoard(false);goStep(1);};
+$('#toTake').onclick=()=>goStep(3);
+$('#nextBtn').onclick=next;$('#backBtn').onclick=back;$('#restartBtn').onclick=restart;
+const fs=()=>{if(document.fullscreenElement)document.exitFullscreen();else document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{});};
+$('#fsBtn').onclick=fs;
+document.addEventListener('keydown',e=>{
+ const tag=(e.target.tagName||'').toLowerCase();if(tag==='input'||tag==='select'||tag==='textarea')return;
+ if(e.metaKey||e.ctrlKey||e.altKey)return;
+ if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();next();}
+ else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();back();}
+ else if(e.key==='r'||e.key==='R')restart();
+ else if(e.key==='f'||e.key==='F')fs();
+});
+let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{updateCtrl();if(step===2)drawMap();},200);});
+
+buildAnswers();S=fresh();newBoard(false);goStep(0);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Rosa Delgado, synthetic patient">
+  <defs><clipPath id="f"><circle cx="100" cy="100" r="100"/></clipPath></defs>
+  <g clip-path="url(#f)">
+    <circle cx="100" cy="100" r="100" fill="#26262a"/>
+    <circle cx="100" cy="44" r="15" fill="#d8d4cf"/>
+    <circle cx="100" cy="84" r="40" fill="#d8d4cf"/>
+    <rect x="88" y="112" width="24" height="30" fill="#b57b56"/>
+    <path d="M28 200 C36 152 68 134 100 134 C132 134 164 152 172 200 Z" fill="#ffb547"/>
+    <path d="M86 135 L100 156 L114 135 Z" fill="#f4f1ea"/>
+    <circle cx="100" cy="90" r="34" fill="#c98f68"/>
+    <path d="M64 90 C60 60 80 47 101 47 C124 47 141 62 136 90 C128 72 113 66 99 67 C85 68 71 74 64 90 Z" fill="#ebe8e4"/>
+    <circle cx="87" cy="94" r="9" fill="none" stroke="#2b1f19" stroke-width="3"/>
+    <circle cx="113" cy="94" r="9" fill="none" stroke="#2b1f19" stroke-width="3"/>
+    <path d="M96 93 Q100 90 104 93" fill="none" stroke="#2b1f19" stroke-width="3"/>
+    <path d="M91 109 Q100 116 109 109" fill="none" stroke="#6b3a2c" stroke-width="3" stroke-linecap="round"/>
+  </g>
+</svg>

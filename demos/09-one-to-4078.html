@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<!--
+  09 · From one patient to a health system (QCOR 2026 workshop demo)
+  The one idea: when chart review costs almost nothing, you can review every chart, and the output
+  for a quality team is not a score but a worklist that clinicians act on.
+  Controls: Right arrow / Space / "Next" = advance; Left arrow = back; R = restart; F = fullscreen.
+            Hover or tap any dot to open a (synthetic) patient card. Filters appear on the "Explore" step.
+  Real numbers (4,078 / 1,134 / 36%) are preliminary (Yale 2025, ACC.27 abstract). Everything else is illustrative.
+  Patient and notes are synthetic. No PHI.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>09 · From one patient to a health system</title>
+<style>
+  :root{
+    --bg:#05070a; --fg:#F2F2F2; --dim:#8C8C8C; --line:#2a2a2a;
+    --amber:#FFB020; --cyan:#22D3EE; --green:#4ADE80; --pink:#FF4FA3; --red:#FF4D4D;
+    --sans:-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Helvetica Neue", Arial, sans-serif;
+    --mono:"SF Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:var(--sans);overflow:hidden;
+    -webkit-font-smoothing:antialiased;touch-action:manipulation}
+  canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+  a{color:inherit}
+  #home{position:fixed;top:14px;left:18px;font-size:13px;color:var(--dim);text-decoration:none;z-index:20;letter-spacing:.02em}
+  #home:hover{color:var(--fg)}
+  #stepind{position:fixed;top:14px;right:18px;font:12px var(--mono);color:var(--dim);z-index:20}
+
+  /* text panel */
+  #panel{position:fixed;z-index:10;pointer-events:none}
+  #panel .inner{pointer-events:auto}
+  #panel.fade .inner{opacity:0;transform:translateY(8px)}
+  #panel .inner{transition:opacity .45s ease, transform .45s ease}
+  .kicker{font:600 13px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .kicker svg{width:18px;height:18px}
+  h1{font-size:40px;line-height:1.1;margin:0 0 18px;font-weight:700;letter-spacing:-.01em}
+  p{font-size:19px;line-height:1.45;margin:0 0 14px;color:#d8d8d8}
+  p.small{font-size:15px;color:var(--dim)}
+  b.a{color:var(--amber);font-weight:600} b.g{color:var(--green);font-weight:600} b.r{color:var(--red);font-weight:600} b.c{color:var(--cyan);font-weight:600}
+  .pill{display:inline-block;font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:99px;
+    vertical-align:middle;white-space:nowrap;margin:2px 0}
+  .pill.pre{color:#fff;border:1px solid #6b6b6b;background:#141414}
+  .pill.ill{color:var(--dim);border:1px dashed #555}
+  .pill.syn{color:var(--amber);border:1px dashed rgba(255,176,32,.6)}
+  .unpack{border-left:3px solid var(--cyan);padding:8px 0 8px 14px;margin:12px 0;font-size:16px;line-height:1.4;color:#cfcfcf}
+  .unpack b{color:#fff;font-weight:700}
+  .quote{font-family:var(--mono);color:var(--amber);font-size:14px}
+
+  .compare{margin:18px 0 10px;display:grid;grid-template-columns:auto 1fr;gap:12px 14px;align-items:center}
+  .compare .lab{font-size:15px;display:flex;align-items:center;gap:8px;white-space:nowrap}
+  .compare .lab svg{width:22px;height:22px;flex:none}
+  .compare .bar{position:relative;height:30px;background:#111;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .compare .bar i{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:5px;transition:width 2.6s cubic-bezier(.3,.7,.2,1)}
+  .compare .bar i.man{background:linear-gradient(90deg,#bdbdbd,#fff)}
+  .compare .bar i.ag{background:var(--cyan);transition-delay:.2s}
+  .compare .bar span{position:absolute;right:8px;top:50%;transform:translateY(-50%);font:600 13px var(--mono);color:#000;mix-blend-mode:normal}
+  .compare .bar span.out{color:var(--cyan);left:16px;right:auto}
+  .counter{font:700 56px var(--mono);letter-spacing:-.02em;color:var(--amber);line-height:1;margin:4px 0 6px}
+  .counter small{font:500 15px var(--sans);color:var(--dim);letter-spacing:0;margin-left:8px}
+
+  .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:10px 0;font-size:14.5px;color:#cfcfcf}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .sw{width:12px;height:12px;border-radius:50%;display:inline-block;flex:none}
+  .sw.ghost{border:2px dashed var(--red);width:14px;height:14px}
+
+  .filters{display:flex;flex-direction:column;gap:10px;margin:14px 0 6px}
+  .frow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .frow .fl{font:600 11px var(--mono);color:var(--dim);letter-spacing:.08em;text-transform:uppercase;width:64px}
+  .chip{font:600 13.5px var(--sans);padding:7px 12px;border-radius:99px;border:1px solid #3a3a3a;background:#0e0e0e;color:#ddd;cursor:pointer}
+  .chip:hover{border-color:#777}
+  .chip.on{background:#fff;color:#000;border-color:#fff}
+  .chip.on.red{background:var(--red);border-color:var(--red)}
+  .chip.on.amb{background:var(--amber);border-color:var(--amber)}
+  #fcount{font:13px var(--mono);color:var(--dim);margin-top:4px}
+
+  /* worklist */
+  #worklist{position:fixed;z-index:9;opacity:0;pointer-events:none;transition:opacity .6s ease .5s;
+    border:1px solid #333;border-radius:12px;background:rgba(10,12,16,.92);padding:14px 16px}
+  #worklist.show{opacity:1;pointer-events:auto}
+  #worklist h3{margin:0 0 2px;font-size:17px;display:flex;align-items:center;gap:8px}
+  #worklist h3 svg{width:20px;height:20px}
+  #worklist .sub{font-size:12.5px;color:var(--dim);margin-bottom:10px}
+  .wrow{display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #222;
+    opacity:0;transform:translateX(10px);transition:opacity .4s ease, transform .4s ease}
+  #worklist.show .wrow{opacity:1;transform:none}
+  .wrow .rk{font:700 14px var(--mono);color:var(--red)}
+  .wrow .who{font-size:14px;line-height:1.3}
+  .wrow .who small{color:var(--dim);font-size:12px}
+  .gchip{display:inline-block;font:600 10.5px var(--mono);color:var(--red);border:1px solid rgba(255,77,77,.6);border-radius:4px;padding:1px 5px;margin:3px 4px 0 0}
+  .wrow .act{font-size:12px;color:var(--green);display:flex;align-items:center;gap:5px;white-space:nowrap}
+  .wrow .act svg{width:16px;height:16px}
+  .wmore{font-size:12.5px;color:var(--dim);border-top:1px solid #222;padding-top:9px;margin-top:2px}
+  .decide{margin-top:10px;font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px;color:var(--fg)}
+  .decide svg{width:20px;height:20px}
+
+  /* takeaway */
+  #take{position:fixed;inset:0;z-index:12;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    padding:0 6vw;opacity:0;pointer-events:none;transition:opacity .9s ease .3s;
+    background:radial-gradient(ellipse at center, rgba(5,7,10,.88) 0%, rgba(5,7,10,.7) 45%, rgba(5,7,10,.15) 80%)}
+  #take.show{opacity:1;pointer-events:auto}
+  #take .big{font-size:clamp(28px,4.4vw,70px);font-weight:800;line-height:1.08;letter-spacing:-.02em;max-width:1200px}
+  #take .big em{font-style:normal;color:var(--amber)}
+  #take .sm{margin-top:22px;color:var(--dim);font-size:clamp(14px,1.4vw,19px)}
+  #take a.next{margin-top:30px;font-size:17px;color:var(--cyan);text-decoration:none;border:1px solid rgba(34,211,238,.5);padding:10px 18px;border-radius:99px}
+  #take a.next:hover{background:rgba(34,211,238,.1)}
+
+  /* card */
+  #card{position:fixed;z-index:30;width:330px;max-width:calc(100vw - 20px);background:#0c0f14;border:1px solid #3a3a3a;border-radius:12px;
+    padding:12px 14px 12px;box-shadow:0 10px 40px rgba(0,0,0,.6);pointer-events:none;opacity:0;transition:opacity .15s ease;font-size:13px}
+  #card.show{opacity:1}
+  #card .ch{font:600 10.5px var(--mono);letter-spacing:.1em;color:var(--amber);text-transform:uppercase;margin-bottom:4px}
+  #card .nm{font-size:16px;font-weight:700;margin-bottom:2px}
+  #card .meta{color:var(--dim);font-size:12.5px;margin-bottom:8px}
+  #card .cr{display:grid;grid-template-columns:96px 1fr;gap:6px;padding:5px 0;border-top:1px solid #1e1e1e;align-items:start}
+  #card .cn{color:#cfcfcf}
+  #card .st{font-weight:700}
+  #card .st.on{color:var(--green)} #card .st.gap{color:var(--red)} #card .st.exc{color:var(--amber)}
+  #card .q{display:block;font:11.5px/1.4 var(--mono);color:var(--amber);margin-top:2px;font-weight:400}
+  #card .q.r{color:#ff9a9a}
+  #card .ft{margin-top:6px;font-size:11px;color:var(--dim)}
+
+  /* controls */
+  #ctrl{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;z-index:25}
+  #ctrl button{white-space:nowrap;font:600 14px var(--sans);background:#111;color:var(--fg);border:1px solid #3a3a3a;border-radius:99px;padding:9px 16px;cursor:pointer;min-width:44px;min-height:40px}
+  #ctrl button:hover{border-color:#888}
+  #ctrl button#next{background:var(--fg);color:#000;border-color:var(--fg)}
+  #dots{display:flex;gap:6px}
+  #dots i{width:8px;height:8px;border-radius:50%;background:#333;display:block;cursor:pointer}
+  #dots i.on{background:var(--cyan)}
+  #foot{position:fixed;bottom:22px;right:18px;font-size:11.5px;color:#666;z-index:5}
+
+  /* portrait / small */
+  body.portrait h1{font-size:23px;margin-bottom:8px}
+  body.portrait p{font-size:14.5px;margin-bottom:8px;line-height:1.4}
+  body.portrait p.small{font-size:12.5px}
+  body.portrait .kicker{font-size:11px;margin-bottom:6px}
+  body.portrait .unpack{font-size:13px;padding:5px 0 5px 10px;margin:6px 0}
+  body.portrait .counter{font-size:34px}
+  body.portrait .counter small{font-size:12px}
+  body.portrait .compare{margin:8px 0 4px;gap:7px 10px}
+  body.portrait .compare .lab{font-size:13px}
+  body.portrait .compare .bar{height:24px}
+  body.portrait .legend{font-size:12.5px;gap:4px 12px;margin:6px 0}
+  body.portrait .chip{font-size:12.5px;padding:6px 10px}
+  body.portrait .filters{margin:6px 0 2px;gap:6px}
+  body.portrait .frow .fl{width:auto;margin-right:4px}
+  body.portrait .hide-p{display:none}
+  body.portrait #foot{bottom:3px;right:auto;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:9.5px}
+  body.portrait #stepind{top:14px}
+  body.portrait #ctrl{bottom:18px}
+  body.portrait #worklist{padding:10px 12px}
+  body.portrait #worklist h3{font-size:14.5px}
+  body.portrait .wrow{padding:5px 0;grid-template-columns:24px 1fr auto}
+  body.portrait .wrow .who{font-size:12.5px}
+  body.portrait .decide{font-size:13px;margin-top:6px}
+  body.portrait .wmore{font-size:11.5px}
+  @media (prefers-reduced-motion: reduce){
+    #panel .inner,#take,#worklist,.wrow,.compare .bar i{transition-duration:.15s !important;transition-delay:0s !important}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<a id="home" href="index.html">&larr; all demos</a>
+<div id="stepind">1 / 8</div>
+<div id="panel"><div class="inner" id="pinner"></div></div>
+<div id="worklist"></div>
+<div id="take">
+  <div class="big">When chart review is cheap,<br class="hide-p"> you can <em>review every chart.</em></div>
+  <div class="sm">The agent finds. The clinician decides.</div>
+  <a class="next" href="10-the-team.html">next demo: the team &rarr;</a>
+</div>
+<div id="card"></div>
+<div id="ctrl">
+  <button id="prev" aria-label="Back">&larr;</button>
+  <div id="dots"></div>
+  <button id="next">Next &rarr;</button>
+</div>
+<div id="foot">QCOR 2026 · synthetic patient · illustrative simulation</div>
+
+<script>
+(function(){
+'use strict';
+/* ---------------- icons (inline SVG, line style) ---------------- */
+const IC={
+  heart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
+  clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  agent:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01M9.5 16.5h5"/><circle cx="12" cy="3.5" r="1"/></svg>',
+  clin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="3.5"/><path d="M5 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/><path d="M9 14v3a2 2 0 0 0 4 0"/></svg>',
+  mag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>',
+  list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>',
+  note:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h5"/></svg>',
+  grid:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="1.4"/><circle cx="12" cy="6" r="1.4"/><circle cx="18" cy="6" r="1.4"/><circle cx="6" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18" cy="12" r="1.4"/><circle cx="6" cy="18" r="1.4"/><circle cx="12" cy="18" r="1.4"/><circle cx="18" cy="18" r="1.4"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>'
+};
+const ico=(k,col)=>'<span style="color:'+col+';display:inline-flex">'+IC[k]+'</span>';
+
+/* ---------------- numbers ---------------- */
+const N=4078, NR=1134, NG=Math.round(NR*0.36); // 408 (preliminary, Yale 2025, ACC.27 abstract)
+const NOK=NR-NG; // 726
+const fmt=n=>n.toLocaleString('en-US');
+
+/* ---------------- seeded RNG + synthetic patients ---------------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const rnd=mulberry32(20250409);
+const ri=(a,b)=>a+Math.floor(rnd()*(b-a+1));
+const pick=a=>a[Math.floor(rnd()*a.length)];
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+
+const CLS=[['ras','ACEi/ARB/ARNI'],['bb','Beta blocker'],['mra','MRA'],['sglt2','SGLT2 inhibitor']];
+const ONTX={ras:['lisinopril','losartan','sacubitril/valsartan','enalapril'],bb:['carvedilol','metoprolol succinate','bisoprolol'],
+  mra:['spironolactone','eplerenone'],sglt2:['empagliflozin','dapagliflozin']};
+const EXC={
+  ras:[['exc','"Lisinopril stopped after angioedema in 2024; avoid ACE inhibitors and ARNI."'],['exc','"Losartan held: creatinine rose to 3.1, potassium 6.0."'],['pref','"Patient declines sacubitril/valsartan because of cost."'],['exc','"Systolic BP 84 on arrival; RAS blockade not restarted."']],
+  bb:[['exc','"Beta blocker held for symptomatic bradycardia, HR 42."'],['exc','"Severe asthma with recent exacerbation; avoiding beta blocker."'],['pref','"Patient declines carvedilol: felt exhausted on it last year."'],['exc','"Second-degree AV block; awaiting EP evaluation before beta blocker."']],
+  mra:[['exc','"Spironolactone stopped: potassium 5.8 on repeat BMP."'],['exc','"eGFR 24; MRA not appropriate at this time."'],['pref','"Gynecomastia on spironolactone; patient declines eplerenone."'],['exc','"Recurrent hyperkalemia on low dose; will not rechallenge."']],
+  sglt2:[['pref','"Declines SGLT2 inhibitor after recurrent genital yeast infections."'],['exc','"eGFR 17; below threshold to start SGLT2 inhibitor."'],['pref','"Copay unaffordable; patient prefers to wait. Social work referral placed."'],['exc','"Type 1 diabetes; SGLT2 inhibitor avoided given DKA risk."']]
+};
+const P=[]; // particles = patients
+const order=shuffle([...Array(N).keys()]); // grid position permutation
+for(let i=0;i<N;i++){
+  const p={i, id:'S-'+String(1000+((i*7919)%9000)).padStart(4,'0'), age:ri(42,94), sex:rnd()<0.46?'F':'M',
+    rEF:i<NR, grp:'other', st:{}, q:{}, rx:{}, gaps:0,
+    x:0,y:0,sx:0,sy:0,tx:0,ty:0,t0:0,dur:1,a:0,ta:0,r:0,tr:0,c:[255,176,32],tc:[255,176,32],dim:1};
+  if(p.rEF){
+    p.ef=pick([15,18,20,20,22,25,25,25,28,30,30,30,32,35,35,35,38,40]);
+    p.grp = i<NG?'red':(rnd()<0.45?'amber':'green'); // amber/green split is illustrative
+    for(const [k] of CLS){p.st[k]='on'; p.rx[k]=pick(ONTX[k]);}
+    if(p.grp==='red'){
+      const n=rnd()<0.62?1:(rnd()<0.8?2:3);
+      const ks=shuffle(['ras','bb','mra']).slice(0,n); // gaps: the study's 3 assessed classes
+      ks.forEach(k=>{p.st[k]='gap';p.q[k]=(k==='bb'&&rnd()<0.35)?'On metoprolol tartrate (does not count). No documented reason found.':'Not prescribed. No documented reason found in 12 months of notes.';});
+      p.gaps=n;
+      if(rnd()<0.35){const k=pick(['ras','bb','mra','sglt2'].filter(k=>p.st[k]==='on'));if(k){const e=pick(EXC[k]);p.st[k]=e[0];p.q[k]=e[1];}}
+    } else if(p.grp==='amber'){
+      const n=rnd()<0.75?1:2;
+      shuffle(['ras','bb','mra','sglt2']).slice(0,n).forEach(k=>{const e=pick(EXC[k]);p.st[k]=e[0];p.q[k]=e[1];});
+    }
+  } else { p.ef=ri(41,72); }
+  P.push(p);
+}
+// Mrs. Delgado (the shared synthetic patient): a reduced-EF patient with one real gap
+const D=P[5];
+Object.assign(D,{id:'Mrs. Rosa Delgado',age:71,sex:'F',ef:30,grp:'red',gaps:1,delgado:true,
+  st:{ras:'on',bb:'gap',mra:'exc',sglt2:'pref'},
+  rx:{ras:'lisinopril 10 mg daily'},
+  q:{bb:'Metoprolol tartrate does not count. No documented reason.',
+     mra:'"Spironolactone discontinued due to hyperkalemia; would not rechallenge given CKD."',
+     sglt2:'"Patient declines: she had recurrent urinary tract infections on dapagliflozin in 2025 and is worried about cost."'}});
+P.forEach(p=>{p.gpos=order.indexOf(p.i)});
+const REF=P.filter(p=>p.rEF), RED=REF.filter(p=>p.grp==='red'), AMB=REF.filter(p=>p.grp==='amber'), GRN=REF.filter(p=>p.grp==='green'), OTH=P.filter(p=>!p.rEF);
+// priority for the worklist (illustrative): more gaps first, then lowest EF
+const RED_SORTED=[...RED].sort((a,b)=>b.gaps-a.gaps||a.ef-b.ef||a.i-b.i);
+const REF_GRID=shuffle([...REF]); // position in step-2 grid
+// ghosts: what structured data alone would also flag (every patient with a documented exception)
+const GH=AMB.map(p=>({p,x:0,y:0,sx:0,sy:0,tx:0,ty:0,t0:0,dur:1,a:0,ta:0}));
+
+/* ---------------- canvas ---------------- */
+const cv=document.getElementById('c'), cx=cv.getContext('2d');
+let W=0,H=0,DPR=1,V={x:0,y:0,w:0,h:0},portrait=false,S=4,labels=[];
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const COL={amber:[255,176,32],red:[255,77,77],green:[74,222,128],gray:[120,120,120],cyan:[34,211,238],white:[242,242,242]};
+const grpCol=g=>g==='red'?COL.red:g==='amber'?COL.amber:g==='green'?COL.green:COL.gray;
+
+function gridFit(n,rect){ // best columns for n dots in rect
+  let best={s:0,c:1};
+  for(let c=1;c<=Math.min(n,400);c++){const r=Math.ceil(n/c);const s=Math.min(rect.w/c,rect.h/r);if(s>best.s)best={s,c};}
+  const rows=Math.ceil(n/best.c);
+  return {s:best.s,c:best.c,x0:rect.x+(rect.w-best.c*best.s)/2,y0:rect.y+(rect.h-rows*best.s)/2};
+}
+const gpos=(g,k)=>[g.x0+(k%g.c+.5)*g.s, g.y0+(Math.floor(k/g.c)+.5)*g.s];
+
+let step=0, filt='all', fcls='any', tNow=0;
+const STEPS=8;
+function move(o,x,y,delay,dur){o.sx=o.x;o.sy=o.y;o.tx=x;o.ty=y;o.t0=tNow+(reduce?0:delay);o.dur=reduce?250:dur;}
+function setP(p,x,y,a,r,col,delay,dur){move(p,x,y,delay||0,dur||1300);p.ta=a;p.tr=r;p.tc=col;}
+
+function layout(instant){
+  labels=[];
+  const v=V, d0=Math.min(v.w,v.h);
+  if(step===0){
+    const cxv=v.x+v.w/2, cyv=v.y+v.h/2;
+    P.forEach(p=>setP(p,cxv,cyv,0,0,COL.amber,0,900));
+    setP(D,cxv,cyv,1,Math.max(9,d0*0.022),COL.amber,0,900);
+  }
+  else if(step===1 || step===7){
+    const rect=step===7?{x:10,y:40,w:W-20,h:H-110}:v;
+    const g=gridFit(N,rect); S=g.s;
+    P.forEach(p=>{const [x,y]=gpos(g,p.gpos);
+      const col=step===7?(p.rEF?grpCol(p.grp):COL.gray):COL.amber;
+      const a=step===7?(p.rEF?.55:.25):.85;
+      setP(p,x,y,a,g.s*.36,col,step===1?p.gpos*(1500/N):(p.gpos%97)*6,step===1?1100:1400);});
+    if(step===1){D.tr=Math.max(g.s*.6,4);D.ta=1;}
+  }
+  else if(step===2){
+    let main,strip;
+    if(portrait){main={x:v.x,y:v.y+22,w:v.w,h:v.h*.66-22};strip={x:v.x,y:v.y+v.h*.72+20,w:v.w,h:v.h*.28-20};}
+    else{main={x:v.x,y:v.y+30,w:v.w*.68,h:v.h-30};strip={x:v.x+v.w*.74,y:v.y+56,w:v.w*.26,h:v.h-56};}
+    const g=gridFit(NR,main), g2=gridFit(N-NR,strip); S=g.s;
+    REF_GRID.forEach((p,k)=>{const [x,y]=gpos(g,k);setP(p,x,y,.92,g.s*.36,COL.amber,k*0.6,1300)});
+    OTH.forEach((p,k)=>{const [x,y]=gpos(g2,k);setP(p,x,y,.22,g2.s*.33,COL.gray,(k%300)*1.5,1500)});
+    labels.push({x:g.x0,y:g.y0-10,big:fmt(NR)+' reduced EF',small:'EF 40% or less · preliminary',col:'#FFB020',w:main.w});
+    labels.push({x:g2.x0,y:g2.y0-10,big:fmt(N-NR)+' other HF',small:'not reduced EF · not assessed here',col:'#9a9a9a',w:strip.w,sz:.8});
+  }
+  else if(step>=3 && step<=5){
+    let main,strip;
+    if(portrait){main={x:v.x,y:v.y,w:v.w,h:v.h*.84};strip={x:v.x+v.w*.15,y:v.y+v.h*.9,w:v.w*.7,h:v.h*.1};}
+    else{main={x:v.x,y:v.y,w:v.w*.78,h:v.h};strip={x:v.x+v.w*.84,y:v.y+v.h*.3,w:v.w*.16,h:v.h*.7};}
+    const gap=portrait?24:Math.max(40,main.w*.07), labH=portrait?62:80;
+    const nL=NG+GH.length, nRt=NOK, nMax=Math.max(nL,nRt);
+    let best={s:0,c:1};
+    for(let c=4;c<=120;c++){const s=Math.min((main.w-gap)/(2*c),(main.h-labH)/Math.ceil(nMax/c));if(s>best.s)best={s,c};}
+    const s=best.s,c=best.c, bw=c*s, x0=main.x+(main.w-(2*bw+gap))/2, base=main.y+main.h;
+    S=s;
+    const at=(bx,k)=>[bx+(k%c+.5)*s, base-(Math.floor(k/c)+.5)*s];
+    const redL=x0, okL=x0+bw+gap;
+    RED.forEach((p,k)=>{const [x,y]=at(redL,k);setP(p,x,y,1,s*.36,COL.red,k*1.2,1300)});
+    const OK=AMB.concat(GRN);
+    OK.forEach((p,k)=>{const [x,y]=at(okL,k);setP(p,x,y,.95,s*.36,grpCol(p.grp),k*0.8,1300)});
+    const g2=gridFit(N-NR,strip);
+    OTH.forEach((p,k)=>{const [x,y]=gpos(g2,k);setP(p,x,y,step===3?.2:.12,g2.s*.33,COL.gray,0,1300)});
+    const redTop=base-Math.ceil(NG/c)*s, okTop=base-Math.ceil(NOK/c)*s, ghTop=base-Math.ceil(nL/c)*s;
+    GH.forEach((g,k)=>{g.x=g.p.x;g.y=g.p.y;
+      if(step===4){const [x,y]=at(redL,NG+k);g.sx=g.p.tx;g.sy=g.p.ty;g.tx=x;g.ty=y;g.t0=tNow+(reduce?0:900+k*3);g.dur=reduce?250:1200;g.ta=.95;}
+      else{g.sx=g.tx=g.p.tx;g.sy=g.ty=g.p.ty;g.ta=0;g.t0=tNow;g.dur=1;}
+    });
+    const lw=bw+gap*.6;
+    labels.push({x:redL,y:(step===4?ghTop:redTop)-12,big:step===4?'≈'+NG+' real':'≈'+NG+' · 36%',small:step===4?'+ dashed ghosts: would be wrongly flagged without reading notes (illustrative)':'≥1 gap, no documented exception',col:'#FF4D4D',w:lw});
+    labels.push({x:okL,y:okTop-12,big:fmt(NOK)+' · 64%',small:'on therapy, or documented exception',col:'#4ADE80',w:lw});
+    if(step===4) labels.push({x:redL,y:redTop-4,small:'',ghostline:true,w:bw});
+    labels.push({x:g2.x0,y:g2.y0-8,small:fmt(N-NR)+' other HF',col:'#777',w:strip.w,sz:.75});
+    if(step===5) applyFilter();
+  }
+  else if(step===6){
+    let q,list;
+    if(portrait){q={x:v.x+8,y:v.y+4,w:v.w-16,h:v.h*.3};list={x:v.x,y:v.y+v.h*.33,w:v.w,h:v.h*.67};}
+    else{q={x:v.x,y:v.y+v.h*.08,w:v.w*.36,h:v.h*.84};list={x:v.x+v.w*.42,y:v.y,w:v.w*.58,h:v.h};}
+    placeWorklist(list);
+    const nk=wlRows.length, g=gridFit(NG-nk,q); S=g.s;
+    const wb=WL.getBoundingClientRect();
+    RED_SORTED.forEach((p,k)=>{
+      if(k<nk){const row=wlRows[k];setP(p,portrait?V.x+5:wb.left-16,wb.top+row.offsetTop+row.offsetHeight/2,1,Math.max(4,g.s*.42),COL.red,300+k*120,1300);}
+      else{const [x,y]=gpos(g,k-nk);setP(p,x,y,1,g.s*.36,COL.red,k*2,1300);}});
+    REF.filter(p=>p.grp!=='red').concat(OTH).forEach(p=>{p.ta=0;});
+    labels.push({x:g.x0,y:g.y0-10,big:'',small:'the other ≈400 red dots, next in line',col:'#FF4D4D',w:q.w,sz:.85});
+  }
+  if(instant){P.forEach(p=>{p.x=p.tx;p.y=p.ty;p.t0=0;p.a=p.ta;p.r=p.tr;p.c=p.tc.slice()});GH.forEach(g=>{g.x=g.tx;g.y=g.ty;g.t0=0;g.a=g.ta})}
+}
+
+/* ---------------- filters (step 5) ---------------- */
+function matches(p){
+  if(!p.rEF) return false;
+  const ks=fcls==='any'?['ras','bb','mra']:[fcls];
+  if(filt==='gaps') return ks.some(k=>p.st[k]==='gap');
+  if(filt==='exc') return ks.some(k=>p.st[k]==='exc'||p.st[k]==='pref');
+  return fcls==='any'?true:ks.some(k=>p.st[k]!=='on');
+}
+function applyFilter(){
+  let n=0;
+  REF.forEach(p=>{const m=matches(p); if(m)n++; p.ta=m?1:.1;});
+  const el=document.getElementById('fcount');
+  if(el) el.textContent='Showing '+fmt(n)+' of '+fmt(NR)+' · breakdown synthetic';
+}
+
+/* ---------------- worklist (step 6) ---------------- */
+const WL=document.getElementById('worklist');
+let wlRows=[];
+function placeWorklist(r){
+  const nrows=portrait?(V.h<380?3:4):7;
+  const nm={ras:'ACEi/ARB/ARNI',bb:'Beta blocker',mra:'MRA',sglt2:'SGLT2i'};
+  let h='<h3>'+ico('list','#FF4D4D')+'Worklist for clinical reassessment</h3>'+
+    '<div class="sub">To: HF clinic · ranked by number of gaps, then lowest EF <span class="pill ill">illustrative</span> <span class="pill syn">synthetic</span></div>';
+  RED_SORTED.slice(0,nrows).forEach((p,k)=>{
+    const gs=Object.keys(p.st).filter(k=>p.st[k]==='gap').map(k=>'<span class="gchip">'+nm[k]+' gap</span>').join('');
+    h+='<div class="wrow" style="transition-delay:'+(0.7+k*0.12)+'s"><div class="rk">'+(k+1)+'</div><div class="who">'+p.id+' <small>· '+p.age+' y · EF '+p.ef+'%</small><br>'+gs+'</div>'+
+       '<div class="act">'+IC.clin+(portrait?'review':'clinician review')+'</div></div>';
+  });
+  h+='<div class="wmore">+ '+(NG-nrows)+' more · each line carries the quote the agent relied on</div>';
+  h+='<div class="decide">'+ico('agent','#22D3EE')+'<span><span style="color:#22D3EE">The agent finds;</span> <span style="color:#4ADE80">the clinician decides.</span></span></div>';
+  WL.innerHTML=h;
+  const ins=portrait?14:0;
+  WL.style.left=(r.x+ins)+'px'; WL.style.top=r.y+'px'; WL.style.width=(r.w-ins)+'px'; WL.style.maxHeight='none';
+  wlRows=[...WL.querySelectorAll('.wrow')];
+  while(wlRows.length>2 && WL.offsetHeight>r.h){wlRows.pop().remove();}
+  WL.querySelector('.wmore').innerHTML='+ '+(NG-wlRows.length)+' more · each line carries the quote the agent relied on';
+}
+
+/* ---------------- text per step ---------------- */
+const PRE='<span class="pill pre">preliminary · Yale 2025 · ACC.27 abstract</span>';
+const ILL='<span class="pill ill">illustrative</span>';
+const TXT=[
+ ()=>`<div class="kicker">${IC.heart} One patient</div>
+  <h1>Mrs. Delgado: one chart, five answers.</h1>
+  <p>Is she on each guideline heart-failure drug, is there a documented reason she isn't, or is it a real gap?</p>
+  <p>One chart review. A clinician takes <b class="a">about 15 minutes</b>. ${ILL}</p>
+  <p class="small hide-p">Her five answers orbit her: HF type, plus four drug classes (GDMT: guideline-directed medical therapy).</p>`,
+ ()=>`<div class="kicker">${IC.grid} Every patient</div>
+  <h1>Now do it for every heart-failure patient.</h1>
+  <div class="counter"><span id="cnt">1</span><small>patients hospitalized, 2025</small></div>
+  <p>${PRE}</p>
+  <div class="compare">
+    <div class="lab">${ico('clock','#F2F2F2')}Manual review</div><div class="bar"><i class="man"></i><span>≈ 1,020 clinician-hours</span></div>
+    <div class="lab">${ico('agent','#22D3EE')}Agents</div><div class="bar"><i class="ag"></i><span class="out">overnight</span></div>
+  </div>
+  <p class="small">4,078 × 15 min ≈ 1,020 hours: about six months of one full-time reviewer. Agents run overnight on the hospital's own computers. ${ILL}</p>`,
+ ()=>`<div class="kicker">${IC.mag} Sort</div>
+  <h1>${fmt(NR)} have reduced EF.</h1>
+  <p><b class="a">HFrEF</b>: heart failure with ejection fraction 40% or less. The agent takes the most recent echo, not the stale value in the problem list.</p>
+  <p>${PRE}</p>
+  <p class="small hide-p">The other ${fmt(N-NR)} drift aside: they are not part of this question.</p>`,
+ ()=>`<div class="kicker">${IC.note} Read the notes</div>
+  <h1>About 400 have a real gap.</h1>
+  <p><b class="r">36%</b> of ${fmt(NR)} (≈${NG}) have at least one gap across the 3 assessed GDMT classes (ACEi/ARB/ARNI, beta blocker, MRA) <b>without a documented exception</b>. ${PRE}</p>
+  <div class="legend"><span><i class="sw" style="background:#FF4D4D"></i>real gap</span><span><i class="sw" style="background:#4ADE80"></i>on therapy</span><span><i class="sw" style="background:#FFB020"></i>documented exception</span></div>
+  <p class="small">A documented exception, like Mrs. Delgado's MRA (stopped for high potassium) or SGLT2 inhibitor (she declined), is <b>not poor care</b>. Finding that sentence is why the agent reads the notes. Green/amber split ${ILL}</p>`,
+ ()=>`<div class="kicker">${IC.list} Without reading notes</div>
+  <h1>Structured data alone would cry wolf.</h1>
+  <p>The medication list shows <i>that</i> a drug is missing, never <i>why</i>. Count every missing drug as a gap and patients with good reasons get flagged too.</p>
+  <div class="legend"><span><i class="sw ghost"></i>would be wrongly flagged without reading notes ${ILL}</span></div>
+  <p class="small">In the study, structured data alone got gap answers right 42–70% of the time; agents 96–98%. ${PRE}</p>`,
+ ()=>`<div class="kicker">${IC.mag} Explore</div>
+  <h1>Every dot is a person.</h1>
+  <p>Hover or tap any dot. <span class="hide-p">The cards are </span><span class="pill syn">synthetic</span> <span class="hide-p">: invented by a fixed recipe, not real people.</span></p>
+  <div class="filters">
+    <div class="frow"><span class="fl">Show</span><button class="chip on" data-f="all">all</button><button class="chip red" data-f="gaps">gaps</button><button class="chip amb" data-f="exc">exceptions</button></div>
+    <div class="frow"><span class="fl">Drug</span><button class="chip on" data-c="any">any</button><button class="chip" data-c="ras">ACEi/ARB</button><button class="chip" data-c="bb">beta blocker</button><button class="chip" data-c="mra">MRA</button></div>
+  </div>
+  <div id="fcount"></div>`,
+ ()=>`<div class="kicker">${IC.clin} For the quality team</div>
+  <h1>Not just a score. A worklist.</h1>
+  <div class="unpack"><b>Quality measure</b>: a rule for what good care looks like, counted across many patients. <span class="hide-p">Example: the share of eligible HFrEF patients on a beta blocker.</span></div>
+  <div class="unpack"><b>Worklist</b>: a to-do list of named patients for a team to look at.</div>
+  <p class="hide-p">The red dots line up into a ranked list for clinical reassessment, sent to the HF clinic. A clinician checks each one, with the quote in hand.</p>`,
+ ()=>``
+];
+
+/* ---------------- step control ---------------- */
+const panel=document.getElementById('panel'), pin=document.getElementById('pinner'), take=document.getElementById('take'), card=document.getElementById('card');
+const dotsEl=document.getElementById('dots');
+for(let i=0;i<STEPS;i++){const d=document.createElement('i');d.title='Step '+(i+1);d.onclick=()=>go(i);dotsEl.appendChild(d);}
+let cntTimer=null;
+function go(n){
+  n=Math.max(0,Math.min(STEPS-1,n));
+  step=n; filt='all'; fcls='any'; hideCard();
+  document.getElementById('stepind').textContent=(n+1)+' / '+STEPS;
+  [...dotsEl.children].forEach((d,i)=>d.classList.toggle('on',i===n));
+  document.getElementById('next').style.visibility=n===STEPS-1?'hidden':'visible';
+  pin.innerHTML=TXT[n]();
+  panel.classList.add('fade'); requestAnimationFrame(()=>requestAnimationFrame(()=>panel.classList.remove('fade')));
+  take.classList.toggle('show',n===7);
+  panel.style.display=n===7?'none':'block';
+  WL.classList.remove('show'); if(n!==6) WL.innerHTML='';
+  measure();
+  layout(false);
+  if(n===6) requestAnimationFrame(()=>requestAnimationFrame(()=>WL.classList.add('show')));
+  if(n===1){
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{const m=pin.querySelector('i.man'),a=pin.querySelector('i.ag');if(m)m.style.width='100%';if(a)a.style.width='1.2%';}));
+    const t0=performance.now(), el=()=>document.getElementById('cnt');
+    clearInterval(cntTimer); cntTimer=setInterval(()=>{const e=el(); if(!e){clearInterval(cntTimer);return;}
+      const f=Math.min(1,(performance.now()-t0)/(reduce?200:2200)); e.textContent=fmt(Math.max(1,Math.round(N*f*f*(3-2*f)))); if(f>=1)clearInterval(cntTimer);},40);
+  }
+  if(n===5){
+    pin.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filt=b.dataset.f;pin.querySelectorAll('[data-f]').forEach(x=>x.classList.toggle('on',x===b));applyFilter();});
+    pin.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{fcls=b.dataset.c;pin.querySelectorAll('[data-c]').forEach(x=>x.classList.toggle('on',x===b));applyFilter();});
+    applyFilter();
+  }
+}
+function measure(){
+  W=innerWidth;H=innerHeight;DPR=Math.min(2,devicePixelRatio||1);
+  cv.width=W*DPR;cv.height=H*DPR;cx.setTransform(DPR,0,0,DPR,0,0);
+  portrait=W<760||W/H<1.05;
+  document.body.classList.toggle('portrait',portrait);
+  const bottom=portrait?72:84;
+  if(!portrait){
+    const pw=Math.min(560,Math.max(380,W*.34));
+    panel.style.cssText='left:'+Math.round(W*.035)+'px;top:'+Math.round(Math.max(64,H*.1))+'px;width:'+pw+'px;';
+    const vx=W*.035+pw+W*.04;
+    V={x:vx,y:Math.max(70,H*.1),w:W-vx-W*.035,h:H-Math.max(70,H*.1)-bottom};
+  } else {
+    panel.style.cssText='left:14px;right:14px;top:38px;';
+    const ph=panel.offsetHeight;
+    const top=38+ph+14;
+    V={x:12,y:top,w:W-24,h:Math.max(160,H-top-bottom)};
+  }
+}
+let rz=null;
+addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{measure();layout(true);},120);});
+
+document.getElementById('next').onclick=()=>go(step+1);
+document.getElementById('prev').onclick=()=>go(step-1);
+addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();go(step+1);}
+  else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();go(step-1);}
+  else if(e.key==='r'||e.key==='R'){go(0);}
+  else if(e.key==='f'||e.key==='F'){if(!document.fullscreenElement)document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{});else document.exitFullscreen();}
+});
+
+/* ---------------- hover / tap card ---------------- */
+let hov=null;
+function findAt(mx,my){
+  if(step===7) return null;
+  let best=null,bd=Math.max(S*.75,step===0?30:7); bd*=bd;
+  for(const p of P){ if(p.a<.3 && p!==D) continue; if(p.a<.05) continue;
+    const dx=p.x-mx,dy=p.y-my,d=dx*dx+dy*dy; if(d<bd){bd=d;best=p;} }
+  return best;
+}
+const LBL={on:'on therapy',gap:'GAP',exc:'medical exception',pref:'patient preference'};
+function showCard(p,mx,my){
+  hov=p;
+  let h='<div class="ch">'+(p.delgado?'the shared synthetic patient':'synthetic patient · not a real person')+'</div>';
+  h+='<div class="nm">'+(p.delgado?p.id:'Patient '+p.id)+'</div>';
+  if(!p.rEF){
+    h+='<div class="meta">'+p.age+' y · '+p.sex+' · EF '+p.ef+'%</div><div class="cr" style="grid-template-columns:1fr"><span class="cn">Heart failure without reduced EF. Not part of this gap question.</span></div>';
+  } else {
+    h+='<div class="meta">'+p.age+' y · '+p.sex+' · EF '+p.ef+'% on most recent echo · HFrEF</div>';
+    CLS.forEach(([k,n])=>{const s=p.st[k];
+      const cls=s==='on'?'on':s==='gap'?'gap':'exc';
+      let extra='';
+      if(s==='on') extra=p.rx[k]?'<span class="q" style="color:#9a9a9a">'+p.rx[k]+'</span>':'';
+      else extra='<span class="q'+(s==='gap'?' r':'')+'">'+p.q[k]+'</span>';
+      h+='<div class="cr"><span class="cn">'+n+'</span><span><span class="st '+cls+'">'+LBL[s]+'</span>'+extra+'</span></div>';});
+    h+='<div class="ft">'+(p.grp==='red'?'Goes on the worklist for a clinician to reassess.':'No real gap: nothing to flag.')+'</div>';
+  }
+  card.innerHTML=h; card.classList.add('show');
+  const cw=card.offsetWidth,ch=card.offsetHeight;
+  let x=mx+16,y=my+16; if(x+cw>W-8)x=mx-cw-16; if(x<8)x=Math.max(8,(W-cw)/2); if(y+ch>H-8)y=Math.max(8,my-ch-16);
+  card.style.left=x+'px';card.style.top=y+'px';
+}
+function hideCard(){hov=null;card.classList.remove('show');}
+cv.addEventListener('pointermove',e=>{if(e.pointerType==='touch')return;const p=findAt(e.clientX,e.clientY);if(p)showCard(p,e.clientX,e.clientY);else hideCard();cv.style.cursor=p?'pointer':'default';});
+cv.addEventListener('pointerdown',e=>{const p=findAt(e.clientX,e.clientY);if(p)showCard(p,e.clientX,e.clientY);else hideCard();});
+cv.addEventListener('pointerleave',e=>{if(e.pointerType!=='touch')hideCard();});
+
+/* ---------------- render loop ---------------- */
+const ease=t=>t<0?0:t>1?1:1-Math.pow(1-t,3);
+function wrap(text,maxw){const ws=text.split(' ');const out=[];let l='';for(const w of ws){const t=l?l+' '+w:w;if(cx.measureText(t).width>maxw&&l){out.push(l);l=w;}else l=t;}if(l)out.push(l);return out;}
+const ORB=[['HF type','HFrEF','#4ADE80'],['ACEi/ARB','on therapy','#4ADE80'],['Beta blocker','GAP','#FF4D4D'],['MRA','exception','#FFB020'],['SGLT2i','declined','#FFB020']];
+let labA=0, lastStep=-1;
+function frame(ts){
+  tNow=ts;
+  cx.clearRect(0,0,W,H);
+  if(lastStep!==step){labA=0;lastStep=step;}
+  labA=Math.min(1,labA+(reduce?1:0.02));
+  // particles
+  for(const p of P){
+    const t=ease((ts-p.t0)/p.dur);
+    p.x=p.sx+(p.tx-p.sx)*t; p.y=p.sy+(p.ty-p.sy)*t;
+    p.a+=(p.ta-p.a)*0.08; p.r+=(p.tr-p.r)*0.1;
+    const c=p.c,tc=p.tc; c[0]+=(tc[0]-c[0])*.08;c[1]+=(tc[1]-c[1])*.08;c[2]+=(tc[2]-c[2])*.08;
+    if(p.a<.01||p.r<.3) continue;
+    cx.fillStyle='rgba('+(c[0]|0)+','+(c[1]|0)+','+(c[2]|0)+','+p.a.toFixed(3)+')';
+    if(p.r<2.2){cx.fillRect(p.x-p.r,p.y-p.r,p.r*2,p.r*2);}
+    else{cx.beginPath();cx.arc(p.x,p.y,p.r,0,6.2832);cx.fill();}
+  }
+  // ghosts
+  if(step===4||GH.some(g=>g.a>.02)){
+    cx.setLineDash([2,2]);cx.lineWidth=1.2;
+    for(const g of GH){
+      g.a+=(g.ta-g.a)*.1; if(g.a<.02) continue;
+      const t=ease((ts-g.t0)/g.dur); const x=g.sx+(g.tx-g.sx)*t, y=g.sy+(g.ty-g.sy)*t;
+      cx.strokeStyle='rgba(255,77,77,'+(g.a*(ts<g.t0?0:1)).toFixed(3)+')';
+      const r=Math.max(1.6,S*.34);
+      cx.beginPath();cx.arc(x,y,r,0,6.2832);cx.stroke();
+    }
+    cx.setLineDash([]);
+  }
+  // Delgado glow + label
+  if(step<=6 && D.a>.05){
+    const r=D.r, pulse=1+0.15*Math.sin(ts/400);
+    const gr=cx.createRadialGradient(D.x,D.y,0,D.x,D.y,r*5*pulse);
+    gr.addColorStop(0,'rgba(255,176,32,.55)');gr.addColorStop(1,'rgba(255,176,32,0)');
+    cx.fillStyle=gr;cx.beginPath();cx.arc(D.x,D.y,r*5*pulse,0,6.2832);cx.fill();
+    cx.strokeStyle='rgba(255,255,255,.9)';cx.lineWidth=1.5;cx.beginPath();cx.arc(D.x,D.y,Math.max(r+2.5,4.5),0,6.2832);cx.stroke();
+    if(step>=1&&step<=5){
+      cx.font='600 '+(portrait?11:13)+'px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif';
+      const tw=cx.measureText('Mrs. Delgado').width;
+      let lx=D.x+r+14, ly=D.y+5; if(lx+tw+8>W-6) lx=D.x-r-14-tw;
+      const lh=portrait?17:20;cx.fillStyle='rgba(5,7,10,.94)';cx.strokeStyle='rgba(255,176,32,.7)';cx.lineWidth=1;rr(lx-7,ly-lh+5,tw+14,lh,lh/2);cx.fill();cx.stroke();
+      cx.fillStyle='rgba(255,176,32,'+Math.min(1,labA*1.5)+')';cx.fillText('Mrs. Delgado',lx,ly);
+    }
+  }
+  // step 0 orbit
+  if(step===0){
+    const cxv=D.x, cyv=D.y; const fs=portrait?12:16;
+    cx.font='600 '+fs+'px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif';
+    let maxw=0; ORB.forEach(o=>{maxw=Math.max(maxw,cx.measureText(o[0]+'  '+o[1]).width)});
+    const pw=maxw+24, ph=fs+16;
+    const rx=Math.max(20,Math.min(V.w/2-pw/2-6, V.h*0.55)), ry=Math.min(V.h/2-ph/2-6, portrait?V.h*.4:rx*.75);
+    const rot=ts/(reduce?60000:9000);
+    cx.strokeStyle='rgba(255,176,32,.18)';cx.lineWidth=1;cx.beginPath();cx.ellipse(cxv,cyv,rx,ry,0,0,6.2832);cx.stroke();
+    ORB.forEach((o,k)=>{
+      const ang=rot+k*6.2832/5 - 1.5708; const x=cxv+Math.cos(ang)*rx, y=cyv+Math.sin(ang)*ry;
+      const al=Math.min(1,labA*2-k*0.15); if(al<=0) return;
+      cx.globalAlpha=al;
+      cx.strokeStyle='rgba(255,176,32,.25)';cx.beginPath();cx.moveTo(cxv,cyv);cx.lineTo(x,y);cx.stroke();
+      cx.fillStyle='#0b0d11';cx.strokeStyle=o[2];cx.lineWidth=1.5;
+      rr(x-pw/2,y-ph/2,pw,ph,ph/2);cx.fill();cx.stroke();
+      const w1=cx.measureText(o[0]+'  ').width, w2=cx.measureText(o[1]).width, sx=x-(w1+w2)/2;
+      cx.fillStyle='#cfcfcf';cx.fillText(o[0],sx,y+fs*.36);
+      cx.fillStyle=o[2];cx.fillText(o[1],sx+w1,y+fs*.36);
+      cx.globalAlpha=1;
+    });
+    cx.font='700 '+(portrait?14:18)+'px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif';
+    const t1='Mrs. Delgado, 71', tw=cx.measureText(t1).width;
+    const ny=cyv+D.r+(portrait?26:34);cx.fillStyle='rgba(5,7,10,.85)';cx.fillRect(cxv-tw/2-6,ny-(portrait?14:18),tw+12,portrait?20:25);
+    cx.fillStyle='#FFB020';cx.fillText(t1,cxv-tw/2,ny);
+  }
+  // block labels
+  cx.globalAlpha=labA;
+  for(const L of labels){
+    const sz=L.sz||1; let y=L.y;
+    if(L.ghostline){ continue; }
+    const big=Math.round((portrait?16:24)*sz), sm=Math.round((portrait?11:14)*sz);
+    cx.font='500 '+sm+'px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif';
+    const lines=L.small?wrap(L.small,L.w):[];
+    for(let i=lines.length-1;i>=0;i--){cx.fillStyle='#a8a8a8';cx.fillText(lines[i],L.x,y);y-=sm+4;}
+    if(L.big){cx.font='700 '+big+'px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif';cx.fillStyle=L.col;cx.fillText(L.big,L.x,y-2);}
+  }
+  cx.globalAlpha=1;
+  // worklist connectors
+  if(step===6 && WL.classList.contains('show') && wlRows.length){
+    const wb=WL.getBoundingClientRect();
+    wlRows.forEach((row,k)=>{const p=RED_SORTED[k]; const y=wb.top+row.offsetTop+row.offsetHeight/2;
+      if(Math.abs(p.y-y)>2) return;
+      cx.strokeStyle='rgba(255,77,77,.6)';cx.lineWidth=1.2;cx.beginPath();cx.moveTo(p.x+p.r+2,p.y);cx.lineTo(wb.left+(portrait?12:14),y);cx.stroke();
+      cx.strokeStyle='rgba(255,255,255,.85)';cx.beginPath();cx.arc(p.x,p.y,p.r+2.5,0,6.2832);cx.stroke();
+    });
+  }
+  requestAnimationFrame(frame);
+}
+function rr(x,y,w,h,r){cx.beginPath();cx.moveTo(x+r,y);cx.arcTo(x+w,y,x+w,y+h,r);cx.arcTo(x+w,y+h,x,y+h,r);cx.arcTo(x,y+h,x,y,r);cx.arcTo(x,y,x+w,y,r);cx.closePath();}
+
+go(0); layout(true); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

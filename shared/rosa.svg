@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Rosa Delgado, synthetic patient">
+  <defs><clipPath id="c"><circle cx="100" cy="100" r="100"/></clipPath></defs>
+  <g clip-path="url(#c)">
+    <circle cx="100" cy="100" r="100" fill="#26262a"/>
+    <path d="M58 118 C50 60 76 38 100 38 C124 38 150 60 142 118 Z" fill="#8e8e93"/>
+    <circle cx="100" cy="84" r="34" fill="#d1d1d6"/>
+    <path d="M66 82 C66 56 84 46 100 46 C116 46 134 56 134 82 C122 74 108 62 100 58 C92 66 78 76 66 82 Z" fill="#8e8e93"/>
+    <path d="M36 200 C42 150 70 128 100 128 C130 128 158 150 164 200 Z" fill="#d1d1d6"/>
+  </g>
+</svg>

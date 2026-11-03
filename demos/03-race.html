@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<!--
+  QCOR 2026 · Demo 03 · Chatbot vs Agent: a race
+  The one idea: the fastest answer is not the right one. A chatbot answers from what it was handed;
+  an agent goes and looks (tools) and follows a protocol (skill). "The chatbot answers. The agent investigates."
+  Steps: 0 the question · 1 the race · 2 the check against two clinicians' review · 3 what if we paste the
+         whole chart? · 4 the real (preliminary) study numbers · 5 takeaway
+  Controls: Right arrow / Space / "Next" advance; Left arrow back; R restart; F fullscreen.
+            "Rematch" re-runs the race; the toggle sets what the chatbot is given.
+  Patient and notes are synthetic. No PHI.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>03 · Chatbot vs Agent: a race · QCOR 2026</title>
+<style>
+:root{
+  --bg:#05070a; --fg:#F2F2F2; --dim:#8C8C8C; --line:#2a2a2a;
+  --amber:#FFB020; --cyan:#22D3EE; --green:#4ADE80; --pink:#FF4FA3; --red:#FF4D4D;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,"Helvetica Neue",Arial,sans-serif;
+  --mono:"SF Mono",ui-monospace,Menlo,Consolas,"DejaVu Sans Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:var(--sans);overflow:hidden}
+button{font-family:inherit}
+#stage{position:absolute;left:0;top:0;width:1600px;height:900px;transform-origin:0 0;display:flex;flex-direction:column;padding:0 36px}
+svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.15em}
+
+/* header */
+header{height:54px;display:flex;align-items:center;gap:18px;flex:none}
+header a.back{color:var(--dim);text-decoration:none;font-size:14px}
+header a.back:hover{color:var(--fg)}
+header h1{font-size:18px;font-weight:600;margin:0;letter-spacing:.2px}
+header h1 span{color:var(--dim);font-weight:400}
+#dots{margin-left:auto;display:flex;gap:8px;align-items:center;font-size:13px;color:var(--dim)}
+#dots i{width:9px;height:9px;border-radius:50%;background:var(--line);display:inline-block;cursor:pointer}
+#dots i.on{background:var(--fg)}
+#dots i.done{background:#555}
+
+/* question bar */
+#qbar{height:66px;flex:none;display:flex;align-items:center;gap:16px;border:1px solid var(--line);border-radius:12px;padding:0 20px;background:#0b0e12}
+#qbar .who{color:var(--amber);font-size:15px;display:flex;align-items:center;gap:8px;white-space:nowrap}
+#qbar .q{font-size:23px;font-weight:500}
+#qbar .q em{font-style:normal;color:var(--dim);font-size:15px;margin-right:8px}
+
+main{flex:1;position:relative;min-height:0;margin-top:14px}
+.scene{position:absolute;inset:0;transition:opacity .5s}
+.scene.off{opacity:0;pointer-events:none}
+
+/* lanes */
+#race{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.lane{border:1px solid var(--line);border-radius:14px;background:#080a0d;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.lane.chat{border-color:#3a3a3a}
+.lane.agent{border-color:#12434d}
+.lhead{height:58px;flex:none;display:flex;align-items:center;gap:12px;padding:0 18px;border-bottom:1px solid var(--line)}
+.lhead .ic{font-size:30px;display:flex}
+.lhead .t{font-size:19px;font-weight:700;letter-spacing:.5px}
+.lhead .t small{display:block;font-size:13px;font-weight:400;color:var(--dim);letter-spacing:0}
+.chat .lhead .ic{color:#d9d9d9}
+.agent .lhead .ic,.agent .lhead .t b{color:var(--cyan)}
+.lhead .right{margin-left:auto;display:flex;align-items:center;gap:14px}
+.clock{font-family:var(--mono);font-size:20px;color:var(--dim);min-width:92px;text-align:right}
+.flag{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;opacity:0;transform:translateY(-6px);transition:all .35s}
+.flag.on{opacity:1;transform:none}
+.flag svg{font-size:24px}
+.chat .flag{color:var(--fg)}
+.agent .flag{color:var(--cyan)}
+.score{font-size:46px;font-weight:800;line-height:1;display:none;font-variant-numeric:tabular-nums}
+.score small{font-size:22px;color:var(--dim);font-weight:600}
+.score.on{display:block;animation:pop .5s}
+@keyframes pop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
+
+.sub{height:42px;flex:none;display:flex;align-items:center;gap:10px;padding:0 18px;font-size:13px;color:var(--dim);border-bottom:1px solid #161616}
+.seg{display:inline-flex;border:1px solid #3a3a3a;border-radius:20px;overflow:hidden}
+.seg button{background:none;border:0;color:var(--dim);font-size:13px;padding:6px 12px;cursor:pointer}
+.seg button.on{background:var(--amber);color:#000;font-weight:600}
+.badge{border:1px solid currentColor;border-radius:12px;padding:2px 9px;font-family:var(--mono);font-size:12px}
+.badge.c{color:var(--cyan)}
+.badge.w{color:var(--fg)}
+
+/* chatbot input zone */
+.czone{height:262px;flex:none;display:grid;grid-template-columns:1.05fr 1fr;gap:16px;padding:14px 18px;border-bottom:1px solid #161616}
+.paste{position:relative}
+.doc{border:1px solid var(--amber);border-radius:10px;padding:10px 12px;background:#120d03;color:#f3dcae;font-size:13px;line-height:1.4;transition:transform .5s, opacity .5s}
+.doc h4{margin:0 0 5px;font-size:12px;color:var(--amber);font-weight:600;display:flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.6px}
+.paste .doc.big{height:234px;overflow:hidden}
+.paste .stack{position:absolute;inset:0}
+.paste .stack .doc{position:absolute;left:0;right:0;height:120px;overflow:hidden;font-size:12px;padding:8px 11px}
+.paste.in .doc{animation:pastein .45s ease-out both}
+@keyframes pastein{from{transform:translateY(-30px) scale(.96);opacity:0}to{opacity:1}}
+.bubbles{display:flex;flex-direction:column;gap:10px;justify-content:flex-start}
+.bub{border-radius:14px;padding:10px 13px;font-size:15px;line-height:1.38}
+.bub.user{background:#1a1d22;align-self:flex-end;border-bottom-right-radius:4px;max-width:92%;color:#cfcfcf;font-size:13.5px}
+.bub.bot{background:#202020;border:1px solid #3a3a3a;border-bottom-left-radius:4px;min-height:44px}
+.caret::after{content:"";display:inline-block;width:8px;height:16px;background:var(--fg);margin-left:2px;vertical-align:-2px;animation:blink .7s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* agent zone */
+.azone{height:134px;flex:none;position:relative;padding:10px 18px;border-bottom:1px solid #161616}
+.amark{position:absolute;left:18px;top:44px;width:62px;height:62px;color:var(--cyan)}
+.amark svg{width:62px;height:62px}
+.amark.busy svg{animation:pulse 1s infinite}
+@keyframes pulse{50%{filter:drop-shadow(0 0 8px var(--cyan))}}
+.ehr{position:absolute;left:100px;right:18px;top:38px;height:86px;border:1px solid var(--pink);border-radius:10px;background:#12040b}
+.ehr .lab{position:absolute;right:10px;top:-11px;background:#080a0d;padding:0 6px;color:var(--pink);font-size:12px;display:flex;gap:6px;align-items:center;font-weight:600}
+.ehr .lab svg{font-size:17px}
+.tiles{position:absolute;left:10px;right:10px;top:14px;display:grid;grid-template-columns:repeat(7,1fr);gap:7px}
+.tile{height:58px;border:1px solid #3b1a2b;border-radius:7px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;color:#b58aa0;transition:all .3s;text-align:center;line-height:1.1}
+.tile svg{font-size:19px}
+.tile.read{border-color:var(--amber);color:var(--amber);background:#1d1404}
+.mag{position:absolute;top:2px;left:0;width:56px;height:56px;color:var(--cyan);opacity:0;transition:left .55s ease-in-out,opacity .3s;pointer-events:none;filter:drop-shadow(0 0 6px rgba(34,211,238,.6))}
+.mag svg{width:56px;height:56px}
+.mag.on{opacity:1}
+.chip{position:absolute;top:8px;left:92px;font-family:var(--mono);font-size:13px;color:var(--cyan);border:1px solid var(--cyan);background:#04161a;border-radius:14px;padding:3px 10px;white-space:nowrap;transition:transform .6s cubic-bezier(.5,0,.3,1),opacity .3s;opacity:0;z-index:3}
+.chip.w{color:var(--fg);border-color:var(--fg);background:#151515}
+.feed{height:128px;justify-content:flex-start;flex:none;padding:10px 18px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid #161616;overflow:hidden}
+.feed .think{font-size:13.5px;color:var(--cyan);font-family:var(--mono);min-height:18px}
+.card{border-left:3px solid var(--amber);background:#120d03;border-radius:6px;padding:6px 10px;font-size:13px;line-height:1.35;color:#f3dcae;animation:cardin .45s ease-out both}
+.card b{color:var(--amber);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;margin-right:6px}
+.card.rule{border-left-color:var(--fg);background:#141414;color:var(--fg)}
+.card.rule b{color:var(--fg)}
+.card s{color:#a58a5a}
+@keyframes cardin{from{transform:translateX(60px);opacity:0}to{opacity:1}}
+
+/* answers */
+.answers{flex:1;display:flex;flex-direction:column;padding:6px 18px 10px;min-height:0}
+.row{flex:1;display:grid;grid-template-columns:140px 1fr 176px;gap:12px;align-items:center;border-bottom:1px solid #151515;min-height:0}
+.row:last-child{border-bottom:0}
+.rl{font-size:14px;color:var(--dim)}
+.ra{font-size:16.5px;line-height:1.25}
+.ra .txt.gap{color:var(--fg)}
+.why{font-size:12.5px;color:var(--red);margin-top:2px;display:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.why.on{display:block;animation:flipin .5s both}
+.rv{font-size:14px;display:flex;align-items:center;gap:8px;opacity:0}
+.rv.on{opacity:1;animation:flipin .55s both}
+.rv svg{font-size:24px;flex:none}
+.rv.ok{color:var(--green)}
+.rv.bad{color:var(--red)}
+.rv span{color:var(--fg)}
+.rv span small{display:block;color:var(--green);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.row.wrong{background:linear-gradient(90deg,rgba(255,77,77,.08),transparent 70%)}
+@keyframes flipin{from{transform:perspective(500px) rotateX(90deg);opacity:0}to{transform:none;opacity:1}}
+.instant *, .instant{animation-duration:0s!important;transition:none!important}
+
+/* caption / unpack strip */
+#cap{height:84px;flex:none;margin-top:14px;display:flex;gap:24px;align-items:stretch}
+#cap .u{flex:1;border:1px dashed #3a3a3a;border-radius:12px;padding:10px 16px;font-size:15.5px;line-height:1.38;color:#d6d6d6;display:flex;align-items:center;gap:14px}
+#cap .u b.w{font-family:var(--mono);font-size:14px;white-space:nowrap}
+#cap .u.c b.w{color:var(--cyan)}
+#cap .lesson{flex:1;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:600;text-align:center;line-height:1.25;animation:flipin .6s both}
+#cap .lesson em{font-style:normal;color:var(--cyan)}
+#cap .lesson .g{color:var(--green)}
+#cap .lesson .r{color:var(--red)}
+
+/* controls */
+nav{height:58px;flex:none;display:flex;align-items:center;gap:12px}
+nav button{background:#111;border:1px solid #3a3a3a;color:var(--fg);border-radius:22px;padding:9px 18px;font-size:15px;cursor:pointer;display:flex;align-items:center;gap:8px}
+nav button:hover{border-color:var(--fg)}
+nav button.primary{background:var(--fg);color:#000;border-color:var(--fg);font-weight:600}
+nav .lbl{color:var(--dim);font-size:14px;margin-left:6px}
+nav .sp{flex:1}
+nav .keys{color:#555;font-size:12px}
+footer{height:26px;flex:none;color:#5c5c5c;font-size:12px;display:flex;align-items:center}
+
+/* study chart */
+#study{padding:12px 30px;display:flex;flex-direction:column}
+#study h2{margin:0;font-size:30px;font-weight:700}
+#study .meta{margin-top:6px;color:var(--dim);font-size:16px}
+#study .meta .pre{color:#000;background:var(--amber);font-weight:700;border-radius:4px;padding:1px 8px;margin-right:8px;font-size:13px;text-transform:uppercase;letter-spacing:.6px}
+.chart{margin-top:40px;position:relative;flex:none;height:460px;padding-bottom:40px}
+.crow{display:grid;grid-template-columns:330px 1fr;align-items:center;height:104px}
+.crow .nm{font-size:21px;text-align:right;padding-right:22px;line-height:1.2}
+.crow .nm small{display:block;color:var(--dim);font-size:13px}
+.track{position:relative;height:100%;margin-right:130px}
+.bar{position:absolute;top:32px;height:40px;left:0;border-radius:0 4px 4px 0;width:0;transition:width 1.1s cubic-bezier(.3,.7,.2,1)}
+.bar.fade{opacity:.18;transition:width 1.1s cubic-bezier(.3,.7,.2,1),opacity .8s}
+.band{position:absolute;top:32px;height:40px;border-radius:4px;opacity:0;transition:opacity .6s}
+.band.on{opacity:1}
+.band::before,.band::after{content:"";position:absolute;top:-8px;bottom:-8px;width:2px;background:currentColor}
+.band::before{left:0}.band::after{right:0}
+.val{position:absolute;top:36px;font-size:24px;font-weight:700;white-space:nowrap;opacity:0;transition:opacity .5s;font-variant-numeric:tabular-nums}
+.val.on{opacity:1}
+.grid{position:absolute;left:330px;right:130px;top:0;bottom:0;pointer-events:none}
+.grid i{position:absolute;top:0;bottom:28px;width:1px;background:#1e1e1e}
+.grid span{position:absolute;bottom:4px;transform:translateX(-50%);font-size:13px;color:var(--dim)}
+.note{position:absolute;font-size:14px;color:var(--dim)}
+#tip{position:fixed;pointer-events:none;background:#161616;border:1px solid #444;border-radius:8px;padding:8px 11px;font-size:13px;color:var(--fg);opacity:0;transition:opacity .15s;z-index:20;max-width:280px}
+.cap2{margin-top:6px;font-size:16px;color:var(--dim);line-height:1.45}
+
+/* takeaway */
+#take{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:30px}
+#take .big{font-size:66px;font-weight:800;line-height:1.15;letter-spacing:-.5px}
+#take .big .a{color:#d9d9d9}
+#take .big .b{color:var(--cyan)}
+#take .sm{font-size:19px;color:var(--dim);max-width:980px;line-height:1.5}
+#take a.next{color:var(--fg);font-size:19px;text-decoration:none;border:1px solid #444;border-radius:24px;padding:10px 22px}
+#take a.next:hover{border-color:var(--fg)}
+
+/* phone / narrow: fluid layout */
+@media (max-width:820px), (max-height:480px) and (max-width:1000px){
+  html,body{overflow:auto;height:auto}
+  #stage{position:static;width:auto;height:auto;transform:none!important;padding:0 12px 76px}
+  header{height:auto;padding:10px 0;flex-wrap:wrap;gap:8px}
+  header h1{font-size:16px;width:100%;order:2}
+  #qbar{height:auto;flex-direction:column;align-items:flex-start;padding:12px 14px;gap:6px}
+  #qbar .q{font-size:17px}
+  main{flex:none}
+  .scene{position:static}
+  .scene.off{display:none!important}
+  #qbar .who{white-space:normal;font-size:13px}
+  .why{white-space:normal}
+  #race{grid-template-columns:1fr;gap:14px}
+  .lhead{height:auto;min-height:56px;padding:8px 12px;flex-wrap:wrap}
+  .lhead .t{font-size:15px}
+  .clock{font-size:15px;min-width:0}
+  .score{font-size:34px}
+  .sub{height:auto;padding:8px 12px;flex-wrap:wrap}
+  .czone{grid-template-columns:1fr;height:auto;padding:12px}
+  .paste{height:150px}
+  .paste .doc.big{height:150px}
+  .paste .stack .doc{height:84px}
+  .azone{padding:8px 12px;height:156px}
+  .amark{left:8px;width:40px;height:40px;top:70px}.amark svg{width:40px;height:40px}
+  .ehr{left:54px;right:6px;height:106px}
+  .tiles{grid-template-columns:repeat(4,1fr);gap:5px;left:6px;right:6px}
+  .tile{font-size:10px;height:38px;flex-direction:row;gap:3px}
+  .tile svg{font-size:13px;flex:none}
+  .mag{width:40px;height:40px}.mag svg{width:40px;height:40px}
+  .chip{left:56px;font-size:11px}
+  .feed{height:auto;min-height:110px;padding:8px 12px}
+  .answers{padding:4px 12px 8px}
+  .row{grid-template-columns:80px 1fr;padding:7px 0}
+  .rv{grid-column:2}
+  .rv:not(.on){display:none}
+  .ra{font-size:14.5px}
+  #cap{height:auto;flex-direction:column;gap:10px}
+  #cap .u{font-size:14px}
+  #cap .lesson{font-size:19px;padding:6px 0}
+  nav{position:fixed;left:0;right:0;bottom:0;background:#05070aee;padding:8px 10px;height:auto;border-top:1px solid var(--line);z-index:10;gap:8px}
+  nav button{padding:8px 13px;font-size:14px}
+  nav .keys,nav .lbl{display:none}
+  footer{height:auto;padding:10px 0}
+  #study{padding:4px 0}
+  #study h2{font-size:21px}
+  #study .meta{font-size:13px}
+  .chart{margin-top:14px;flex:none;height:auto}
+  .crow{grid-template-columns:1fr;height:auto;padding-bottom:6px}
+  .crow .nm{text-align:left;font-size:15px;padding:0}
+  .track{height:56px}
+  .bar,.band{top:10px;height:24px}
+  .track{margin-right:0}
+  .val{top:36px;font-size:15px;left:0!important}
+  .grid{display:none}
+  .note{position:static;display:block;margin-top:8px}
+  #take{padding:40px 6px;gap:22px}
+  #take .big{font-size:36px}
+  #take .sm{font-size:16px}
+}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01s!important;transition-duration:.12s!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v10H9l-5 4z"/><path d="M8 9h8M8 12h5"/></symbol>
+    <symbol id="i-agent" viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="11" rx="3"/><path d="M12 7V4"/><circle cx="12" cy="3.3" r=".8"/><circle cx="9.5" cy="12" r="1.2"/><circle cx="14.5" cy="12" r="1.2"/><path d="M9.5 15.3h5M3 11v3M21 11v3"/></symbol>
+    <symbol id="i-mag" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="M14.5 14.5L20 20"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 15h5M10 18h3"/></symbol>
+    <symbol id="i-pill" viewBox="0 0 24 24"><rect x="3" y="8.5" width="18" height="7" rx="3.5" transform="rotate(-35 12 12)"/><path d="M9.6 8.6l4.8 6.8"/></symbol>
+    <symbol id="i-ehr" viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="7" ry="2.5"/><path d="M5 5.5v13c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-13M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4"/><path d="M5 4h13l-3 4 3 4H5"/></symbol>
+    <symbol id="i-ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/></symbol>
+    <symbol id="i-bad" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.6-7 10-7 10z"/></symbol>
+    <symbol id="i-docs" viewBox="0 0 24 24"><path d="M8 3h7l4 4v11H8z"/><path d="M5 6v15h11"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5l11 7-11 7z"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.3-5.7"/><path d="M20 4v5h-5"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+    <symbol id="i-people" viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16.5" cy="8" r="3"/><path d="M2.5 20c.5-3.5 2.7-5.5 5.5-5.5s5 2 5.5 5.5M13 14.8c1-.3 2.3-.4 3.5-.3 2.8.2 4.6 2.2 5 5.5"/></symbol>
+    <symbol id="i-rule" viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M9 8h6M9 12h6M9 16h4"/></symbol>
+  </defs>
+</svg>
+
+<div id="stage">
+  <header>
+    <a class="back" href="index.html">&larr; all demos</a>
+    <h1>03 · Chatbot vs Agent: <span>a race</span></h1>
+    <div id="dots"></div>
+  </header>
+
+  <div id="qbar">
+    <div class="who"><svg class="i"><use href="#i-heart"/></svg>Mrs. Rosa Delgado, 71 · HFrEF · synthetic patient</div>
+    <div class="q"><em>Same question to both:</em>&ldquo;Which heart-failure medicines is she missing, and is there a reason?&rdquo;</div>
+  </div>
+
+  <main>
+    <section class="scene" id="race">
+      <!-- CHATBOT lane -->
+      <div class="lane chat" id="laneC">
+        <div class="lhead">
+          <div class="ic"><svg class="i"><use href="#i-chat"/></svg></div>
+          <div class="t">CHATBOT <small>one question, one answer</small></div>
+          <div class="right">
+            <div class="flag" id="flagC"><svg class="i"><use href="#i-flag"/></svg><span>done in 2 seconds</span></div>
+            <div class="clock" id="clockC">0.0 s</div>
+            <div class="score" id="scoreC"><b>0</b><small>/5</small></div>
+          </div>
+        </div>
+        <div class="sub">What it is given:
+          <div class="seg" id="seg">
+            <button data-m="summary" class="on">Discharge summary only</button>
+            <button data-m="whole">Paste the whole chart</button>
+          </div>
+        </div>
+        <div class="czone">
+          <div class="paste" id="paste"></div>
+          <div class="bubbles">
+            <div class="bub user">Which heart-failure medicines is she missing, and is there a reason?</div>
+            <div class="bub bot" id="botBub"></div>
+          </div>
+        </div>
+        <div class="answers" id="ansC"></div>
+      </div>
+
+      <!-- AGENT lane -->
+      <div class="lane agent" id="laneA">
+        <div class="lhead">
+          <div class="ic"><svg class="i"><use href="#i-agent"/></svg></div>
+          <div class="t"><b>AGENT</b> <small>works the problem</small></div>
+          <div class="right">
+            <div class="flag" id="flagA"><svg class="i"><use href="#i-flag"/></svg><span>done in about a minute</span></div>
+            <div class="clock" id="clockA">0 s</div>
+            <div class="score" id="scoreA"><b>0</b><small>/5</small></div>
+          </div>
+        </div>
+        <div class="sub">Has: <span class="badge c">tools: search &amp; read the chart</span><span class="badge w">skill: gdmt-gaps protocol</span></div>
+        <div class="azone" id="azone">
+          <div class="chip" id="chip"></div>
+          <div class="amark" id="amark"><svg class="i"><use href="#i-agent"/></svg></div>
+          <div class="ehr">
+            <div class="lab"><svg class="i"><use href="#i-ehr"/></svg>EHR · her chart</div>
+            <div class="tiles" id="tiles"></div>
+            <div class="mag" id="mag"><svg class="i"><use href="#i-mag"/></svg></div>
+          </div>
+        </div>
+        <div class="feed" id="feed"><div class="think" id="think"></div></div>
+        <div class="answers" id="ansA"></div>
+      </div>
+    </section>
+
+    <section class="scene off" id="study">
+      <h2>The real study: finding GDMT gaps, accuracy against two clinicians' review</h2>
+      <div class="meta"><span class="pre">Preliminary</span>ACC.27 abstract · 1,000 heart-failure patients · 2 health systems · bars show the reported range</div>
+      <div class="chart" id="chart"></div>
+      <div class="cap2" id="studyCap">Accuracy = agreement with two clinicians' chart review (higher is better). Agents ran on a local 35-billion-parameter open-weight model (inside the health system). &ldquo;Single AI call&rdquo; (in the study: a single LLM, or large language model, call) is the chatbot in our race: one question, one answer.</div>
+    </section>
+
+    <section class="scene off" id="take">
+      <div class="big"><span class="a">The chatbot answers.</span><br><span class="b">The agent investigates.</span></div>
+      <div class="sm">Fastest is not the same as right. The difference was not a smarter model: it went and looked (tools), and it followed a protocol written by clinicians (a skill). And two clinicians still checked the answers.</div>
+      <a class="next" href="04-you-are-the-agent.html">Next demo: you are the agent &rarr;</a>
+    </section>
+  </main>
+
+  <div id="cap"></div>
+
+  <nav>
+    <button id="bBack" aria-label="Back"><svg class="i"><use href="#i-left"/></svg>Back</button>
+    <button id="bRe"><svg class="i"><use href="#i-redo"/></svg>Rematch</button>
+    <button id="bNext" class="primary">Next<svg class="i"><use href="#i-right"/></svg></button>
+    <span class="lbl" id="lbl"></span>
+    <span class="sp"></span>
+    <span class="keys">&rarr; / Space next · &larr; back · R restart · F fullscreen</span>
+  </nav>
+  <footer>QCOR 2026 · synthetic patient · illustrative simulation · race times are illustrative</footer>
+</div>
+<div id="tip"></div>
+
+<script>
+(function(){
+"use strict";
+const $=s=>document.querySelector(s);
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const S=reduced?0.25:1;            // timeline speed factor
+const ic=(id)=>'<svg class="i"><use href="#i-'+id+'"/></svg>';
+
+/* ---------- chart text (verbatim from the shared spec) ---------- */
+const NOTES={
+  dc:{t:'Discharge summary · 9/2/2026',x:'71-year-old woman with HFrEF (EF 30% on TTE 8/29/2026), CKD stage 3, hypertension, admitted with acute on chronic systolic heart failure. Diuresed with IV furosemide, net -4.2 L. Discharge medications: lisinopril 10 mg daily; metoprolol tartrate 25 mg twice daily; furosemide 40 mg daily. Follow-up: cardiology clinic in 2 weeks, BMP in 1 week.'},
+  echo:{t:'Echocardiogram · 8/29/2026',x:'Left ventricle moderately dilated with global hypokinesis. LVEF 30% (biplane Simpson\'s). Moderate mitral regurgitation. RV systolic function mildly reduced.'},
+  nurse:{t:'Nursing note · 8/31/2026',x:'Patient ambulated 150 ft in hallway with walker, no shortness of breath at rest. Tolerating low-sodium diet. Daily weight 69.1 kg.'},
+  card:{t:'Cardiology clinic · 6/10/2026',x:'HFrEF follow-up, NYHA class II. We discussed adding an SGLT2 inhibitor (empagliflozin). Patient declines: she had recurrent urinary tract infections on dapagliflozin in 2025 and is worried about cost. Will revisit at next visit. Continue lisinopril and metoprolol.'},
+  neph:{t:'Nephrology clinic · 4/14/2026',x:'CKD stage 3b, eGFR 38. Potassium 5.9 today. Spironolactone discontinued due to hyperkalemia; would not rechallenge given CKD. Low-potassium diet education provided. Repeat BMP in 1 week.'},
+  prob:{t:'Problem list · last edited 3/2024',x:'Heart failure with mildly reduced ejection fraction, HFmrEF (EF 45%). Hypertension. Chronic kidney disease stage 3.'}
+};
+const KEYS=['hf','ras','bb','mra','sglt'];
+const LABELS={hf:'HF type',ras:'ACEi / ARB / ARNI',bb:'Beta blocker',mra:'MRA',sglt:'SGLT2 inhibitor'};
+const GOLD={hf:'HFrEF',ras:'On therapy',bb:'GAP',mra:'Medical exception',sglt:'Patient preference'};
+const ANS={
+  summary:{
+    hf:['HFrEF (EF 30%)',1],
+    ras:['On therapy: lisinopril',1],
+    bb:['On therapy: metoprolol',0,'Nobody told it the rule: tartrate doesn\'t count.'],
+    mra:['GAP, no reason documented',0,'It never saw the nephrology note (high potassium).'],
+    sglt:['GAP, no reason documented',0,'It never saw the cardiology note (she declined).']
+  },
+  whole:{
+    hf:['HFmrEF (EF 45%)',0,'Took the stale 45% from the 2024 problem list.'],
+    ras:['On therapy: lisinopril',1],
+    bb:['On therapy: metoprolol',0,'Still nobody told it: tartrate doesn\'t count.'],
+    mra:['Exception: hyperkalemia',1],
+    sglt:['Patient declined',1]
+  },
+  agent:{
+    hf:['HFrEF: EF 30%, echo 8/29/26 (45% is stale)',1],
+    ras:['On therapy: lisinopril',1],
+    bb:['GAP: tartrate does not count',1],
+    mra:['Exception: hyperkalemia (nephrology)',1],
+    sglt:['Patient preference: declined (cardiology)',1]
+  }
+};
+const BOT={
+  summary:'Sure! She is on lisinopril and metoprolol. She is missing an MRA and an SGLT2 inhibitor, with no reason documented.',
+  whole:'Sure! The problem list says HFmrEF (EF 45%). She is on lisinopril and metoprolol. Spironolactone was stopped for hyperkalemia, and she declined an SGLT2 inhibitor.'
+};
+const TILES=[['meds','Meds','pill'],['dc','Discharge','doc'],['echo','Echo','doc'],['nurse','Nursing','doc'],['card','Cardiology','doc'],['neph','Nephrology','doc'],['prob','Problem list','doc']];
+
+/* ---------- build static DOM ---------- */
+function buildRows(el,prefix){
+  el.innerHTML=KEYS.map(k=>`<div class="row" id="${prefix}-${k}"><div class="rl">${LABELS[k]}</div><div class="ra"><span class="txt"></span><div class="why"></div></div><div class="rv"></div></div>`).join('');
+}
+buildRows($('#ansC'),'c'); buildRows($('#ansA'),'a');
+$('#tiles').innerHTML=TILES.map(t=>`<div class="tile" id="t-${t[0]}">${ic(t[2])}<span>${t[1]}</span></div>`).join('');
+
+/* ---------- state ---------- */
+const STEPS=['The question','The race','Check against two clinicians','Paste the whole chart?','The real study','Takeaway'];
+let step=0, mode='summary', gen=0, racing=false, raceDone=false, revealed=false, rafId=0;
+let onRaceDone=null;
+const dots=$('#dots');
+dots.innerHTML=STEPS.map((s,i)=>`<i title="${s}" data-i="${i}"></i>`).join('')+'<span id="stepTxt"></span>';
+dots.addEventListener('click',e=>{const i=e.target.dataset&&e.target.dataset.i; if(i!=null) go(+i);});
+
+function later(ms,fn){const g=gen; setTimeout(()=>{if(g===gen)fn();},ms*S);}
+function typeInto(el,text,cps,done){
+  const g=gen; let i=0; el.classList.add('caret');
+  const iv=setInterval(()=>{
+    if(g!==gen){clearInterval(iv);return;}
+    i=Math.min(text.length,i+Math.max(1,Math.round(cps/30/S)));
+    el.textContent=text.slice(0,i);
+    if(i>=text.length){clearInterval(iv);el.classList.remove('caret');done&&done();}
+  },33);
+}
+
+/* ---------- chatbot input ---------- */
+function renderPaste(anim){
+  const p=$('#paste'); p.classList.remove('in');
+  if(mode==='summary'){
+    p.innerHTML=`<div class="doc big"><h4>${ic('doc')} Pasted: ${NOTES.dc.t}</h4>${NOTES.dc.x}</div>`;
+  }else{
+    const ks=['prob','neph','card','nurse','echo','dc'];
+    p.innerHTML='<div class="stack">'+ks.map((k,i)=>`<div class="doc" style="top:${i*(p.offsetHeight>200?22:13)}px;z-index:${i};animation-delay:${i*0.07}s"><h4>${ic('doc')} ${NOTES[k].t}</h4>${NOTES[k].x}</div>`).join('')+'</div>';
+  }
+  if(anim){void p.offsetWidth;p.classList.add('in');}
+  document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
+}
+
+/* ---------- reset ---------- */
+function resetRace(){
+  gen++; racing=false; raceDone=false; revealed=false; onRaceDone=null; cancelAnimationFrame(rafId);
+  ['#flagC','#flagA','#scoreC','#scoreA'].forEach(s=>$(s).classList.remove('on'));
+  $('#clockC').textContent='0.0 s'; $('#clockA').textContent='0 s';
+  $('#clockC').style.display=$('#clockA').style.display='';
+  $('#botBub').textContent=''; $('#botBub').classList.remove('caret');
+  document.querySelectorAll('.row').forEach(r=>{r.classList.remove('wrong');r.querySelector('.txt').textContent='';const w=r.querySelector('.why');w.className='why';w.textContent='';const v=r.querySelector('.rv');v.className='rv';v.innerHTML='';});
+  document.querySelectorAll('.tile').forEach(t=>t.classList.remove('read'));
+  $('#mag').classList.remove('on'); $('#chip').style.opacity=0; $('#amark').classList.remove('busy');
+  $('#feed').innerHTML='<div class="think" id="think"></div>';
+  renderPaste(false);
+}
+
+/* ---------- agent timeline ---------- */
+const AGENT_EVENTS=[
+  {t:200, think:'Plan: list her meds, find every EF, then check the notes for reasons.'},
+  {t:900, chip:'get_medications()', tiles:['meds']},
+  {t:1900, card:['Medications','lisinopril 10 mg daily · metoprolol tartrate 25 mg twice daily · furosemide 40 mg daily · spironolactone <s>stopped 4/14/2026</s>'], row:'ras'},
+  {t:2700, chip:'search_notes("ejection fraction")', tiles:['dc','echo','prob']},
+  {t:3900, card:['Echo 8/29/2026','&ldquo;LVEF 30% (biplane Simpson\'s).&rdquo; Problem list (3/2024) says EF 45%: older, ignore.'], row:'hf'},
+  {t:4800, chip:'skill: gdmt-gaps', w:1},
+  {t:5600, card:['Skill rule','&ldquo;Metoprolol tartrate does not count.&rdquo; No reason documented, so: gap.'], rule:1, row:'bb'},
+  {t:6500, chip:'search_notes("spironolactone")', tiles:['neph']},
+  {t:7600, card:['Nephrology 4/14/2026','&ldquo;Spironolactone discontinued due to hyperkalemia; would not rechallenge given CKD.&rdquo;'], row:'mra'},
+  {t:8500, chip:'search_notes("SGLT2")', tiles:['card']},
+  {t:9600, card:['Cardiology 6/10/2026','&ldquo;Patient declines: she had recurrent urinary tract infections on dapagliflozin...&rdquo;'], row:'sglt'},
+  {t:10500, done:1}
+];
+const AGENT_END=10500, AGENT_CLOCK_X=6; // agent clock runs 6x: ~1 minute, illustrative
+
+function tilePos(id){
+  const t=$('#t-'+id), ehr=t.parentElement.parentElement;
+  const r=t.getBoundingClientRect(), e=ehr.getBoundingClientRect(), sc=r.width/t.offsetWidth||1;
+  return (r.left-e.left)/sc + t.offsetWidth/2 - $('#mag').offsetWidth/2 + 10;
+}
+function addCard(c,rule,anim){
+  const f=$('#feed'); const d=document.createElement('div'); d.className='card'+(rule?' rule':'');
+  if(!anim) d.style.animation='none';
+  d.innerHTML=`<b>${c[0]}</b>${c[1]}`; f.appendChild(d);
+  const cards=f.querySelectorAll('.card'); if(cards.length>2) cards[0].remove();
+}
+function fillRow(prefix,k,a,anim){
+  const el=$('#'+prefix+'-'+k+' .txt');
+  if(anim) typeInto(el,a[0],70); else el.textContent=a[0];
+}
+function agentEvent(ev,anim){
+  if(ev.think){$('#think').textContent='> '+ev.think;}
+  if(ev.chip&&anim){
+    const c=$('#chip'); c.className='chip'+(ev.w?' w':''); c.textContent=ev.chip;
+    c.style.transition='none'; c.style.transform='translateX(0)'; c.style.opacity=1; void c.offsetWidth;
+    c.style.transition='';
+    const zone=$('#azone'); const dist=zone.offsetWidth-c.offsetWidth-c.offsetLeft-20;
+    c.style.transform=`translateX(${ev.w?dist*0.25:dist}px)`;
+    later(700,()=>{c.style.opacity=0;});
+  }
+  if(ev.tiles){
+    const m=$('#mag');
+    if(anim){
+      m.classList.add('on');
+      ev.tiles.forEach((id,i)=>later(250+i*380,()=>{m.style.left=tilePos(id)+'px';later(320,()=>$('#t-'+id).classList.add('read'));}));
+      later(250+ev.tiles.length*380+250,()=>m.classList.remove('on'));
+    } else ev.tiles.forEach(id=>$('#t-'+id).classList.add('read'));
+  }
+  if(ev.card){addCard(ev.card,ev.rule,anim); if(ev.row) fillRow('a',ev.row,ANS.agent[ev.row],anim);}
+}
+
+/* ---------- the race ---------- */
+function runRace(){
+  resetRace(); racing=true;
+  const g=gen, t0=performance.now(); let cDone=0, aDone=0;
+  renderPaste(true);
+  $('#amark').classList.add('busy');
+  const tick=()=>{
+    if(g!==gen) return;
+    const el=(performance.now()-t0)/S;
+    if(!cDone) $('#clockC').textContent=(Math.min(el,2000)/1000).toFixed(1)+' s';
+    if(!aDone) $('#clockA').textContent=Math.round(el*AGENT_CLOCK_X/1000)+' s';
+    if(!(cDone&&aDone)) rafId=requestAnimationFrame(tick);
+  };
+  rafId=requestAnimationFrame(tick);
+  // chatbot: instant, fast, confident
+  const A=ANS[mode];
+  later(350,()=>typeInto($('#botBub'),BOT[mode],mode==='whole'?260:220,()=>{}));
+  KEYS.forEach((k,i)=>later(700+i*240,()=>typeInto($('#c-'+k+' .txt'),A[k][0],140)));
+  later(2000,()=>{cDone=1;$('#clockC').textContent='2.0 s';$('#flagC').classList.add('on');});
+  // agent: slower, visibly searching
+  AGENT_EVENTS.forEach(ev=>later(ev.t,()=>{
+    if(ev.done){aDone=1;finishAgent();return;}
+    agentEvent(ev,true);
+  }));
+}
+function finishAgent(){
+  $('#clockA').textContent=Math.round(AGENT_END*AGENT_CLOCK_X/1000)+' s';
+  $('#flagA').classList.add('on'); $('#amark').classList.remove('busy');
+  $('#think').textContent='> Done. Every answer has a quoted source.';
+  racing=false; raceDone=true;
+  if(onRaceDone){const f=onRaceDone;onRaceDone=null;later(500,f);}
+}
+function finishInstant(){
+  // jump to the end state of the race, no animation
+  resetRace();
+  const A=ANS[mode];
+  $('#botBub').textContent=BOT[mode];
+  KEYS.forEach(k=>fillRow('c',k,A[k],false));
+  $('#clockC').textContent='2.0 s'; $('#flagC').classList.add('on');
+  AGENT_EVENTS.forEach(ev=>{if(!ev.done) agentEvent(ev,false);});
+  $('#feed').querySelectorAll('.card').forEach(c=>c.style.animation='none');
+  KEYS.forEach(k=>fillRow('a',k,ANS.agent[k],false));
+  $('#clockA').textContent=Math.round(AGENT_END*AGENT_CLOCK_X/1000)+' s';
+  $('#flagA').classList.add('on'); $('#think').textContent='> Done. Every answer has a quoted source.';
+  raceDone=true; racing=false;
+}
+
+/* ---------- the check ---------- */
+function reveal(anim){
+  if(revealed) return; revealed=true;
+  const sets=[['c',ANS[mode],'#scoreC','#clockC'],['a',ANS.agent,'#scoreA','#clockA']];
+  sets.forEach(([p,A,sc,clk],li)=>{
+    let n=0;
+    KEYS.forEach((k,i)=>{
+      const f=()=>{
+        const row=$('#'+p+'-'+k), a=A[k], v=row.querySelector('.rv');
+        v.className='rv on '+(a[1]?'ok':'bad');
+        v.innerHTML=ic(a[1]?'ok':'bad')+`<span><small>Clinicians</small>${GOLD[k]}</span>`;
+        if(!a[1]){row.classList.add('wrong');const w=row.querySelector('.why');w.textContent=a[2];w.classList.add('on');}
+        if(a[1]) n++;
+        $(sc+' b').textContent=n;
+      };
+      anim?later(300+i*420+li*120,f):f();
+    });
+    const fin=()=>{ $(clk).style.display='none'; $(sc).classList.add('on'); };
+    if(anim){ $(sc+' b').textContent=0; later(200,()=>{$(clk).style.display='none';$(sc).classList.add('on');}); }
+    else fin();
+  });
+  setCap(mode==='whole'?'whole':'lesson');
+}
+
+/* ---------- caption strip ---------- */
+function setCap(kind){
+  const c=$('#cap');
+  if(kind==='unpack'){
+    c.innerHTML=`<div class="u"><b class="w">Chatbot</b><span>One question in, one answer out. It only knows what you paste in; <b>it can't go and look.</b></span></div>
+    <div class="u c"><b class="w">Agent</b><span>A model with <b>tools</b> (search, read the chart) and a <b>skill</b> (a written protocol). It decides what to look up, reads, checks the rule, then answers.</span></div>`;
+  }else if(kind==='race'){
+    c.innerHTML=`<div class="u">${mode==='whole'?'Left: now handed all six documents at once. Still one question, one answer.':'Left: answers straight away from the one document it was handed.'}</div><div class="u c">Right: looks things up. Each cyan chip is a tool call into the EHR; each amber card is what came back from her chart.</div>`;
+  }else if(kind==='check'){
+    c.innerHTML=`<div class="lesson"><span><svg class="i" style="color:var(--green)"><use href="#i-people"/></svg> Now check both against two clinicians' review...</span></div>`;
+  }else if(kind==='lesson'){
+    c.innerHTML=`<div class="lesson"><span>Fastest <span class="r">&ne;</span> right. The difference: <em>the agent went and looked</em>, and followed the protocol.</span></div>`;
+  }else if(kind==='whole'){
+    c.innerHTML=`<div class="u"><b class="w">Paste it all?</b><span>Now it sees the notes: MRA and SGLT2i fixed. Still 3/5: no protocol said <b>tartrate doesn't count</b>, and no method said <b>find every EF, date it, take the latest</b>.</span></div>
+    <div class="u c"><b class="w">Lesson</b><span>Pasting more in is not the same as <b>a protocol and a method</b>. More text on the desk is not a way of working.</span></div>`;
+  }else c.innerHTML='';
+}
+
+/* ---------- study chart ---------- */
+const DATA=[
+  {n:'Structured data alone',s:'codes, med lists, fields',lo:42,hi:70,c:'#BDBDBD'},
+  {n:'+ keyword search',s:'rules that scan notes for words',lo:79,hi:89,c:'#BDBDBD'},
+  {n:'Single AI call',s:'the model asked once, no tools',lo:82,hi:85,c:'#8C8C8C'},
+  {n:'Agents',s:'tools + skill, in a loop',lo:96,hi:98,c:'#22D3EE'}
+];
+function buildChart(){
+  const ch=$('#chart');
+  ch.innerHTML='<div class="grid">'+[0,25,50,75,100].map(v=>`<i style="left:${v}%"></i><span style="left:${v}%">${v}%</span>`).join('')+'</div>'+
+  DATA.map((d,i)=>`<div class="crow" data-i="${i}"><div class="nm" style="${d.n==='Agents'?'color:var(--cyan);font-weight:700':''}">${d.n}<small>${d.s}</small></div>
+   <div class="track"><div class="bar" style="background:${d.c}"></div><div class="band" style="left:${d.lo}%;width:${d.hi-d.lo}%;background:${d.c};color:${d.c}"></div>
+   <div class="val" style="left:calc(${d.hi}% + 14px)">${d.lo}&ndash;${d.hi}%</div></div></div>`).join('');
+  ch.querySelectorAll('.crow').forEach(r=>{
+    const d=DATA[r.dataset.i], tip=$('#tip');
+    r.addEventListener('mousemove',e=>{tip.innerHTML=`<b>${d.n}</b><br>${d.lo}&ndash;${d.hi}% accurate (preliminary)`;tip.style.left=(e.clientX+14)+'px';tip.style.top=(e.clientY+14)+'px';tip.style.opacity=1;});
+    r.addEventListener('mouseleave',()=>tip.style.opacity=0);
+  });
+}
+buildChart();
+function animateChart(){
+  const g=gen;
+  const rows=[...document.querySelectorAll('.crow')];
+  rows.forEach(r=>{const b=r.querySelector('.bar');b.classList.remove('fade');b.style.transition='none';b.style.width='0';r.querySelector('.band').classList.remove('on');r.querySelector('.val').classList.remove('on');});
+  void document.body.offsetWidth;
+  rows.forEach((r,i)=>{
+    const d=DATA[i], b=r.querySelector('.bar');
+    later(300+i*500,()=>{b.style.transition='';b.style.width=d.hi+'%';});
+    later(300+i*500+1100,()=>{r.querySelector('.band').classList.add('on');b.classList.add('fade');r.querySelector('.val').classList.add('on');});
+  });
+}
+
+/* ---------- navigation ---------- */
+function show(scene){['#race','#study','#take'].forEach(s=>$(s).classList.toggle('off',s!=='#'+scene));
+  $('#qbar').style.visibility=scene==='take'?'hidden':'visible';}
+function go(n){
+  n=Math.max(0,Math.min(STEPS.length-1,n)); const prev=step; step=n;
+  document.querySelectorAll('#dots i').forEach((d,i)=>{d.className=i===n?'on':(i<n?'done':'');});
+  $('#stepTxt').textContent=(n+1)+' / '+STEPS.length;
+  $('#lbl').textContent=STEPS[n];
+  $('#bRe').style.display=(n>=1&&n<=3)?'':'none';
+  $('#bNext').style.display=n===STEPS.length-1?'none':'';
+  if(n===0){ show('race'); mode='summary'; resetRace(); setCap('unpack'); }
+  else if(n===1){ show('race'); if(prev!==0) mode='summary'; runRace(); setCap('race'); }
+  else if(n===2){
+    show('race');
+    if(prev===1){
+      if(racing) finishInstant();
+      setCap('check'); later(900,()=>reveal(true));
+    } else { mode='summary'; finishInstant(); reveal(false); }
+  }
+  else if(n===3){
+    show('race'); mode='whole';
+    if(prev===4){ finishInstant(); reveal(false); }
+    else { runRace(); setCap('race'); onRaceDone=()=>reveal(true); }
+  }
+  else if(n===4){ gen++; show('study'); setCap(''); animateChart(); }
+  else { gen++; show('take'); setCap(''); }
+}
+function rematch(){
+  if(step<1||step>3){ go(1); return; }
+  runRace(); setCap('race');
+  if(step>=2) onRaceDone=()=>reveal(true);
+}
+$('#seg').addEventListener('click',e=>{
+  const m=e.target.dataset&&e.target.dataset.m; if(!m) return;
+  mode=m;
+  if(step===0){ renderPaste(true); return; }
+  if(step>=1&&step<=3) rematch(); else { go(1); }
+});
+$('#bNext').onclick=()=>go(step+1);
+$('#bBack').onclick=()=>go(step-1);
+$('#bRe').onclick=rematch;
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT') return;
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();go(step+1);}
+  else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();go(step-1);}
+  else if(e.key==='r'||e.key==='R'){go(0);}
+  else if(e.key==='f'||e.key==='F'){ if(!document.fullscreenElement) document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{}); else document.exitFullscreen(); }
+});
+
+/* ---------- fit 1600x900 stage ---------- */
+function fit(){
+  const st=$('#stage');
+  if(getComputedStyle(st).position!=='absolute'){st.style.transform='';return;}
+  const s=Math.min(innerWidth/1600,innerHeight/900);
+  st.style.transform=`translate(${(innerWidth-1600*s)/2}px,${(innerHeight-900*s)/2}px) scale(${s})`;
+}
+addEventListener('resize',()=>{fit(); if(step===0) renderPaste(false);});
+fit();
+go(0);
+})();
+</script>
+</body>
+</html>

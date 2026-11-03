@@ -1,0 +1,30 @@
+{
+  "id": "rosa-test-given",
+  "order": 9,
+  "kind": "rosa",
+  "label": "Rosa · the test build · Is it given?",
+  "build": {
+    "sources": [
+      "diagnoses",
+      "medications",
+      "vitals",
+      "notes",
+      "allergies"
+    ],
+    "tools": [
+      "read_records",
+      "search_notes",
+      "read_note"
+    ],
+    "prompt": "Is this patient on a beta blocker?"
+  },
+  "criteria": [],
+  "model": "Qwen/Qwen3.6-35B-A3B-FP8",
+  "recorded": "2026-10-27T18:24:28.356Z",
+  "seconds": 1.5,
+  "cohort": "7a9fb28cb794",
+  "system": "53b659e8dc74",
+  "rows": [
+    {"start":1,"done":1468,"patientId":"p000","answer":null,"text":"Yes, the patient was on carvedilol, a beta blocker, but it was stopped on 2026-05-14. Therefore, the patient is not currently on a beta blocker.","trace":[{"kind":"act","tool":"read_records","args":{"record":"medications"},"t":984},{"kind":"observe","tool":"read_records","text":"sacubitril / valsartan 49/51 mg oral tablet: 49/51 mg by mouth twice daily. Status active, ordered 2023-08-14\ncarvedilol 12.5 mg oral tablet: 12.5 mg by mouth twice daily. Status stopped, ordered 2025-05-01, stopped 2026-05-14\nspironolactone 25 mg oral tablet: 25 mg by mouth once daily. Status active, ordered 2023-11-02\ndapagliflozin 10 mg oral tablet: 10 mg by mouth once daily. Status active, ordered 2024-03-20\nfurosemide 40 mg oral tablet: 40 mg by mouth once daily. Status active, ordered 2023-02-12\natorvastatin 40 mg oral tablet: 40 mg by mouth once daily. Status active, ordered 2019-05-01\nmetformin 500 mg oral tablet: 500 mg by mouth twice daily. Status active, ordered 2014-10-01","error":false,"details":{"request":"GET /fhir/MedicationRequest?patient=p000 → 200, 7 resources","count":7},"t":989},{"kind":"delta","text":"Yes","t":1040},{"kind":"delta","text":",","t":1042},{"kind":"delta","text":" the","t":1046},{"kind":"delta","text":" patient","t":1050},{"kind":"delta","text":" was","t":1054},{"kind":"delta","text":" on","t":1058},{"kind":"delta","text":" carved","t":1062},{"kind":"delta","text":"il","t":1067},{"kind":"delta","text":"ol","t":1071},{"kind":"delta","text":",","t":1075},{"kind":"delta","text":" a","t":1079},{"kind":"delta","text":" beta","t":1083},{"kind":"delta","text":" blocker","t":1087},{"kind":"delta","text":",","t":1092},{"kind":"delta","text":" but","t":1096},{"kind":"delta","text":" it","t":1100},{"kind":"delta","text":" was","t":1104},{"kind":"delta","text":" stopped","t":1108},{"kind":"delta","text":" on","t":1112},{"kind":"delta","text":" ","t":1117},{"kind":"delta","text":"2","t":1121},{"kind":"delta","text":"0","t":1125},{"kind":"delta","text":"2","t":1129},{"kind":"delta","text":"6","t":1133},{"kind":"delta","text":"-","t":1137},{"kind":"delta","text":"0","t":1142},{"kind":"delta","text":"5","t":1146},{"kind":"delta","text":"-","t":1150},{"kind":"delta","text":"1","t":1154},{"kind":"delta","text":"4","t":1159},{"kind":"delta","text":".","t":1163},{"kind":"delta","text":" Therefore","t":1167},{"kind":"delta","text":",","t":1171},{"kind":"delta","text":" the","t":1175},{"kind":"delta","text":" patient","t":1179},{"kind":"delta","text":" is","t":1184},{"kind":"delta","text":" not","t":1188},{"kind":"delta","text":" currently","t":1192},{"kind":"delta","text":" on","t":1196},{"kind":"delta","text":" a","t":1200},{"kind":"delta","text":" beta","t":1204},{"kind":"delta","text":" blocker","t":1209},{"kind":"delta","text":".","t":1213},{"kind":"think","text":"Yes, the patient was on carvedilol, a beta blocker, but it was stopped on 2026-05-14. Therefore, the patient is not currently on a beta blocker.","t":1221}],"usage":{"input":749,"output":71,"modelCalls":2,"toolCalls":1},"status":"ok","error":null,"scope":"system/Condition.rs system/MedicationRequest.rs system/Observation.rs?category=http://terminology.hl7.org/CodeSystem/observation-category|vital-signs system/DocumentReference.rs system/AllergyIntolerance.rs","seconds":1.2,"judged":{"given":"no","why":null,"whyMatches":null,"gap":null}}
+  ]
+}

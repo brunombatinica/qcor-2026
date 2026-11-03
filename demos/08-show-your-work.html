@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<!--
+  QCOR 2026 · Demo 08 · Show your work ("No quote, no answer")
+  The one idea: you make an agent's work checkable. Trust comes from evidence you can click
+  (every answer quotes the exact sentence it came from), a second checker that uses fixed rules
+  instead of the model's confidence, and a clinician who signs before anything reaches care.
+  Steps: 1 the five answers · 2 receipts (lines to source sentences) · 3 a hallucination ·
+         4 the checker · 5 clinician review · 6 sign-off and draft to PCP · 7 toy · 8 takeaway.
+  Controls: Right arrow / Space / "Next" advance. Left arrow / "Back" go back. R restarts. F fullscreen.
+            Hover or tap an answer to light up its line and scroll the chart to its source sentence.
+            "Approve" (step 5) signs off. Step 7: "Make the agent sloppy" slider and "Checker" toggle.
+  Patient and notes are synthetic. No PHI.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>08 · Show your work · QCOR 2026</title>
+<style>
+:root{
+  --bg:#05070a; --fg:#F2F2F2; --dim:#8C8C8C; --line:#2a2a2a; --panel:#0c1016;
+  --amber:#FFB020; --cyan:#22D3EE; --green:#4ADE80; --pink:#FF4FA3; --red:#FF4D4D;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,"Helvetica Neue",Arial,sans-serif;
+  --mono:"SF Mono",ui-monospace,Menlo,Consolas,"DejaVu Sans Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+body{height:100vh;height:100dvh;overflow:hidden}
+a{color:inherit}
+.home{position:fixed;top:10px;left:14px;font-size:13px;color:var(--dim);text-decoration:none;z-index:30}
+.home:hover{color:var(--fg)}
+#app{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;grid-template-areas:"head" "main" "bot" "foot";padding:0 28px}
+#head{grid-area:head;padding:30px 0 12px;display:flex;align-items:flex-start;gap:20px}
+#head .tx{flex:1;min-width:0}
+h1{margin:0;font-size:clamp(26px,2.4vw,38px);font-weight:700;letter-spacing:-.01em;line-height:1.15}
+h1 .n{color:var(--dim);font-weight:500;margin-right:8px;font-size:.7em}
+#sub{margin:6px 0 0;font-size:clamp(15px,1.2vw,19px);color:var(--dim);line-height:1.35}
+#sub b{color:var(--fg);font-weight:600}
+.ctrl{display:flex;align-items:center;gap:10px;flex:0 0 auto;padding-top:4px}
+.btn{background:#0d1117;border:1.5px solid #333;color:var(--fg);border-radius:9px;padding:8px 15px;font:600 14px var(--sans);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.btn:hover{border-color:#666}
+.btn.pri{border-color:var(--cyan);color:var(--cyan)}
+.btn:disabled{opacity:.35;cursor:default}
+.dots{display:flex;gap:6px;align-items:center}
+.dots i{width:8px;height:8px;border-radius:50%;background:#2a2a2a;transition:background .3s}
+.dots i.done{background:#5a5a5a}
+.dots i.on{background:var(--fg)}
+#stepn{font:12px var(--mono);color:var(--dim);min-width:34px;text-align:right}
+
+/* main stage */
+#main{grid-area:main;position:relative;display:grid;grid-template-columns:minmax(330px,30%) minmax(70px,8%) minmax(0,1fr);grid-template-areas:"ans gut docs";min-height:0}
+.colh{display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;height:26px;flex:0 0 auto}
+.colh svg{width:18px;height:18px}
+#ans{grid-area:ans;display:flex;flex-direction:column;min-height:0;position:relative}
+#ans .colh{color:var(--cyan)}
+#ansScroll{flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;padding:2px 2px 6px}
+#ansScroll::-webkit-scrollbar{display:none}
+#list{display:flex;flex-direction:column;gap:8px}
+.card{position:relative;border:1.5px solid var(--line);border-left:3px solid var(--cyan);border-radius:11px;background:var(--panel);padding:8px 12px 8px 12px;cursor:pointer;transition:border-color .3s,background .3s,box-shadow .3s,opacity .3s}
+.card.in{animation:cin .5s cubic-bezier(.2,.8,.2,1) both}
+@keyframes cin{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}
+.card:hover,.card.hot{background:#101820;box-shadow:0 0 0 1px rgba(34,211,238,.35)}
+.card .r1{display:flex;align-items:center;gap:8px;min-height:18px}
+.card .lab{font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .st{font-size:11.5px;color:var(--dim);display:flex;align-items:center;gap:4px;white-space:nowrap;border:1px solid #2f2f2f;border-radius:20px;padding:1px 8px 1px 7px}
+.card .st svg{width:13px;height:13px}
+.card .st.ok{color:var(--green);border-color:rgba(74,222,128,.45);background:rgba(74,222,128,.07)}
+.card .st.bad{color:var(--red);border-color:rgba(255,77,77,.5);background:rgba(255,77,77,.08)}
+.card .st.chk{color:#fff;border-color:#fff}
+.card .av{font-size:18px;font-weight:650;margin:2px 0 3px;line-height:1.2}
+.card .av.gap{color:var(--red)}
+.card .q{font:12.5px/1.35 var(--mono);color:var(--amber);visibility:hidden;display:flex;gap:8px;align-items:baseline;min-width:0}
+.card .q .qt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .q .wh{font-family:var(--sans);font-size:11.5px;color:var(--dim);white-space:nowrap}
+.card .q .wh.bad{color:var(--red)}
+.card.shq .q{visibility:visible}
+.card .jump{display:none}
+.card.fake .q .qt{font-style:italic}
+.card.failed{border-left-color:var(--red)}
+.card.failed .q .qt{text-decoration:line-through;text-decoration-color:var(--red);color:#b98a3a}
+.card.checking{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
+.card.passed{border-color:rgba(74,222,128,.35)}
+.card.unchecked{border-color:rgba(255,77,77,.0)}
+#list.compact{gap:6px}
+#list.compact .card,#tray .card{padding:5px 11px}
+#list.compact .card .av,#tray .card .av{font-size:15px;margin:0 0 1px}
+#tray.many .card .q{display:none}
+#tray.many .card .av{font-size:14px}
+#tray{margin-top:12px;border:1.5px dashed rgba(255,77,77,.55);border-radius:12px;padding:8px 8px 8px;display:none;background:rgba(255,77,77,.04)}
+#tray.on{display:block;animation:cin .4s both}
+#tray .th{display:flex;align-items:center;gap:7px;color:var(--red);font-size:12px;letter-spacing:.1em;text-transform:uppercase;margin:0 2px 6px}
+#tray .th svg{width:16px;height:16px}
+#tray .th span{color:var(--dim);text-transform:none;letter-spacing:0;font-size:12px;margin-left:auto}
+#trayList{display:flex;flex-direction:column;gap:6px}
+#tray .empty{font-size:13px;color:var(--dim);padding:2px 4px 4px}
+#stamp{position:absolute;top:-6px;right:4px;z-index:5;border:2.5px solid var(--green);color:var(--green);border-radius:8px;padding:4px 10px;font:800 13px var(--sans);letter-spacing:.1em;text-transform:uppercase;transform:rotate(-5deg);background:rgba(5,7,10,.92);display:none;align-items:center;gap:6px}
+#stamp svg{width:16px;height:16px}
+#stamp.on{display:flex;animation:stamp .55s cubic-bezier(.3,1.6,.5,1) both}
+@keyframes stamp{from{opacity:0;transform:rotate(-5deg) scale(2.2)}to{opacity:1;transform:rotate(-5deg) scale(1)}}
+
+#gut{grid-area:gut}
+#docs{grid-area:docs;display:flex;flex-direction:column;min-height:0}
+#docs .colh{color:var(--amber);padding-left:16px}
+#docScroll{flex:1;min-height:0;overflow-y:auto;padding:2px 6px 10px 0;scrollbar-width:thin;scrollbar-color:#333 transparent}
+.doc{border-left:1.5px solid var(--line);padding:5px 0 7px 16px;margin-bottom:6px}
+.doc .dh{display:flex;align-items:center;gap:8px;font:11.5px var(--mono);color:var(--dim);letter-spacing:.02em}
+.doc .dh b{color:#cfcfcf;font-family:var(--sans);font-size:13px;font-weight:650;letter-spacing:0}
+.doc .dh svg{width:14px;height:14px;flex:0 0 auto}
+.doc p{margin:2px 0 0;font-size:clamp(13px,.95vw,15px);line-height:1.5;color:#cdcdcd}
+.doc .stale{color:var(--dim)}
+.s{border-radius:3px;transition:background .4s,color .4s,box-shadow .4s}
+.s.hl{background:rgba(255,176,32,.16);color:var(--amber);box-shadow:0 1.5px 0 rgba(255,176,32,.7)}
+.s.hl.hot{background:rgba(255,176,32,.32);color:#ffd27a}
+.s.bad{background:rgba(255,77,77,.14);color:#ff8a8a;box-shadow:0 1.5px 0 rgba(255,77,77,.7)}
+.s.flash{animation:fl 1.2s ease}
+@keyframes fl{0%,100%{}30%{background:rgba(255,176,32,.55)}}
+
+#lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:3;transition:opacity .4s}
+#main.review #lines{opacity:0}
+#shield{position:absolute;left:0;top:0;z-index:4;pointer-events:none;display:none;flex-direction:column;align-items:center;gap:1px;will-change:transform}
+#shield.on{display:flex}
+#shield .sb{width:40px;height:40px;border-radius:50%;background:#05070a;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 18px rgba(255,255,255,.35)}
+#shield .sb svg{width:24px;height:24px}
+#shield .sl{font:700 10px var(--sans);letter-spacing:.12em;color:#fff;background:#05070a;padding:0 3px}
+
+/* review panel */
+#review{grid-area:docs;z-index:6;background:var(--bg);display:none;min-height:0;overflow-y:auto;padding:0 2px 8px 16px}
+#review.on{display:block;animation:rin .5s cubic-bezier(.2,.8,.2,1) both}
+@keyframes rin{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.rv{border:1.5px solid var(--green);border-radius:16px;background:rgba(74,222,128,.04);padding:16px 20px 16px;max-width:780px}
+.rvh{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.rvh .av2{width:46px;height:46px;border-radius:50%;border:2px solid var(--green);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.rvh .av2 svg{width:28px;height:28px}
+.rvh b{font-size:20px;display:block}
+.rvh span{color:var(--dim);font-size:14px}
+.rvs{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line);font-size:16px;line-height:1.4}
+.rvs svg{width:20px;height:20px;flex:0 0 auto;margin-top:1px}
+.rvs .dec{display:inline-block;margin-left:4px;font-size:13px;color:var(--green);border:1px solid rgba(74,222,128,.5);border-radius:6px;padding:0 6px}
+.rvs .qq{color:var(--amber);font-family:var(--mono);font-size:14px}
+.rvs .bq{color:#ff8a8a;font-style:italic}
+.rvact{display:flex;align-items:center;gap:14px;margin-top:12px;flex-wrap:wrap}
+.btn.go{border-color:var(--green);color:#05070a;background:var(--green);font-size:17px;padding:10px 26px;display:inline-flex;align-items:center;gap:8px}
+.btn.go svg{width:18px;height:18px}
+.btn.go:hover{filter:brightness(1.08)}
+.btn.go.pulse{animation:pu 1.6s ease-in-out infinite}
+@keyframes pu{50%{box-shadow:0 0 0 7px rgba(74,222,128,.18)}}
+.rvnote{color:var(--dim);font-size:14px}
+.okh{display:flex;align-items:center;gap:8px;color:var(--green);font-weight:700;font-size:15px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px}
+.okh svg{width:20px;height:20px}
+.dlab{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:14px;color:var(--dim);margin:2px 0 6px}
+.dlab b{color:var(--fg);font-size:16px}
+.dlab svg{width:16px;height:16px}
+#draft{width:100%;min-height:150px;resize:vertical;background:#0a0e13;border:1.5px solid #3a3a3a;border-radius:10px;color:var(--fg);font:16px/1.5 var(--sans);padding:12px 14px}
+#draft:focus{outline:none;border-color:var(--green)}
+#draft:disabled{color:#bcbcbc}
+#sent{color:var(--green);font-size:14px;display:flex;align-items:center;gap:6px}
+#sent svg{width:16px;height:16px}
+
+/* bottom bar */
+#bot{grid-area:bot;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px;padding:10px 0 4px;min-height:118px}
+.unpack{border:1px solid var(--line);border-radius:14px;padding:11px 16px;background:var(--panel);transition:opacity .3s}
+.unpack .w{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.unpack h3{margin:2px 0 3px;font-size:20px}
+.unpack p{margin:0 0 3px;font-size:15.5px;line-height:1.38;color:#d9d9d9}
+.unpack .an{color:var(--dim);font-size:14px}
+.unpack.hint{border-style:dashed}
+#con{border:1.5px solid #fff;border-radius:14px;padding:10px 14px;background:#07090c;display:none;font-family:var(--mono);min-width:0}
+#con.on{display:block}
+.conh{display:flex;align-items:center;gap:8px;font:700 12px var(--sans);letter-spacing:.12em;color:#fff;text-transform:uppercase}
+.conh svg{width:18px;height:18px}
+.conh span{font-weight:400;letter-spacing:0;text-transform:none;color:var(--dim);font-size:12.5px}
+#conb{margin-top:6px;font-size:13px;line-height:1.55;min-height:58px}
+#conb .cl{color:var(--cyan);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#conb .ck{display:flex;gap:8px;color:#cfcfcf}
+#conb .ck .k{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#conb .ck .k i{font-style:normal;color:var(--dim)}
+.P{color:var(--green);font-weight:700}
+.F{color:var(--red);font-weight:700}
+.D{color:var(--dim)}
+#cont{font-size:13px;color:var(--dim);margin-top:2px}
+#cont b{color:var(--fg)}
+/* toy */
+#toy{display:none;font-family:var(--sans)}
+#toy.on{display:block}
+.trow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:6px}
+.trow label{font-size:15px;font-weight:600}
+#slop{width:150px;accent-color:var(--red)}
+#slopv{font:600 14px var(--mono);color:var(--red);min-width:132px}
+#chk{display:inline-flex;align-items:center;gap:8px;border-radius:20px;padding:5px 12px 5px 6px;font:600 14px var(--sans);cursor:pointer;background:#0d1117;border:1.5px solid #fff;color:#fff}
+#chk .kn{width:30px;height:18px;border-radius:9px;background:#fff;position:relative;transition:background .25s}
+#chk .kn::after{content:"";position:absolute;top:2px;left:14px;width:14px;height:14px;border-radius:50%;background:#05070a;transition:left .25s}
+#chk[aria-checked="false"]{border-color:var(--red);color:var(--red)}
+#chk[aria-checked="false"] .kn{background:#333}
+#chk[aria-checked="false"] .kn::after{left:2px;background:var(--red)}
+#toyres{margin-top:8px;font-size:15px;line-height:1.35;display:flex;gap:8px;align-items:flex-start}
+#toyres svg{width:20px;height:20px;flex:0 0 auto}
+#toyres.ok{color:var(--green)}
+#toyres.bad{color:var(--red);font-weight:600}
+#toyres.mid{color:var(--dim)}
+#warn{position:absolute;right:0;bottom:4px;z-index:8;background:#1a0606;border:1.5px solid var(--red);color:#ffb3b3;border-radius:10px;padding:6px 14px;font-size:14px;font-weight:600;display:none;align-items:center;gap:8px;white-space:nowrap}
+#warn svg{width:18px;height:18px}
+#warn.on{display:flex;animation:cin .3s both}
+
+footer{grid-area:foot;font-size:12px;color:#5a5a5a;padding:4px 0 10px}
+
+/* takeaway */
+#take{position:fixed;inset:0;z-index:40;background:#05070a;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px}
+#take.on{display:flex;animation:rin .7s both}
+#take .tk{font-size:clamp(34px,5vw,78px);font-weight:750;letter-spacing:-.02em;line-height:1.1;max-width:1200px}
+#take .tk em{font-style:normal;color:var(--amber)}
+#take .tk s{text-decoration:none;color:#b5b5b5}
+#take .three{display:flex;gap:28px;margin-top:34px;flex-wrap:wrap;justify-content:center}
+#take .three div{display:flex;align-items:center;gap:9px;font-size:clamp(15px,1.4vw,20px);color:#d0d0d0}
+#take .three svg{width:26px;height:26px}
+#take .nav{margin-top:44px;display:flex;gap:18px;align-items:center;flex-wrap:wrap;justify-content:center}
+#take .next{color:var(--cyan);font-size:18px;text-decoration:none;border:1.5px solid var(--cyan);border-radius:10px;padding:9px 18px}
+#take .next:hover{background:rgba(34,211,238,.08)}
+
+@media (prefers-reduced-motion: reduce){ .card.in,#tray.on,#review.on,#take.on,#stamp.on{animation-duration:.01s} .btn.go.pulse{animation:none} }
+
+/* ---------- phone / narrow ---------- */
+@media (max-width: 820px){
+  body{height:auto;overflow:auto}
+  .home{position:absolute}
+  #app{display:flex;flex-direction:column;padding:0 14px 84px;height:auto}
+  #head{padding:34px 0 8px;order:1}
+  .ctrl{position:fixed;left:0;right:0;bottom:0;z-index:35;background:rgba(5,7,10,.95);border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom));justify-content:space-between}
+  .ctrl .btn{padding:10px 18px;font-size:15px}
+  #bot{order:2;display:flex;flex-direction:column;gap:10px;min-height:0;padding:4px 0 10px}
+  #main{order:3;display:flex;flex-direction:column;gap:14px}
+  #gut,#lines,#shield{display:none!important}
+  #ansScroll{overflow:visible}
+  .card .q{flex-wrap:wrap}
+  .card .q .qt{white-space:normal;flex-basis:100%}
+  .card.shq .jump{display:inline-flex;align-items:center;gap:5px;margin-top:6px;background:none;border:1px solid rgba(255,176,32,.5);color:var(--amber);border-radius:7px;font:600 12.5px var(--sans);padding:4px 9px}
+  .card.fake .jump,.card.nosrc .jump{display:none!important}
+  .card .jump svg{width:13px;height:13px}
+  #review{padding:0;order:2}
+  #docs{order:3}
+  #docs .colh{padding-left:0}
+  #docScroll{overflow:visible}
+  .doc{padding-left:12px}
+  .doc p{font-size:15px}
+  #warn{position:static;transform:none;white-space:normal;margin-bottom:6px}
+  #stamp{position:static;align-self:flex-start;margin:2px 0 8px;font-size:12px}
+  .dots{display:none}
+  footer{order:4}
+  #take .three{flex-direction:column;gap:12px;align-items:flex-start}
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-agent" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 12h.01M15 12h.01M9.5 16h5M2 12v3M22 12v3"/></g></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M8 13h8"/></g></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h5"/></g></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 20s-7-4.4-9-9a4.5 4.5 0 0 1 9-3 4.5 4.5 0 0 1 9 3c-2 4.6-9 9-9 9z"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 7.8-8 9-4.6-1.2-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></g></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 17H2z"/><path d="M12 10v4M12 17.5h.01"/></g></symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13h4l2 2h4"/><path d="M8 13l4.5-4.5a2 2 0 0 1 2.8 0L20 13v6H9l-5-3"/></g></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="4"/><path d="M4.5 21c.8-4 3.8-6.5 7.5-6.5s6.7 2.5 7.5 6.5"/><path d="M15.5 16.5v2.2a1.8 1.8 0 0 0 3.6 0"/></g></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></g></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/></g></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M12 4v15M6 13l6 6 6-6"/></symbol>
+    <symbol id="i-quote" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18h5v-6H6c0-3 1-4 4-5M14 18h5v-6h-4c0-3 1-4 4-5"/></g></symbol>
+  </defs>
+</svg>
+
+<a class="home" href="index.html">&larr; all demos</a>
+
+<div id="app">
+  <div id="head">
+    <div class="tx">
+      <h1 id="h1"><span class="n">08</span><span id="ht">No quote, no answer</span></h1>
+      <p id="sub"></p>
+    </div>
+    <div class="ctrl">
+      <button class="btn" id="bBack" aria-label="Back">&larr; Back</button>
+      <div class="dots" id="dots"></div>
+      <span id="stepn"></span>
+      <button class="btn pri" id="bNext" aria-label="Next">Next &rarr;</button>
+    </div>
+  </div>
+
+  <div id="main">
+    <section id="ans">
+      <div class="colh"><svg><use href="#i-agent"/></svg>The agent's answers</div>
+      <div id="stamp"><svg><use href="#i-check"/></svg>Reviewed by clinician</div>
+      <div id="ansScroll">
+        <div id="list"></div>
+        <div id="tray">
+          <div class="th"><svg><use href="#i-hand"/></svg>Needs a human<span>pulled out by the checker</span></div>
+          <div id="trayList"></div>
+        </div>
+      </div>
+    </section>
+    <div id="gut"></div>
+    <section id="docs">
+      <div class="colh"><svg><use href="#i-folder"/></svg>Her chart &middot; Rosa Delgado, 71</div>
+      <div id="docScroll">
+        <div class="doc" id="d-dc"><div class="dh"><svg style="color:var(--amber)"><use href="#i-note"/></svg><b>Discharge summary</b>9/2/2026 &middot; Hospital Medicine</div>
+          <p>71-year-old woman with HFrEF (EF 30% on TTE 8/29/2026), CKD stage 3, hypertension, admitted with acute on chronic systolic heart failure. Diuresed with IV furosemide, net -4.2 L. Discharge medications: <span class="s" id="q-lis">lisinopril 10 mg daily</span>; <span class="s" id="q-meto">metoprolol tartrate 25 mg twice daily</span>; furosemide 40 mg daily. Follow-up: cardiology clinic in 2 weeks, BMP in 1 week.</p></div>
+        <div class="doc"><div class="dh"><svg style="color:var(--amber)"><use href="#i-note"/></svg><b>Nursing note</b>8/31/2026 &middot; Nursing</div>
+          <p>Patient ambulated 150 ft in hallway with walker, no shortness of breath at rest. Tolerating low-sodium diet. Daily weight 69.1 kg.</p></div>
+        <div class="doc"><div class="dh"><svg style="color:var(--amber)"><use href="#i-heart"/></svg><b>Echocardiogram report</b>8/29/2026 &middot; Cardiology</div>
+          <p>Left ventricle moderately dilated with global hypokinesis. <span class="s" id="q-ef">LVEF 30% (biplane Simpson's).</span> Moderate mitral regurgitation. RV systolic function mildly reduced.</p></div>
+        <div class="doc"><div class="dh"><svg style="color:var(--amber)"><use href="#i-note"/></svg><b>Cardiology clinic</b>6/10/2026 &middot; Cardiology</div>
+          <p>HFrEF follow-up, NYHA class II. We discussed adding an SGLT2 inhibitor (empagliflozin). <span class="s" id="q-decl">Patient declines: she had recurrent urinary tract infections on dapagliflozin in 2025 and is worried about cost.</span> Will revisit at next visit. Continue lisinopril and metoprolol.</p></div>
+        <div class="doc"><div class="dh"><svg style="color:var(--amber)"><use href="#i-note"/></svg><b>Nephrology clinic</b>4/14/2026 &middot; Nephrology</div>
+          <p><span class="s" id="q-egfr">CKD stage 3b, eGFR 38.</span> Potassium 5.9 today. <span class="s" id="q-spiro">Spironolactone discontinued due to hyperkalemia; would not rechallenge given CKD.</span> Low-potassium diet education provided. Repeat BMP in 1 week.</p></div>
+        <div class="doc"><div class="dh"><svg style="color:var(--dim)"><use href="#i-note"/></svg><b>Problem list</b>last edited 3/2024</div>
+          <p class="stale">Heart failure with mildly reduced ejection fraction, HFmrEF (EF 45%). Hypertension. Chronic kidney disease stage 3.</p></div>
+      </div>
+    </section>
+    <section id="review" aria-live="polite"></section>
+    <svg id="lines" aria-hidden="true"></svg>
+    <div id="shield"><div class="sb"><svg style="color:#fff"><use href="#i-shield"/></svg></div><div class="sl">CHECKER</div></div>
+    <div id="warn"><svg><use href="#i-alert"/></svg><span id="warnt"></span></div>
+  </div>
+
+  <div id="bot">
+    <div class="unpack" id="unpack"></div>
+    <div id="con">
+      <div class="conh"><svg><use href="#i-shield"/></svg>Checker<span>&nbsp;fixed rules, not the model's opinion</span></div>
+      <div id="conb"></div>
+      <div id="cont"></div>
+      <div id="toy">
+        <div class="trow">
+          <label for="slop">Make the agent sloppy</label>
+          <input type="range" id="slop" min="0" max="3" step="1" value="1" aria-label="Number of made-up claims">
+          <span id="slopv">1 made-up claim</span>
+        </div>
+        <div class="trow">
+          <button id="chk" role="switch" aria-checked="true"><span class="kn"></span><span id="chkt">Checker ON</span></button>
+        </div>
+        <div id="toyres"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>QCOR 2026 &middot; synthetic patient &middot; illustrative simulation</footer>
+</div>
+
+<div id="take">
+  <div class="tk">Trust the <em>receipts</em>,<br><s>not the confidence.</s></div>
+  <div class="three">
+    <div><svg style="color:var(--amber)"><use href="#i-quote"/></svg>Every answer quotes its source</div>
+    <div><svg style="color:#fff"><use href="#i-shield"/></svg>A checker that doesn't trust the model</div>
+    <div><svg style="color:var(--green)"><use href="#i-doc"/></svg>A clinician who signs</div>
+  </div>
+  <div class="nav"><button class="btn" id="takeBack">&larr; back to the toy</button><a class="next" href="09-one-to-4078.html">next demo: from one patient to 4,078 &rarr;</a></div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const $=s=>document.querySelector(s);
+const NS="http://www.w3.org/2000/svg";
+const RM=matchMedia("(prefers-reduced-motion: reduce)").matches, K=RM?0.2:1;
+const phone=()=>matchMedia("(max-width: 820px)").matches;
+const C={cyan:"#22D3EE",red:"#FF4D4D",amber:"#FFB020",white:"#ffffff",green:"#4ADE80"};
+
+/* ---------- the agent's claims (scripted) ---------- */
+const REAL=[
+ {id:"hf",lab:"HF type",ans:"HFrEF",q:"LVEF 30% (biplane Simpson's).",src:"q-ef",where:"Echo 8/29/26",c1:"found word-for-word in Echo 8/29/26",c2:"LVEF 30% is 40% or less, so HFrEF"},
+ {id:"ras",lab:"ACE inhibitor / ARB / ARNI",ans:"On therapy",q:"lisinopril 10 mg daily",src:"q-lis",where:"Discharge 9/2/26",c1:"found word-for-word in Discharge 9/2/26",c2:"names lisinopril, an ACE inhibitor"},
+ {id:"bb",lab:"Beta blocker",ans:"GAP",gap:1,q:"metoprolol tartrate 25 mg twice daily",src:"q-meto",where:"Discharge 9/2/26",c1:"found word-for-word in Discharge 9/2/26",c2:"tartrate is not on the evidence-based list"},
+ {id:"mra",lab:"MRA",ans:"Medical exception",q:"Spironolactone discontinued due to hyperkalemia; would not rechallenge given CKD.",src:"q-spiro",where:"Nephrology 4/14/26",c1:"found word-for-word in Nephrology 4/14/26",c2:"names spironolactone + a medical reason"},
+ {id:"sglt",lab:"SGLT2 inhibitor",ans:"Patient preference",q:"Patient declines: she had recurrent urinary tract infections on dapagliflozin in 2025 and is worried about cost.",src:"q-decl",where:"Cardiology 6/10/26",c1:"found word-for-word in Cardiology 6/10/26",c2:"names dapagliflozin + \"Patient declines\""}
+];
+const FAKE=[
+ {id:"f1",fake:1,lab:"Beta blocker",ans:"Medical exception: bradycardia (HR 48)",q:"Beta blocker limited by bradycardia, HR 48.",src:null,where:"cites Cardiology 6/10/26",c1:null,c1t:"no such sentence anywhere in her chart",c2t:"nothing to check",dy:-18},
+ {id:"f2",fake:1,lab:"ARNI",ans:"Patient declined switch from lisinopril",q:"Patient prefers to stay on lisinopril rather than switch to sacubitril/valsartan.",src:null,where:"cites Cardiology 6/10/26",c1:null,c1t:"no such sentence anywhere in her chart",c2t:"nothing to check",dy:14},
+ {id:"f3",fake:1,lab:"SGLT2 inhibitor",ans:"Medical exception: kidney function",q:"CKD stage 3b, eGFR 38.",src:"q-egfr",where:"Nephrology 4/14/26",c1:1,c1t:"found word-for-word in Nephrology 4/14/26",c2t:"never mentions an SGLT2 inhibitor or a reason to hold one"}
+];
+
+/* ---------- steps ---------- */
+const STEPS=[
+ {h:"The agent's five answers for Mrs. Delgado",sub:"Fluent. Confident. <b>How would you check them?</b>",
+  un:{w:"the question",t:"For each heart-failure drug class: on it, excused, or a real gap?",d:"The agent read her chart and answered. On the right is the chart itself: six documents.",a:"Press Next (or &rarr;) to see where each answer came from."}},
+ {h:"Every answer carries a receipt",sub:"Each answer points to <b>the exact sentence</b> in her chart that it relied on.",
+  un:{w:"unpacked",t:"Citation (grounding)",d:"Every claim must point to the exact sentence it came from. No quote, no answer.",a:"Like a resident who says “K was 5.9, it’s in the April nephrology note”, and can open it. Hover an answer to follow its line."}},
+ {h:"A sixth answer. It sounds right.",sub:"Its line goes looking for the sentence it quotes, and <b>finds nothing</b>.",
+  un:{w:"unpacked",t:"Hallucination",d:"A fluent, confident statement with no source behind it. The model writes what sounds likely, not what it looked up.",a:"Like a sign-out detail nobody can find in the chart. And this one would erase a real beta-blocker gap."}},
+ {h:"A second checker, with fixed rules",sub:"It doesn't ask the model how sure it is. <b>It looks.</b>",
+  un:{w:"unpacked",t:"Verification",d:"A check that does not rely on the model's own confidence: is the quote in the chart word for word, and does it say what the answer claims?",a:"Like a pharmacist checking an order against the chart, every time, the same way."}},
+ {h:"A clinician reviews",sub:"The tray and the summary go to a person. <b>The agent drafts; the clinician decides.</b>",
+  un:{w:"unpacked",t:"Human in the loop",d:"Anything the checker can't verify lands in a tray for a person. Nothing goes to a patient's care without a human.",a:"Presenter: click Approve (or press Next)."}},
+ {h:"Signed, then sent, by a human",sub:"The finding becomes a <b>draft</b> to her primary care physician. Edit it before it goes.",
+  un:{w:"unpacked",t:"Draft, not order",d:"The agent's output is a suggestion. The clinician can rewrite it, send it, or throw it away.",a:"Try editing the draft message."}},
+ {h:"Your turn: make the agent sloppy",sub:"The checker catches every made-up claim. <b>Switch it off and see what slips through.</b>",
+  un:{w:"unpacked",t:"Deterministic",d:"Same input, same result, every time. The checker is plain code that compares text, not another guess.",a:"Drag the slider (0 to 3 made-up claims). Flip the checker off."}},
+ {h:"Trust the receipts, not the confidence",sub:"",un:null}
+];
+const NST=STEPS.length;
+let step=0, run=0;
+const ABORT={abort:1};
+
+/* ---------- DOM refs ---------- */
+const list=$("#list"), tray=$("#tray"), trayList=$("#trayList"), svg=$("#lines"), main=$("#main"),
+      docScroll=$("#docScroll"), ansScroll=$("#ansScroll"), shield=$("#shield"), con=$("#con"), conb=$("#conb"), cont=$("#cont"),
+      toyEl=$("#toy"), review=$("#review"), stamp=$("#stamp"), take=$("#take"), warn=$("#warn");
+let cards=[], checking=null, shieldPos={x:0,y:0,init:false};
+
+function sv(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+const icon=(id,color)=>`<svg${color?` style="color:${color}"`:""}><use href="#i-${id}"/></svg>`;
+
+function makeCard(d,anim,delay){
+  const el=document.createElement("div");
+  el.className="card"+(d.fake?" fake":"")+(anim?" in":"");
+  if(anim&&delay)el.style.animationDelay=(delay*K)+"ms";
+  el.tabIndex=0;
+  el.innerHTML=`<div class="r1"><span class="lab">${d.lab}</span><span class="st">agent: confident</span></div>
+    <div class="av${d.gap?" gap":""}">${d.ans}</div>
+    <div class="q"><span class="qt">“${d.q}”</span><span class="wh">${d.where}</span></div>
+    ${d.src?`<button class="jump">${icon("down")}Jump to source</button>`:""}`;
+  list.appendChild(el);
+  const g=sv("g",{},svg);
+  const glow=sv("path",{fill:"none","stroke-width":10,"stroke-linecap":"round",opacity:0},g);
+  const ln=sv("path",{fill:"none","stroke-width":2.4,"stroke-linecap":"round"},g);
+  const brk=sv("rect",{width:3.5,rx:1.5,fill:C.amber,opacity:0},g);
+  const sdot=sv("circle",{r:4,opacity:0},g);
+  const fray=sv("path",{fill:"none",stroke:C.red,"stroke-width":2,"stroke-linecap":"round",opacity:0},g);
+  const cut=sv("path",{fill:"none",stroke:C.red,"stroke-width":3,"stroke-linecap":"round",opacity:0},g);
+  const dot=sv("circle",{r:5,fill:C.cyan,opacity:0},g);
+  const nos=sv("text",{fill:C.red,"font-size":12,"font-family":"-apple-system,Segoe UI,Arial,sans-serif","font-weight":600,"text-anchor":"end",opacity:0},g);
+  nos.textContent="no source";
+  const c={d,el,g:{g,glow,ln,brk,dot,sdot,fray,cut,nos},L:{p:0,op:1,fray:0,hl:0,dot:0,glow:0,cut:0,white:0,col:C.cyan},res:null};
+  el.addEventListener("mouseenter",()=>hot(c,true));
+  el.addEventListener("mouseleave",()=>hot(c,false));
+  el.addEventListener("focus",()=>hot(c,true));
+  el.addEventListener("blur",()=>hot(c,false));
+  el.addEventListener("click",e=>{ if(e.target.closest(".jump")){jump(c);return;} hot(c,true); if(phone()&&c.d.src&&c.el.classList.contains("shq"))jump(c); });
+  cards.push(c);
+  return c;
+}
+function hot(c,on){
+  c.L.glow=on?1:0; c.el.classList.toggle("hot",on);
+  const sp=c.d.src&&document.getElementById(c.d.src);
+  if(sp&&c.L.hl>0){ sp.classList.toggle("hot",on); if(on&&!phone())scrollDocTo(sp); }
+}
+function scrollDocTo(sp){
+  const dr=docScroll.getBoundingClientRect(), r=sp.getBoundingClientRect();
+  if(r.top>=dr.top+8&&r.bottom<=dr.bottom-8)return;
+  docScroll.scrollTo({top:docScroll.scrollTop+r.top-dr.top-dr.height/2+r.height/2,behavior:RM?"auto":"smooth"});
+}
+function jump(c){
+  const sp=document.getElementById(c.d.src); if(!sp)return;
+  if(phone()){ const r=sp.getBoundingClientRect(); window.scrollTo({top:window.scrollY+r.top-window.innerHeight/2,behavior:RM?"auto":"smooth"}); }
+  else scrollDocTo(sp);
+  sp.classList.remove("flash"); void sp.offsetWidth; sp.classList.add("flash");
+}
+function setSt(c,kind,text){
+  const st=c.el.querySelector(".st");
+  st.className="st"+(kind?" "+kind:"");
+  st.innerHTML=(kind==="ok"?icon("check"):kind==="bad"?icon("x"):kind==="chk"?icon("shield"):"")+text;
+}
+function showQuote(c){c.el.classList.add("shq");}
+function setWhere(c,text,bad){const w=c.el.querySelector(".wh");w.textContent=text;w.classList.toggle("bad",!!bad);}
+function hlSpan(c,cls){const sp=c.d.src&&document.getElementById(c.d.src);if(sp){sp.classList.remove("hl","bad");if(cls)sp.classList.add(cls);}}
+function removeCard(c){c.el.remove();c.g.g.remove();cards=cards.filter(x=>x!==c);}
+
+/* ---------- animation helpers ---------- */
+const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+function mk(inst,id){
+  return {
+    w:ms=>inst?Promise.resolve():new Promise(r=>setTimeout(r,ms*K)).then(()=>{if(id!==run)throw ABORT;}),
+    tw:(o,k,to,ms)=>{ if(inst){o[k]=to;return Promise.resolve();}
+      const from=o[k],t0=performance.now(),dur=Math.max(1,ms*K);
+      return new Promise((res,rej)=>{ (function f(now){ if(id!==run){rej(ABORT);return;} const t=Math.min(1,(now-t0)/dur); o[k]=from+(to-from)*ease(t); if(t<1)requestAnimationFrame(f); else res(); })(t0); }); },
+    inst,id
+  };
+}
+
+/* ---------- line rendering, every frame ---------- */
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function frame(now){
+  requestAnimationFrame(frame);
+  if(phone())return;
+  const mr=main.getBoundingClientRect(), dr=docScroll.getBoundingClientRect(), ar=ansScroll.getBoundingClientRect();
+  const dTop=dr.top-mr.top+6, dBot=dr.bottom-mr.top-6;
+  for(const c of cards){
+    const L=c.L,G=c.g;
+    if(L.op<=0.01||L.p<=0.001){G.g.style.display="none";continue;}
+    G.g.style.display=""; G.g.style.opacity=L.op;
+    const cr=c.el.getBoundingClientRect();
+    const sx=cr.right-mr.left+1;
+    let sy=clamp(cr.top+cr.height/2-mr.top, ar.top-mr.top+4, ar.bottom-mr.top-4);
+    let ex=dr.left-mr.left+3, ey, b0=0,b1=0, off=false;
+    if(c.d.src){
+      const rs=document.getElementById(c.d.src).getClientRects(); const r0=rs[0], rl=rs[rs.length-1];
+      ey=r0.top+r0.height/2-mr.top; b0=r0.top-mr.top; b1=rl.bottom-mr.top;
+      if(ey<dTop||ey>dBot)off=true;
+      ey=clamp(ey,dTop,dBot); b0=clamp(b0,dTop,dBot); b1=clamp(b1,dTop,dBot);
+    } else {
+      ex=sx+(ex-sx)*0.8; ey=sy+c.d.dy+50*L.fray;
+    }
+    const dx=(ex-sx)*0.55;
+    const d=`M${sx.toFixed(1)},${sy.toFixed(1)} C${(sx+dx).toFixed(1)},${sy.toFixed(1)} ${(ex-dx).toFixed(1)},${(ey-(c.d.src?0:30*L.fray)).toFixed(1)} ${ex.toFixed(1)},${ey.toFixed(1)}`;
+    G.ln.setAttribute("d",d); G.glow.setAttribute("d",d);
+    const len=G.ln.getTotalLength();
+    const col=L.white>0.5?C.white:L.col;
+    G.ln.setAttribute("stroke",col); G.glow.setAttribute("stroke",col);
+    if(L.p<0.999){ G.ln.style.strokeDasharray=len+" "+len; G.ln.style.strokeDashoffset=len*(1-L.p); G.ln.style.opacity=1; }
+    else if(L.cut>0||off){ G.ln.style.strokeDasharray="6 6"; G.ln.style.strokeDashoffset=0; G.ln.style.opacity=off?.45:1; }
+    else { G.ln.style.strokeDasharray="none"; G.ln.style.strokeDashoffset=0; G.ln.style.opacity=1; }
+    G.glow.setAttribute("opacity",(Math.max(L.glow*0.35,L.white*0.45)*Math.min(1,L.p*3)).toFixed(2));
+    G.ln.setAttribute("stroke-width",(L.glow||L.white)?3.4:2.4);
+    // travelling dot
+    if(L.dot>0){ const pt=G.ln.getPointAtLength(len*L.p); G.dot.setAttribute("cx",pt.x); G.dot.setAttribute("cy",pt.y);
+      const pulse=c.d.src?1:(L.p>0.98?0.55+0.45*Math.sin(now/90):1);
+      G.dot.setAttribute("opacity",(L.dot*pulse).toFixed(2)); G.dot.setAttribute("fill",L.fray>0.3?C.red:C.cyan); }
+    else G.dot.setAttribute("opacity",0);
+    // start dot
+    G.sdot.setAttribute("cx",sx); G.sdot.setAttribute("cy",sy); G.sdot.setAttribute("fill",col); G.sdot.setAttribute("opacity",1);
+    // bracket at the source sentence
+    if(c.d.src){ G.brk.setAttribute("x",ex-1); G.brk.setAttribute("y",b0); G.brk.setAttribute("height",Math.max(4,b1-b0));
+      G.brk.setAttribute("fill",L.cut>0?C.red:C.amber); G.brk.setAttribute("opacity",(L.hl*(off?.4:1)).toFixed(2)); }
+    // fray
+    if(L.fray>0){ const f=L.fray*11;
+      G.fray.setAttribute("d",`M${ex},${ey} l${f*.9},${-f*.55} M${ex},${ey} l${f},${f*.1} M${ex},${ey} l${f*.7},${f*.75} M${ex},${ey} l${f*.2},${f}`);
+      G.fray.setAttribute("opacity",L.fray.toFixed(2));
+      G.nos.setAttribute("x",ex+10); G.nos.setAttribute("y",ey+25); G.nos.setAttribute("opacity",L.fray.toFixed(2));
+    } else { G.fray.setAttribute("opacity",0); G.nos.setAttribute("opacity",0); }
+    // checker's cut mark
+    const mid=G.ln.getPointAtLength(len*0.5); c.mid=mid;
+    if(L.cut>0){ const s=7*L.cut; G.cut.setAttribute("d",`M${mid.x-s},${mid.y-s} L${mid.x+s},${mid.y+s} M${mid.x+s},${mid.y-s} L${mid.x-s},${mid.y+s}`); G.cut.setAttribute("opacity",L.cut.toFixed(2)); }
+    else G.cut.setAttribute("opacity",0);
+  }
+  // checker shield follows the line it is scanning
+  if(shield.classList.contains("on")){
+    let tx,ty;
+    if(checking&&checking.mid){tx=checking.mid.x;ty=checking.mid.y;}
+    else { const ar2=ansScroll.getBoundingClientRect(); tx=ar2.right-mr.left+((dr.left-ar2.right)/2); ty=ar2.top-mr.top+22; }
+    if(!shieldPos.init){shieldPos={x:tx,y:ty,init:true};}
+    shieldPos.x+=(tx-shieldPos.x)*(RM?1:0.22); shieldPos.y+=(ty-shieldPos.y)*(RM?1:0.22);
+    shield.style.transform=`translate(${(shieldPos.x-27).toFixed(1)}px,${(shieldPos.y-20).toFixed(1)}px)`;
+  }
+}
+requestAnimationFrame(frame);
+
+/* ---------- checker console ---------- */
+function conClaim(c){ conb.innerHTML=`<div class="cl">&gt; ${c.d.lab}: ${c.d.ans}</div><div class="ck" id="ck1"><span class="k">1 &middot; Quote in the chart, word for word? <i>&hellip;</i></span></div><div class="ck" id="ck2"></div>`; }
+function conRes(n,pass,txt){ const e=$("#ck"+n); if(!e)return;
+  const q=n===1?"Quote in the chart, word for word?":"Does the quote support the answer?";
+  e.innerHTML=`<span class="k">${n} &middot; ${q} <i>${txt}</i></span><span class="${pass===null?"D":pass?"P":"F"}">${pass===null?"SKIP":pass?"PASS":"FAIL"}</span>`; }
+function conTally(p,f){ cont.innerHTML=`<b>${p}</b> pass &middot; <b style="color:${f?C.red:"inherit"}">${f}</b> fail${f?` &rarr; sent to <b>Needs a human</b>`:""}`; }
+
+async function checkOne(c,X,fast){
+  checking=c; c.L.white=1; c.el.classList.add("checking"); setSt(c,"chk","checking");
+  if(!fast){ conClaim(c); }
+  await X.w(fast?120:420);
+  const d=c.d; let pass;
+  if(!d.fake){ if(!fast){conRes(1,true,d.c1); await X.w(330); conRes(2,true,d.c2); await X.w(300);} pass=true; }
+  else if(!d.src){ if(!fast){conRes(1,false,d.c1t); await X.w(330); conRes(2,null,d.c2t); await X.w(300);} pass=false; }
+  else { if(!fast){conRes(1,true,d.c1t); await X.w(330); conRes(2,false,d.c2t); await X.w(300);} pass=false; }
+  c.L.white=0; c.el.classList.remove("checking");
+  c.res=pass?"pass":"fail";
+  if(pass){ setSt(c,"ok","verified"); c.el.classList.add("passed"); }
+  else { setSt(c,"bad",d.src?"doesn't support":"no source"); c.el.classList.add("failed"); c.L.col=C.red;
+    if(d.src){ X.tw(c.L,"cut",1,300).catch(()=>{}); hlSpan(c,"bad"); } }
+  await X.w(fast?60:180);
+  return pass;
+}
+function toTray(c,X){
+  const first=c.el.getBoundingClientRect();
+  trayList.appendChild(c.el);
+  const em=trayList.querySelector(".empty"); if(em)em.remove();
+  if(!X.inst&&!phone()){ const last=c.el.getBoundingClientRect();
+    c.el.animate([{transform:`translate(${first.left-last.left}px,${first.top-last.top}px)`,opacity:.9},{transform:"none",opacity:1}],{duration:650*K,easing:"cubic-bezier(.2,.8,.2,1)"}); }
+  c.el.classList.remove("in");
+  if(c.d.src)hlSpan(c,null);
+  return X.tw(c.L,"op",0,450);
+}
+
+/* ---------- reset to a clean slate ---------- */
+function reset(){
+  cards.forEach(c=>{c.el.remove();c.g.g.remove();}); cards=[];
+  list.innerHTML=""; trayList.innerHTML=""; tray.classList.remove("on","many"); list.classList.remove("compact");
+  document.querySelectorAll(".s").forEach(s=>s.classList.remove("hl","bad","hot","flash"));
+  con.classList.remove("on"); conb.innerHTML=""; cont.innerHTML=""; conb.style.display=""; toyEl.classList.remove("on");
+  review.classList.remove("on"); review.innerHTML=""; main.classList.remove("review");
+  stamp.classList.remove("on"); take.classList.remove("on"); warn.classList.remove("on");
+  shield.classList.remove("on"); shieldPos.init=false; checking=null;
+}
+function realCards(anim){ return REAL.map((d,i)=>makeCard(d,anim,i*110)); }
+async function drawReal(c,X,ms){
+  showQuote(c); c.L.dot=1;
+  await X.tw(c.L,"p",1,ms); c.L.dot=0;
+  hlSpan(c,"hl"); X.tw(c.L,"hl",1,250).catch(()=>{});
+}
+async function drawFake(c,X,ms){
+  showQuote(c);
+  if(c.d.src){ return drawReal(c,X,ms); }
+  setWhere(c,"searching her chart…"); c.L.dot=1;
+  await X.tw(c.L,"p",1,ms);
+  await X.w(ms*0.6);
+  c.L.col=C.red; c.el.classList.add("nosrc");
+  await X.tw(c.L,"fray",1,500);
+  c.L.dot=0;
+  setWhere(c,"not in her chart",true);
+}
+
+/* ---------- step scripts ---------- */
+const S=[];
+S[0]=async X=>{ /* cards are created in play() */ };
+S[1]=async X=>{
+  const cs=cards.filter(c=>!c.d.fake);
+  for(const c of cs){ await drawReal(c,X,650); await X.w(200); }
+};
+S[2]=async X=>{
+  const c=makeCard(FAKE[0],!X.inst);
+  if(phone()&&!X.inst)c.el.scrollIntoView({block:"center",behavior:"smooth"});
+  await X.w(600);
+  await drawFake(c,X,900);
+};
+S[3]=async X=>{
+  con.classList.add("on"); tray.classList.add("on");
+  trayList.innerHTML=`<div class="empty">Empty so far.</div>`;
+  if(!X.inst){ shield.classList.add("on"); }
+  let p=0,f=0; const fails=[];
+  conTally(0,0);
+  for(const c of cards.slice()){
+    if(X.inst){ c.res=c.d.fake?"fail":"pass"; if(c.d.fake){setSt(c,"bad","no source");c.el.classList.add("failed");c.L.col=C.red;} else {setSt(c,"ok","verified");c.el.classList.add("passed");} }
+    else await checkOne(c,X,false);
+    if(c.res==="pass")p++; else {f++;fails.push(c);}
+    conTally(p,f);
+  }
+  checking=null;
+  await X.w(350);
+  for(const c of fails) toTray(c,X);
+  await X.w(700);
+  shield.classList.remove("on");
+  if(X.inst){ conb.innerHTML=`<div class="cl">&gt; done: 6 claims checked</div><div class="ck"><span class="k">1 &middot; Quote in the chart, word for word?</span><span class="P">5 PASS</span><span class="F">1 FAIL</span></div><div class="ck"><span class="k">2 &middot; Does the quote support the answer?</span><span class="P">5 PASS</span><span class="D">1 SKIP</span></div>`; }
+};
+function trayCount(){return trayList.querySelectorAll(".card").length;}
+S[4]=async X=>{
+  main.classList.add("review");
+  const fk=cards.filter(c=>c.d.fake);
+  review.innerHTML=`<div class="rv">
+    <div class="rvh"><div class="av2">${icon("doc","var(--green)")}</div><div><b>Clinician review</b><span>Rosa Delgado, 71 &middot; HFrEF &middot; GDMT check</span></div></div>
+    <div class="rvs">${icon("check","var(--green)")}<div><b>5 answers</b>, each with a quote the checker found word for word in her chart.</div></div>
+    <div class="rvs">${icon("hand","var(--red)")}<div><b>${fk.length} claim${fk.length===1?"":"s"} in “Needs a human”:</b> ${fk.map(c=>`<span class="bq">“${c.d.lab}: ${c.d.ans}”</span>`).join(", ")}. No such sentence in her chart. <span class="dec">clinician: discard</span></div></div>
+    <div class="rvs">${icon("alert","var(--amber)")}<div>Finding: <b style="color:var(--red)">beta blocker GAP</b>. She is on <span class="qq">metoprolol tartrate</span>, which is not an evidence-based HF beta blocker, and no reason is documented.</div></div>
+    <div class="rvact"><button class="btn go pulse" id="approve">${icon("check")}Approve</button><span class="rvnote">Nothing goes to a patient's care without a human.</span></div>
+  </div>`;
+  review.classList.add("on");
+  $("#approve").addEventListener("click",()=>{ if(step===4)go(5); });
+  if(phone()&&!X.inst) setTimeout(()=>review.scrollIntoView({block:"start",behavior:"smooth"}),50);
+};
+const DRAFT="Re: Rosa Delgado, 71 · HFrEF (LVEF 30%, echo 8/29/26)\n\nConsider evidence-based beta blocker (carvedilol, bisoprolol, or metoprolol succinate) in place of metoprolol tartrate. MRA held for hyperkalemia (nephrology 4/14). SGLT2i declined by patient (6/10) — revisit.";
+let draftText=DRAFT;
+S[5]=async X=>{
+  stamp.classList.add("on");
+  review.innerHTML=`<div class="rv">
+    <div class="okh">${icon("check")}Approved &middot; reviewed by clinician</div>
+    <div class="dlab">${icon("pen")}<b>Draft message to her PCP</b>&nbsp;you can edit before sending</div>
+    <textarea id="draft" spellcheck="false" aria-label="Draft message to PCP"></textarea>
+    <div class="rvact"><button class="btn go" id="send">${icon("send")}Send to PCP</button><span id="sent"></span></div>
+    <div class="rvnote" style="margin-top:10px">Simulated. Every word above can be changed by the clinician; nothing is sent automatically.</div>
+  </div>`;
+  review.classList.add("on"); main.classList.add("review");
+  const ta=$("#draft"); ta.value=draftText; ta.addEventListener("input",()=>{draftText=ta.value;});
+  $("#send").addEventListener("click",()=>{ ta.disabled=true; const b=$("#send"); b.disabled=true;
+    $("#sent").innerHTML=icon("check")+"Sent (simulated) &middot; signed by the reviewing clinician"; });
+};
+/* ---------- toy ---------- */
+let toyN=1, toyOn=true;
+async function toy(X){
+  // clear fakes, keep the five real answers with their receipts
+  cards.filter(c=>c.d.fake).forEach(removeCard);
+  shield.classList.remove("on"); shieldPos.init=false; checking=null;
+  cards.forEach(c=>{c.L.white=0;c.el.classList.remove("checking");});
+  trayList.innerHTML=""; tray.classList.toggle("on",toyOn); tray.classList.toggle("many",toyN>=2); warn.classList.remove("on");
+  if(toyOn)trayList.innerHTML=`<div class="empty">Empty so far.</div>`;
+  document.querySelectorAll(".s").forEach(s=>s.classList.remove("bad"));
+  for(const c of cards){ c.L.p=1; c.L.hl=1; c.L.col=C.cyan; c.L.cut=0; c.L.op=1; showQuote(c); hlSpan(c,"hl"); c.el.classList.remove("passed","failed");
+    setSt(c,"","agent: confident"); }
+  $("#slopv").textContent=toyN+" made-up claim"+(toyN===1?"":"s");
+  const tr=$("#toyres"); tr.className="mid"; tr.innerHTML="Agent is answering…";
+  conb.style.display="none"; cont.innerHTML="";
+  list.classList.toggle("compact",toyN>=2);
+  const fk=FAKE.slice(0,toyN).map(d=>makeCard(d,!X.inst));
+  await X.w(250);
+  await Promise.all(fk.map(c=>drawFake(c,X,600)));
+  if(!toyOn){
+    cards.forEach(c=>setSt(c,"","agent: confident"));
+    if(toyN===0){ tr.className="mid"; tr.innerHTML=icon("alert")+"<span>Checker off. Nothing made up this time, but you would have no way to know.</span>"; }
+    else { tr.className="bad"; tr.innerHTML=icon("alert")+`<span>Checker off: ${toyN} made-up claim${toyN===1?"":"s"} sit${toyN===1?"s":""} among the real answers, looking just as confident.</span>`;
+      $("#warnt").textContent=`Unchecked: ${toyN} made-up claim${toyN===1?"":"s"} would reach the clinician as fact`; warn.classList.add("on"); }
+    return;
+  }
+  tr.className="mid"; tr.innerHTML="Checker scanning…";
+  if(!X.inst){ shield.classList.add("on"); }
+  let p=0,f=0; const fails=[];
+  for(const c of cards.slice()){
+    if(X.inst){ c.res=c.d.fake?"fail":"pass"; if(c.d.fake){setSt(c,"bad",c.d.src?"doesn't support":"no source");c.el.classList.add("failed");c.L.col=C.red;if(c.d.src){c.L.cut=1;hlSpan(c,"bad");}} else {setSt(c,"ok","verified");c.el.classList.add("passed");} }
+    else await checkOne(c,X,true);
+    if(c.res==="pass")p++; else {f++;fails.push(c);}
+  }
+  checking=null;
+  await X.w(250);
+  for(const c of fails) toTray(c,X);
+  await X.w(500); shield.classList.remove("on");
+  tr.className="ok";
+  tr.innerHTML=icon("shield")+(toyN===0?"<span>No made-up claims. All 5 answers verified.</span>":`<span>Checker caught ${f} of ${toyN} made-up claim${toyN===1?"":"s"}. 5 of 5 real answers verified.</span>`);
+}
+S[6]=async X=>{
+  main.classList.remove("review"); review.classList.remove("on"); stamp.classList.remove("on");
+  cards.filter(c=>c.d.fake).forEach(removeCard);
+  con.classList.add("on"); toyEl.classList.add("on");
+  $("#slop").value=toyN; syncChk();
+  await toy(X);
+};
+S[7]=async X=>{ take.classList.add("on"); };
+
+function syncChk(){ const b=$("#chk"); b.setAttribute("aria-checked",toyOn?"true":"false"); $("#chkt").textContent=toyOn?"Checker ON":"Checker OFF"; }
+$("#slop").addEventListener("input",e=>{ toyN=+e.target.value; if(step===6){ const id=++run; toy(mk(false,id)).catch(x=>{if(x!==ABORT)throw x;}); } });
+$("#chk").addEventListener("click",()=>{ toyOn=!toyOn; syncChk(); if(step===6){ const id=++run; toy(mk(false,id)).catch(x=>{if(x!==ABORT)throw x;}); } });
+
+/* ---------- navigation ---------- */
+const dots=$("#dots"); for(let i=0;i<NST;i++)dots.appendChild(document.createElement("i"));
+function chrome(){
+  const st=STEPS[step];
+  $("#ht").textContent=st.h; $("#sub").innerHTML=st.sub;
+  [...dots.children].forEach((d,i)=>{d.className=i===step?"on":i<step?"done":"";});
+  $("#stepn").textContent=(step+1)+" / "+NST;
+  $("#bBack").disabled=step===0; $("#bNext").disabled=step===NST-1;
+  const u=$("#unpack");
+  if(st.un){ u.className="unpack"+(st.un.w==="unpacked"?"":" hint"); u.innerHTML=`<div class="w">${st.un.w}</div><h3>${st.un.t}</h3><p>${st.un.d}</p><p class="an">${st.un.a}</p>`; }
+}
+async function go(n){
+  n=clamp(n,0,NST-1);
+  const id=++run; step=n; chrome(); reset();
+  realCards(n===0);
+  if(phone()&&n!==4&&n!==5)window.scrollTo({top:0,behavior:"auto"});
+  try{
+    for(let k=1;k<=n;k++){ await S[k](mk(k<n,id)); if(id!==run)return; }
+  }catch(e){ if(e!==ABORT)throw e; }
+}
+$("#bNext").addEventListener("click",()=>go(step+1));
+$("#bBack").addEventListener("click",()=>go(step-1));
+$("#takeBack").addEventListener("click",()=>go(6));
+document.addEventListener("keydown",e=>{
+  const t=e.target; if(t&&(t.tagName==="TEXTAREA"||t.tagName==="INPUT"&&t.type!=="range"))return;
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  const k=e.key;
+  if(k==="ArrowRight"||k===" "||k==="PageDown"){e.preventDefault();go(step+1);}
+  else if(k==="ArrowLeft"||k==="PageUp"){e.preventDefault();go(step-1);}
+  else if(k==="r"||k==="R"){draftText=DRAFT;toyN=1;toyOn=true;go(0);}
+  else if(k==="f"||k==="F"){ if(document.fullscreenElement)document.exitFullscreen(); else document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{}); }
+});
+go(0);
+})();
+</script>
+</body>
+</html>
