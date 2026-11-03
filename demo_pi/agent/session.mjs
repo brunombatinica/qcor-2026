@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { issueToken } from "../ehr/fhir.mjs";
 import { PATIENTS, TODAY } from "../ehr/patients.mjs";
 import { PI_TOOLS, normalize } from "./catalog.mjs";
-import { MODEL } from "./model.mjs";
+import { MODEL, reasoningOff } from "./model.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PI = join(HERE, "..", "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
@@ -88,7 +88,7 @@ export function runSession({ patientId, build, onEvent = () => {}, signal, strea
   const env = {
     ...process.env,
     DEMO_BASE_URL: MODEL.baseUrl, DEMO_API_KEY: MODEL.apiKey, DEMO_MODEL: MODEL.id,
-    DEMO_CONTEXT_WINDOW: String(MODEL.agentWindow), DEMO_MAX_TOKENS: String(MODEL.maxTokens),
+    DEMO_CONTEXT_WINDOW: String(MODEL.agentWindow), DEMO_MAX_TOKENS: String(MODEL.maxTokens), DEMO_REASONING_OFF: reasoningOff(),
     DEMO_FHIR_BASE: FHIR.base, DEMO_FHIR_TOKEN: grant.access_token, DEMO_PATIENT: patient.id,
     DEMO_STRUCTURED: b.tools.includes("structured") ? "1" : "0", DEMO_ANSWER_FIELDS: answerFields(b).join(","),
     PI_CODING_AGENT_DIR: SETTINGS,

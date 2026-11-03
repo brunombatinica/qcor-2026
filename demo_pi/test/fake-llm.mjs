@@ -35,6 +35,7 @@ function decide(messages, tools) {
 }
 
 export const requests = [];      // every chat request, for test/e2e.mjs to inspect
+export const keys = [];          // the Authorization header of each, for test/unlock.mjs
 
 const server = createServer((req, res) => {
   if (req.method === "GET" && req.url.endsWith("/models")) {
@@ -46,6 +47,7 @@ const server = createServer((req, res) => {
   req.on("end", () => {
     const r = JSON.parse(body || "{}");
     requests.push(r);
+    keys.push(req.headers.authorization);
     const messages = r.messages || [];
     if (/^An agent reviewed/.test(contentOf(messages[0] || {}))) {      // the prose grader, not streamed
       const t = contentOf(messages[1] || {});

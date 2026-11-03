@@ -105,8 +105,36 @@ The model is any OpenAI-compatible `/v1` endpoint:
 | `DEMO_CONTEXT_WINDOW` / `DEMO_MAX_TOKENS` | 131072 / 2048 |
 | `DEMO_CONCURRENCY` | 8 sessions at once (vLLM extract runs `--max-num-seqs 8`) |
 | `DEMO_SESSION_TIMEOUT_MS` | 180000 |
+| `DEMO_UNLOCK_CODE` | unset: the workshop code, to unlock `workshop-key.json` at start (below) |
+| `DEMO_REASONING_OFF` | what pi and the grader send as `reasoning_effort`: `none` for OpenAI's GPT-5.1 and later (`gpt-6-luna`), `minimal` for `gpt-5`, `-mini`, `-nano`, nothing elsewhere; `omit` sends nothing |
 
-To switch services on the day: `DEMO_BASE_URL=https://… DEMO_API_KEY=… DEMO_MODEL=… just demo-pi`.
+On OpenAI, `gpt-6-luna` is the smallest current model. It reasons by default, and on `/chat/completions` it refuses
+tool calls unless `reasoning_effort` is `none` (an HTTP 400), so the demo declares it a reasoning model and pi's
+`--thinking off` sends `none`; the grader sends the same and drops `temperature` and `max_tokens`, which it also refuses
+(`agent/model.mjs` `reasoningOff`, `test/openai-request.mjs`). Live on Rosa (notes and the note tools, *Is it a gap?*):
+all three right, 2 tool calls, about 1,450 tokens, 8 s. The recorded runs are still Qwen's.
+
+`just demo-pi` reads them from `.env` in the repo root (gitignored; [.env.example](../.env.example)) as well as your
+environment. To switch services on the day: `DEMO_BASE_URL=https://… DEMO_API_KEY=… DEMO_MODEL=… just demo-pi`.
+
+### The workshop key: one code for the room
+
+For participants who run their own copy (their own dev container), the API key ships with the repo encrypted, and
+the code we give the room unlocks it ([agent/workshop-key.mjs](agent/workshop-key.mjs)):
+
+```bash
+just key-encrypt          # DEMO_BASE_URL, DEMO_API_KEY, DEMO_MODEL from .env -> workshop-key.json; prints a code like k7mp-ra3x
+```
+
+Commit `workshop-key.json`; put the code on a slide, never in the repo (`--code …` picks one; 8 characters or more). A
+server with no endpoint or key set and a `workshop-key.json` starts **locked**: it replays, and the header has a
+*Workshop code* box. The right code unlocks the model for everyone on that server until it restarts. The key is
+decrypted in the server's memory only and never sent to the page. A shared server can start unlocked with
+`DEMO_UNLOCK_CODE`, or just with `DEMO_API_KEY` in its `.env`.
+
+The repo is public, so the encrypted file is too: the code is all that protects the key, and anyone in the room can
+recover the key with it. Use a key from an OpenAI project with a budget cap, and revoke it after the workshop.
+`node test/with-stand-in.mjs --locked` serves the page locked behind a throwaway key whose code is `test-code`.
 
 Test results are cached per model, build, system prompt and cohort in `.cache/`. A build the room has already tried comes
 back at once; *Ignore cache* re-runs one and refreshes its cache. Rosa always runs live. The build is kept in the
@@ -134,7 +162,8 @@ Checks:
 
 - `npm test` runs the real server and real pi sessions against a regex stand-in model (`test/fake-llm.mjs`, plumbing
   only), then replays every recording with no model (`test/replay.mjs`: none missing or stale, each streamed and
-  scored as the page expects, an unrecorded build refused).
+  scored as the page expects, an unrecorded build refused), then checks the workshop key (`test/unlock.mjs`: locked
+  until the right code, which then reaches the model as the key).
 - `node test/with-stand-in.mjs --port 8771` serves the page on the stand-in without a GPU; the header shows
   `stand-in-regex`.
 
@@ -152,6 +181,7 @@ Checks:
 | `score.mjs` | an answer against the three gold answers, the checks, unsafe actions; a cohort summary |
 | `record.mjs`, `recorded/` | the planned builds, and their runs on the live model, one JSON file per build |
 | `replay.mjs` | replays a recorded run when there is no model (or with `--replay`); skips stale recordings |
+| `encrypt-key.mjs`, `workshop-key.json` | the workshop key: the API key encrypted with the room's code (`agent/workshop-key.mjs`) |
 
 To add a tool: write `agent/tools/<name>.ts`, register it in `extension.ts`, and add its card to `catalog.mjs`
 (and to `PI_TOOLS`).

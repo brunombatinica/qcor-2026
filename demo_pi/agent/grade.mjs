@@ -5,7 +5,7 @@
 //
 //   judge(answerText, referenceWhy)  →  { given: "yes"|"no"|null, why: string|null, whyMatches: bool|null, gap: "yes"|"no"|null }
 
-import { MODEL } from "./model.mjs";
+import { MODEL, reasoningOff } from "./model.mjs";
 
 const PROMPT = `An agent reviewed a heart-failure patient's chart and answered questions about beta blockers. Read its final answer and report only what it explicitly says; do not infer anything it doesn't say.
 Reply with one JSON object with these four fields:
@@ -19,11 +19,14 @@ const map = (v, yes, no) => (v === yes ? "yes" : v === no ? "no" : null);
 export async function judge(text, reference) {
   const none = { given: null, why: null, whyMatches: null, gap: null };
   if (!text) return none;
+  // OpenAI's reasoning models take neither temperature nor max_tokens; reasoning tokens count against the cap
+  const off = reasoningOff();
+  const settings = off ? { reasoning_effort: off, max_completion_tokens: 400 } : { temperature: 0, max_tokens: 200 };
   try {
     const res = await fetch(`${MODEL.baseUrl}/chat/completions`, {
       method: "POST", signal: AbortSignal.timeout(60_000),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${MODEL.apiKey}` },
-      body: JSON.stringify({ model: MODEL.id, temperature: 0, max_tokens: 200, messages: [
+      body: JSON.stringify({ model: MODEL.id, ...settings, messages: [
         { role: "system", content: `${PROMPT}\n\nReference reason: ${reference}` },
         { role: "user", content: text.slice(0, 4000) },
       ] }),

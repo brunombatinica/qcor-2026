@@ -3,6 +3,7 @@
   "configurations": [
     { "name": "qcor", "runtimeExecutable": "python3", "runtimeArgs": ["serve.py", "--port", "8770"], "port": 8770 },
     { "name": "qcor-demo-pi (replay)", "runtimeExecutable": "node", "runtimeArgs": ["demo_pi/server.mjs", "--port", "8771", "--replay"], "port": 8771 },
-    { "name": "qcor-demo-pi (stand-in model)", "runtimeExecutable": "node", "runtimeArgs": ["demo_pi/test/with-stand-in.mjs", "--port", "8771"], "port": 8771 }
+    { "name": "qcor-demo-pi (stand-in model)", "runtimeExecutable": "node", "runtimeArgs": ["demo_pi/test/with-stand-in.mjs", "--port", "8771"], "port": 8771 },
+    { "name": "qcor-demo-pi (locked, code test-code)", "runtimeExecutable": "node", "runtimeArgs": ["demo_pi/test/with-stand-in.mjs", "--port", "8771", "--locked"], "port": 8771 }
   ]
 }

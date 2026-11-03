@@ -1,0 +1,34 @@
+{
+  "name": "qcor_2026",
+  // Self-contained: builds from this repo alone, whether it is cloned on its own or opened as the agents repo's
+  // submodule dissemination/qcor_2026 (open that folder, not the agents repo). See .devcontainer/README.md.
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "..",
+    "args": {
+      "LIBREOFFICE": "false" // "true" for `just pptx-render`
+    }
+  },
+  // named after the repo, so `docker ps` and OrbStack show which one it is ("-dev": the dev container, not a deploy
+  // image); only one container of this name at a time
+  "runArgs": ["--name=qcor_2026-dev", "--hostname=qcor-2026"],
+  // node_modules live in volumes, not the bind mount: a Mac's node_modules (native builds for darwin) must not
+  // leak into the Linux container, or the other way round.
+  "mounts": [
+    "source=qcor-demo-pi-node-modules-${devcontainerId},target=${containerWorkspaceFolder}/demo_pi/node_modules,type=volume",
+    "source=qcor-pptx-node-modules-${devcontainerId},target=${containerWorkspaceFolder}/pptx/node_modules,type=volume",
+    // Claude Code's login and settings, so a rebuild doesn't log you out
+    "source=qcor-claude-${devcontainerId},target=/home/node/.claude,type=volume"
+  ],
+  "forwardPorts": [8771, 8770],
+  "portsAttributes": {
+    "8771": { "label": "Build an agent (demo_pi)", "onAutoForward": "notify" },
+    "8770": { "label": "talk + style book (just view)", "onAutoForward": "silent" }
+  },
+  // the model endpoint and key come from .env (gitignored; copy .env.example), or from Codespaces secrets
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  // the demo starts on 8771 at every container start, in tmux session "demo"; QCOR_AUTOSTART=0 in .env turns it off
+  "postStartCommand": "bash .devcontainer/start-demo.sh",
+  "remoteUser": "node",
+  "updateRemoteUser": true
+}

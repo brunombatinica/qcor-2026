@@ -21,6 +21,23 @@ just pptx            # build pptx/qcor-bruno-agents.pptx
 just test            # the demo's tests (a stand-in model, no network)
 ```
 
+### In the dev container
+
+`.devcontainer/` builds everything above from this repo alone (Node 22, Python 3, just, uv, and Claude Code: `claude`,
+logged in once and kept across rebuilds), and is how the demo is deployed. The container is `qcor_2026-dev` (hostname `qcor-2026`); its user `node` has passwordless `sudo`. Open the folder in VS Code (*Reopen in Container*), GitHub Codespaces, or `npx @devcontainers/cli up
+--workspace-folder .`. At every start the container serves the demo on port 8771 in tmux session `demo` (`tmux attach
+-t demo` to watch it, `just demo-restart` after editing `.env` or the code, `just demo-stop` to free the port;
+`QCOR_AUTOSTART=0` in `.env` turns it off). `node_modules` live in container volumes, so a Mac's and the container's
+don't mix. `LIBREOFFICE: "true"` in `devcontainer.json` adds what `just pptx-render` needs.
+
+The model: copy `.env.example` to `.env` (gitignored) and set `DEMO_BASE_URL`, `DEMO_API_KEY` and `DEMO_MODEL`, or
+use Codespaces secrets of the same names. With neither, the demo replays its recorded runs, or, if there is a
+`demo_pi/workshop-key.json`, waits for the workshop code on the page ([demo_pi/README.md](demo_pi/README.md#the-workshop-key-one-code-for-the-room)).
+
+Opened as the agents repo's submodule (`dissemination/qcor_2026/`), the container runs everything, but git inside it
+can't reach the submodule's history, which lives in the agents repo: commit from the host, or deploy from a plain
+clone of this repo.
+
 ## Working together
 
 Everyone works on `main` in this repo: `git pull` before you start, commit small changes, `git push` when they work.
@@ -49,6 +66,8 @@ Working on a remote machine: forward the ports, e.g. `ssh -L 8770:localhost:8770
 | `sketches/` | the earlier brainstorm board and drafts (superseded by `talk/` and `demo_pi/`) |
 | `docs/pi-notes.md` | notes on the pi agent harness the demo runs on |
 | `tools/` | `talk_pdf.py` (the talk snapshot), `install-libreoffice.sh` (for rendering the PowerPoint) |
+| `.devcontainer/` | the dev container: image, post-create (`npm ci`), and the demo's autostart (`start-demo.sh`) |
+| `.env.example` | the settings `.env` can hold: the model endpoint and key, concurrency, autostart |
 | `NOTES.md` | working notes and open questions |
 
 All patients here are synthetic (Rosa and the 100-patient cohort in `demo_pi/ehr/`). No real patient data goes in

@@ -4,6 +4,7 @@
  *
  *   DEMO_BASE_URL, DEMO_MODEL, DEMO_CONTEXT_WINDOW, DEMO_MAX_TOKENS  the model endpoint (any OpenAI-compatible /v1)
  *   DEMO_API_KEY                                                     its key ("$DEMO_API_KEY" is resolved by pi)
+ *   DEMO_REASONING_OFF                                               reasoning_effort for "off", or empty (agent/model.mjs)
  *   DEMO_FHIR_BASE, DEMO_FHIR_TOKEN                                  the FHIR server and this run's scoped token
  *   DEMO_PATIENT                                                     the patient's FHIR id
  *   DEMO_ANSWER_FIELDS                                               extra answer fields, e.g. quote,confidence
@@ -31,12 +32,16 @@ function env(name: string): string {
 }
 
 export default function (pi: ExtensionAPI) {
+  // a reasoning model (gpt-6-luna) is declared as one, so pi's --thinking off sends reasoning_effort: "none" (or what
+  // DEMO_REASONING_OFF says); left to its default it reasons, and on /chat/completions it then won't call tools
+  const reasoningOff = process.env.DEMO_REASONING_OFF || "";
   pi.registerProvider("demo", {
     baseUrl: env("DEMO_BASE_URL"),
     apiKey: "$DEMO_API_KEY",
     api: "openai-completions",
     models: [{
-      id: env("DEMO_MODEL"), name: env("DEMO_MODEL"), reasoning: false, input: ["text"],
+      id: env("DEMO_MODEL"), name: env("DEMO_MODEL"), input: ["text"],
+      reasoning: Boolean(reasoningOff), ...(reasoningOff ? { thinkingLevelMap: { off: reasoningOff } } : {}),
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: Number(env("DEMO_CONTEXT_WINDOW")), maxTokens: Number(env("DEMO_MAX_TOKENS")),
     }],

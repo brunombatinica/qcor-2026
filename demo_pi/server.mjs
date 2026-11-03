@@ -6,6 +6,7 @@
 //   GET  /api/config    the cards (agent/catalog.mjs), Rosa, and whether the model answers
 //   POST /api/preview   {build}             what a run would be given: scopes, tools, system prompt, first message, command
 //   GET  /api/source    ?file=<tool>.ts     a tool's source, for the under-the-hood panel
+//   POST /api/unlock    {code}              the workshop code: unlocks the model in workshop-key.json (agent/model.mjs)
 //   POST /api/run       {build, patient}    one session, streamed as server-sent events: the trace, then the scored answer
 //   POST /api/cohort    {build, n, fresh}   n patients, DEMO_CONCURRENCY at a time, streamed as they run, then a summary
 //   POST /auth/token, GET /fhir/…           the synthetic EHR (ehr/fhir.mjs)
@@ -21,7 +22,7 @@ import { dirname, extname, join, normalize as normPath } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ACT_EXAMPLE, CRITERIA, DATA, EXAMPLES, TOOLS, criteriaPrompt, normalize } from "./agent/catalog.mjs";
 import { judge } from "./agent/grade.mjs";
-import { MODEL, connect } from "./agent/model.mjs";
+import { MODEL, connect, unlock } from "./agent/model.mjs";
 import { FHIR, byPatientId, commandLine, piTools, runSession, systemPrompt, userPrompt } from "./agent/session.mjs";
 import { handleFhir, scopeOf } from "./ehr/fhir.mjs";
 import { PATIENTS, STATUSES, TODAY } from "./ehr/patients.mjs";
@@ -100,7 +101,7 @@ async function config() {
   const rosa = PATIENTS[0];
   const replayed = await replaying();
   return {
-    model: { id: MODEL.id, baseUrl: MODEL.baseUrl, ok: MODEL.ok, error: MODEL.error },
+    model: { id: MODEL.id, baseUrl: MODEL.baseUrl, ok: MODEL.ok, error: MODEL.error, locked: MODEL.locked },
     replay: replayed ? replayInfo() : null, recorded: replayed ? catalog() : [],
     data: DATA.map((d) => ({ ...d, scope: scopeOf(d) })), tools: TOOLS, criteria: CRITERIA, examples: EXAMPLES, act: ACT_EXAMPLE, statuses: STATUSES,
     cohort: PATIENTS.length, concurrency: CONCURRENCY, today: TODAY,
@@ -120,6 +121,7 @@ async function api(req, res, url) {
   }
   if (req.method !== "POST") return json(res, 405, { error: "POST" });
   const body = await readBody(req);
+  if (url.pathname === "/api/unlock") return (await unlock(body.code)) ? json(res, 200, { ok: MODEL.ok, error: MODEL.error }) : json(res, 403, { error: "That code didn't work." });
   const build = normalize(body.build);
   if (url.pathname === "/api/preview") return json(res, 200, { ...wiring(build, byPatientId(body.patient)), criteria: criteriaPrompt(body.criteria || []) });
   const kind = { "/api/run": "rosa", "/api/cohort": "cohort" }[url.pathname];
@@ -182,9 +184,10 @@ export const server = createServer(async (req, res) => {
 export const ready = new Promise((resolve) => server.listen(PORT, HOST, async () => {
   const port = server.address().port;
   FHIR.base = `http://127.0.0.1:${port}/fhir`;
+  if (MODEL.locked && process.env.DEMO_UNLOCK_CODE && !(await unlock(process.env.DEMO_UNLOCK_CODE))) console.log("DEMO_UNLOCK_CODE is wrong for workshop-key.json");
   if (!REPLAY) await connect();
   console.log(`Build an agent (pi): http://localhost:${port}`);
-  console.log(REPLAY ? "model: none (--replay)" : MODEL.ok ? `model: ${MODEL.id} at ${MODEL.baseUrl}` : `model not reachable yet: ${MODEL.error}`);
+  console.log(REPLAY ? "model: none (--replay)" : MODEL.locked ? `model: ${MODEL.id} at ${MODEL.baseUrl}, locked until someone enters the workshop code` : MODEL.ok ? `model: ${MODEL.id} at ${MODEL.baseUrl}` : `model not reachable yet: ${MODEL.error}`);
   console.log(`replay: ${recordings.size} recorded runs${stale.length ? `, ${stale.length} stale and skipped (${stale.join(", ")}): npm run record` : ""}${REPLAY || !MODEL.ok ? ", replaying" : ", not used while the model answers"}`);
   resolve(port);
 }));

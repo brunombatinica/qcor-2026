@@ -25,6 +25,10 @@ header .tools { display: flex; align-items: center; gap: 10px; }
 .model { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--card2); color: var(--muted); font-family: var(--mono); }
 .model.ok::before { content: "● "; color: var(--green); } .model.bad { color: var(--red); }
 .model.replay { color: var(--amber); } .model.replay::before { content: "▶ "; }
+.unlock { display: flex; align-items: center; gap: 6px; } .unlock[hidden] { display: none; }
+.unlock input { width: 9.5em; font: 12px var(--mono); padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--card2); color: inherit; }
+.unlock button { background: var(--amber-s); border: 1px solid var(--amber); color: var(--amber); font-size: 12px; padding: 3px 10px; border-radius: 999px; cursor: pointer; }
+.unlock .small { color: var(--red); }
 select.rec { background: var(--card2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 13px; min-width: 0; max-width: 100%; }
 .hoodBtn { background: var(--card2); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; cursor: pointer; font-family: var(--mono); font-size: 13px; }
 body.hoodOpen .hoodBtn { border-color: var(--amber); color: var(--amber); }

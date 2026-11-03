@@ -526,6 +526,18 @@ cfg = await (await fetch("/api/config")).json();
 $("model").textContent = cfg.replay ? `replay · ${cfg.replay.models.map((m) => m.split("/").pop()).join(", ") || "nothing recorded"}` : cfg.model.ok ? cfg.model.id.split("/").pop() : "no model";
 $("model").title = cfg.replay ? `Runs recorded on ${cfg.replay.recorded}, replayed; no model is called (${cfg.replay.why})` : cfg.model.ok ? `${cfg.model.id} at ${cfg.model.baseUrl}` : cfg.model.error;
 $("model").className = `model ${cfg.replay ? "replay" : cfg.model.ok ? "ok" : "bad"}`;
+// a locked model (agent/workshop-key.mjs): the code we give the room unlocks it for everyone on this server
+if (cfg.model.locked) {
+  $("unlock").hidden = false;
+  $("model").title = `Replaying recorded runs until the workshop code unlocks ${cfg.model.id}`;
+  $("unlock").onsubmit = async (e) => {
+    e.preventDefault();
+    $("unlockMsg").textContent = "checking…";
+    const r = await post("/api/unlock", { code: $("unlockCode").value }).catch(() => ({ error: "The server didn't answer." }));
+    if (r.error && !("ok" in r)) { $("unlockMsg").textContent = r.error; return; }
+    location.reload();
+  };
+}
 $("pname").textContent = `${cfg.rosa.name}, ${cfg.rosa.age}`;
 $("pdx").textContent = `Heart failure, ejection fraction ${cfg.rosa.ef}%`;
 
