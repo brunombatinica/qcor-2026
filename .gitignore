@@ -9,3 +9,5 @@ __pycache__/
 # Word / PowerPoint lock and temp files
 ~$*
 *.tmp
+# the dev container's SSH login keys (.devcontainer/README.md): local to each computer
+.devcontainer/ssh_authorized_keys

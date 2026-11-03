@@ -1,7 +1,7 @@
 {
-  "name": "qcor_2026",
+  "name": "qcor-2026",
   // Self-contained: builds from this repo alone, whether it is cloned on its own or opened as the agents repo's
-  // submodule dissemination/qcor_2026 (open that folder, not the agents repo). See .devcontainer/README.md.
+  // submodule dissemination/qcor-2026 (open that folder, not the agents repo). See .devcontainer/README.md.
   "build": {
     "dockerfile": "Dockerfile",
     "context": "..",
@@ -11,14 +11,19 @@
   },
   // named after the repo, so `docker ps` and OrbStack show which one it is ("-dev": the dev container, not a deploy
   // image); only one container of this name at a time
-  "runArgs": ["--name=qcor_2026-dev", "--hostname=qcor-2026"],
+  // SSH from this computer only: published on its loopback, never beyond (.devcontainer/README.md). Every create and
+  // start first runs check-loopback-ports.py on the host, which refuses any port published past 127.0.0.1.
+  "runArgs": ["--name=qcor-2026-dev", "--hostname=qcor-2026", "-p", "127.0.0.1:2226:22"],
+  "initializeCommand": "python3 \"${localWorkspaceFolder}/.devcontainer/check-loopback-ports.py\"",
   // node_modules live in volumes, not the bind mount: a Mac's node_modules (native builds for darwin) must not
   // leak into the Linux container, or the other way round.
   "mounts": [
     "source=qcor-demo-pi-node-modules-${devcontainerId},target=${containerWorkspaceFolder}/demo_pi/node_modules,type=volume",
     "source=qcor-pptx-node-modules-${devcontainerId},target=${containerWorkspaceFolder}/pptx/node_modules,type=volume",
-    // Claude Code's login and settings, so a rebuild doesn't log you out
-    "source=qcor-claude-${devcontainerId},target=/home/node/.claude,type=volume"
+    // Claude Code's login and settings, and sshd's host key: one of each for qcor-2026-dev wherever it is built from,
+    // so a rebuild or a fresh clone doesn't log you out or trip "host key changed"
+    "source=qcor-2026-claude,target=/home/node/.claude,type=volume",
+    "source=qcor-2026-ssh-host-keys,target=/etc/ssh/qcor_host_keys,type=volume"
   ],
   "forwardPorts": [8771, 8770],
   "portsAttributes": {
@@ -27,8 +32,12 @@
   },
   // the model endpoint and key come from .env (gitignored; copy .env.example), or from Codespaces secrets
   "postCreateCommand": "bash .devcontainer/post-create.sh",
-  // the demo starts on 8771 at every container start, in tmux session "demo"; QCOR_AUTOSTART=0 in .env turns it off
-  "postStartCommand": "bash .devcontainer/start-demo.sh",
+  // at every container start: the demo on 8771, in tmux session "demo" (QCOR_AUTOSTART=0 in .env turns it off), and
+  // sshd, if .devcontainer/ssh_authorized_keys exists
+  "postStartCommand": {
+    "demo": "bash .devcontainer/start-demo.sh",
+    "ssh": "bash .devcontainer/start-ssh.sh"
+  },
   "remoteUser": "node",
   "updateRemoteUser": true
 }

@@ -2,7 +2,7 @@
 
 An interactive demonstration/presentation for the QCOR workshop at AHA Scientific Sessions 2026. It draws on the
 agent work in the [agents](https://github.com/brunombatinica/agents) repo (the HFQ extraction strategies, the
-accuracy and deployment studies), where this repo is included as the submodule `dissemination/qcor_2026/`. It is
+accuracy and deployment studies), where this repo is included as the submodule `dissemination/qcor-2026/`. It is
 self-contained: everything here runs from a plain clone.
 
 ## Getting started
@@ -12,7 +12,7 @@ installs an old pi). Optional: [uv](https://docs.astral.sh/uv/) for `just talk-p
 `just pptx-render` (`sudo tools/install-libreoffice.sh` on Debian/Ubuntu).
 
 ```sh
-git clone https://github.com/brunombatinica/qcor_2026.git && cd qcor_2026
+git clone https://github.com/brunombatinica/qcor-2026.git && cd qcor-2026
 just                 # list recipes
 just view            # the talk and the style book: http://localhost:8770/  (/ opens the talk)
 just demo-pi         # the "Build an agent" demo: http://localhost:8771/  (no model reachable: replays recorded runs)
@@ -24,7 +24,8 @@ just test            # the demo's tests (a stand-in model, no network)
 ### In the dev container
 
 `.devcontainer/` builds everything above from this repo alone (Node 22, Python 3, just, uv, and Claude Code: `claude`,
-logged in once and kept across rebuilds), and is how the demo is deployed. The container is `qcor_2026-dev` (hostname `qcor-2026`); its user `node` has passwordless `sudo`. Open the folder in VS Code (*Reopen in Container*), GitHub Codespaces, or `npx @devcontainers/cli up
+logged in once and kept across rebuilds), and is how the demo is deployed. The container is `qcor-2026-dev` (hostname `qcor-2026`); its user `node` has passwordless `sudo`. SSH, from this computer only: `ssh qcor-dev` once your public key is in
+`.devcontainer/ssh_authorized_keys` ([.devcontainer/README.md](.devcontainer/README.md#ssh-from-this-computer-only)). Open the folder in VS Code (*Reopen in Container*), GitHub Codespaces, or `npx @devcontainers/cli up
 --workspace-folder .`. At every start the container serves the demo on port 8771 in tmux session `demo` (`tmux attach
 -t demo` to watch it, `just demo-restart` after editing `.env` or the code, `just demo-stop` to free the port;
 `QCOR_AUTOSTART=0` in `.env` turns it off). `node_modules` live in container volumes, so a Mac's and the container's
@@ -34,7 +35,7 @@ The model: copy `.env.example` to `.env` (gitignored) and set `DEMO_BASE_URL`, `
 use Codespaces secrets of the same names. With neither, the demo replays its recorded runs, or, if there is a
 `demo_pi/workshop-key.json`, waits for the workshop code on the page ([demo_pi/README.md](demo_pi/README.md#the-workshop-key-one-code-for-the-room)).
 
-Opened as the agents repo's submodule (`dissemination/qcor_2026/`), the container runs everything, but git inside it
+Opened as the agents repo's submodule (`dissemination/qcor-2026/`), the container runs everything, but git inside it
 can't reach the submodule's history, which lives in the agents repo: commit from the host, or deploy from a plain
 clone of this repo.
 
@@ -46,7 +47,7 @@ If a push is rejected, someone pushed first: `git pull --rebase`, check it still
 replays) are all plain files in git; `node_modules/`, the demo's result cache and pi's session state stay local and
 rebuild themselves.
 
-In the agents repo this is the submodule `dissemination/qcor_2026/`: commit and push here first, then commit the
+In the agents repo this is the submodule `dissemination/qcor-2026/`: commit and push here first, then commit the
 updated pointer there (`just qcor-pull` there fetches everyone's latest).
 
 Working on a remote machine: forward the ports, e.g. `ssh -L 8770:localhost:8770 -L 8771:localhost:8771 <host>`.

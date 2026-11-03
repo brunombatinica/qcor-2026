@@ -14,6 +14,9 @@ sudo chown "$(id -u):$(id -g)" demo_pi/node_modules pptx/node_modules ~/.claude
 curl -fsSL https://claude.ai/install.sh | bash
 grep -q '.local/bin' ~/.bashrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
+# an SSH login (ssh qcor-dev, the Claude desktop app) starts in the repo, not in ~
+grep -q 'qcor-2026: ssh starts in the repo' ~/.bashrc || printf '%s\n' "# qcor-2026: ssh starts in the repo" "if [ -n \"\$SSH_CONNECTION\" ] && [ \"\$PWD\" = \"\$HOME\" ]; then cd $PWD; fi" >> ~/.bashrc
+
 if [ ! -f .env ]; then
     echo "post-create: no .env, so the demo replays its recorded runs. For a live model: cp .env.example .env, fill it in, then just demo-restart"
 fi

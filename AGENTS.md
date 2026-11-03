@@ -7,7 +7,7 @@ Start with [README.md](README.md) (layout, `just` recipes) and [NOTES.md](NOTES.
 
 - Several people work here. Pull before you start; keep commits small and focused with a clear subject line.
 - Commit only when asked. Agents: end commit messages with your co-author trailer.
-- This repo is the submodule `dissemination/qcor_2026/` of the agents repo. Work and commit here; the agents repo
+- This repo is the submodule `dissemination/qcor-2026/` of the agents repo. Work and commit here; the agents repo
   only records which commit it points at.
 
 ## Data
