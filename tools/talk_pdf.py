@@ -5,7 +5,7 @@
 """Snapshot the talk as a PDF: every slide in its end state (?review), 1600x900 at 2x, controls hidden.
 
     just talk-pdf                # -> talk/talk.pdf
-    uv run tools/talk_pdf.py [--out talk/talk.pdf] [--port 8779]
+    uv run tools/talk_pdf.py [--out talk/talk.pdf] [--port N]   (default: a free port)
 
 talk.pdf is a snapshot, not a build product: regenerate it when you mean to, not after every edit.
 First run: `uvx playwright install chromium` (downloads the browser).
@@ -25,9 +25,17 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def wait_for(port, timeout=10):
+def free_port():
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def wait_for(server, port, timeout=10):
     end = time.time() + timeout
     while time.time() < end:
+        if server.poll() is not None:
+            sys.exit(f"serve.py exited (is port {port} in use?)")
         with socket.socket() as s:
             if s.connect_ex(("127.0.0.1", port)) == 0:
                 return
@@ -38,12 +46,13 @@ def wait_for(port, timeout=10):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--out", default=str(ROOT / "talk" / "talk.pdf"))
-    p.add_argument("--port", type=int, default=8779)
+    p.add_argument("--port", type=int, default=0)
     a = p.parse_args()
+    a.port = a.port or free_port()
 
     server = subprocess.Popen([sys.executable, str(ROOT / "serve.py"), "--port", str(a.port)], stdout=subprocess.DEVNULL)
     try:
-        wait_for(a.port)
+        wait_for(server, a.port)
         shots = []
         with sync_playwright() as pw:
             browser = pw.chromium.launch()
