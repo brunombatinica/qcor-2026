@@ -2,7 +2,7 @@
 
 An interactive demonstration/presentation for the QCOR workshop at AHA Scientific Sessions 2026. It draws on the
 agent work in the [agents](https://github.com/brunombatinica/agents) repo (the HFQ extraction strategies, the
-accuracy and deployment studies), where this repo is included as the submodule `dissemination/AHA26_qcor/`. It is
+accuracy and deployment studies), where this repo is included as the submodule `dissemination/qcor_2026/`. It is
 self-contained: everything here runs from a plain clone.
 
 ## Getting started
@@ -20,6 +20,17 @@ just demos           # the ten small interactive demos: http://localhost:8771/in
 just pptx            # build pptx/qcor-bruno-agents.pptx
 just test            # the demo's tests (a stand-in model, no network)
 ```
+
+## Working together
+
+Everyone works on `main` in this repo: `git pull` before you start, commit small changes, `git push` when they work.
+If a push is rejected, someone pushed first: `git pull --rebase`, check it still runs, push again. The talk
+(`talk/`), the PowerPoint generator (`pptx/build.mjs`) and the demo (`demo_pi/`, including the recorded runs it
+replays) are all plain files in git; `node_modules/`, the demo's result cache and pi's session state stay local and
+rebuild themselves.
+
+In the agents repo this is the submodule `dissemination/qcor_2026/`: commit and push here first, then commit the
+updated pointer there (`just qcor-pull` there fetches everyone's latest).
 
 Working on a remote machine: forward the ports, e.g. `ssh -L 8770:localhost:8770 -L 8771:localhost:8771 <host>`.
 
