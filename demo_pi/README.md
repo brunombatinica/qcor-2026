@@ -12,7 +12,7 @@ what. The main views stay simple; the panel and the logs carry the detail.
 | Data | pick what it can see, next to the FHIR logo: nine cards, each adding informal **IRB review** weeks (insurance and immunizations play no part in the answer; demographics only adds identifiers) | what you're setting up (the token's permissions), and an example for Rosa: the request (403 if not granted), what the model reads, the FHIR JSON |
 | Tools | pick what it can do: read structured records, search notes, read a note, structured answer, estimate confidence, check its own work, and three stand-ins that act outside the chart (message the patient, search the web, place orders); each adds informal **IT setup** weeks | what you're setting up (the tools the model is given, the pi command), and an example: the call for Rosa and what comes back, with the tool's code |
 | Prompt | Rosa, a prompt (*On a beta blocker?*, *Care gap? Why?*, and *next appointment?* to show it is the same agent), **Run on Rosa**: the agent's answer and the two checks against her chart, nothing else; the terminal has everything the model is given and does, and ends with how it was checked | what you're setting up (the prompt), and an example for Rosa: the user message, the tools, the system prompt and the pi command |
-| Criteria | tick what counts: *what counts as being on a beta blocker* and *valid exceptions*; anything else is a care gap | what you're setting up (the sentences), and the first message Rosa's agent gets |
+| Criteria | pick the rulebook, **CMS144** (US quality measure) or **ESC 2021** (European guideline), with how many of the 100 charts are care gaps under it (20 or 31); then tick what the agent is told: *what counts as being on a beta blocker*, *valid exceptions* and, for ESC, *not reasons on their own*; anything else is a care gap | what you're setting up (the answer key and the sentences), and the first message Rosa's agent gets |
 | Test | the prompt (Rosa's plus the criteria; *Fix it* is an agent that acts) on all 100 synthetic patients: a square per patient (green right, red wrong; hover for its answers, click for everything it did), a window per agent running, **Stop**, the score and the two answers' bars | none |
 
 The panel starts closed; from the second slide a curved arrow points at its button until someone opens it. The
@@ -32,6 +32,18 @@ question and the answer, never the chart (`agent/grade.mjs`). "On a beta blocker
 measure; a question it didn't answer isn't right, and a patient is right only when both are. The harness tells the
 agent to be quick and answer only what it is asked, so *On a beta blocker?* gets a short answer that says nothing
 about a care gap: not finished.
+
+**Rulebooks.** The rulebook picked on Criteria is the answer key (`RULES` and `goldFor` in `agent/catalog.mjs`); the
+ticked sentences are only what the agent is told, so the room can tell it one rulebook and check it against the other.
+Both are limited to what the synthetic charts can hold: no chart has an arrhythmia, critical limb ischaemia, COPD or
+nebivolol, so those rules change no answer. **CMS144** ([v14, Denominator Exceptions](https://ecqi.healthit.gov/sites/default/files/ecqm/measures/CMS144-v14.0.000-QDM.html))
+accepts every documented reason in the cohort: 20 care gaps. **ESC 2021** ([Supplementary Table 3](https://api.iscpcardio.org/storage/guidelines/ehab368_Suppl.pdf#page=11))
+makes AV block without a pacemaker, asthma and an allergic or adverse reaction contraindications, and a heart rate
+under 50 or a systolic pressure under 90 only cautions, so those 11 charts become care gaps (why: no documented reason
+that counts): 31. Nebivolol counts under ESC. A patient who declined counts under both; the guideline doesn't say (our
+choice). The rulebook changes the scores, not the run: cached and recorded runs are scored again under either. Replayed
+on the recordings: *Care gap? Why?* 85 (CMS144) and 80 (ESC); with every CMS144 sentence, 98 and 87. A test given the
+ESC sentences has a prompt of its own, so it needs the live model (it isn't recorded).
 
 ## The story it tells
 

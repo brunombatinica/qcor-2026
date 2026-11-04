@@ -15,7 +15,7 @@ Reply with one JSON object with two fields:
   "on_beta_blocker": it says the patient takes a beta blocker (and doesn't say that one doesn't count)
   "medical_reason": it names a medical reason not to take one (slow heart rate, heart block, low blood pressure, asthma, an allergy or intolerance, ...)
   "declined": it says the patient declined
-  "no_reason": it says the patient isn't on one (or only on one that doesn't count) and no reason is documented, or that a past reason no longer applies
+  "no_reason": it says the patient isn't on one (or only on one that doesn't count) and no reason is documented, or that a past reason no longer applies, or that the reason it names doesn't count as one
   null: it gives no reason; a bare fact such as "it was stopped on <date>" or "it isn't in the medication list" is not a reason.`;
 
 const yn = (v) => (v === "yes" || v === true ? "yes" : v === "no" || v === false ? "no" : null);

@@ -105,6 +105,7 @@
         <div class="split">
           <div class="col">
             <h2>What counts?</h2>
+            <div class="rulebook" id="rulebook" role="radiogroup" aria-label="Rulebook"></div>
             <div id="criteria"></div>
             <div class="row"><button id="tickAll" class="ghost">Tick all</button><button id="useCriteria" class="primary">Use for the test →</button></div>
           </div>
@@ -123,6 +124,7 @@
             <textarea id="testPrompt" rows="9" placeholder="The prompt for every patient…"></textarea>
             <div class="examples"><button class="chipBtn" id="actExample"></button></div>
             <div class="row"><button id="runCohort" class="primary">Run on 100 patients</button><label class="muted small" id="freshLabel"><input type="checkbox" id="fresh"> ignore cache</label><select id="recCohort" class="rec" hidden></select></div>
+            <div class="rulesNow" id="rulesNow"></div>
             <div id="results"></div>
           </div>
           <div class="col">

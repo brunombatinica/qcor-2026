@@ -16,14 +16,14 @@ const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
 const state = {
   view: VIEWS.includes(saved.view) ? saved.view : "overview",
   sources: new Set(saved.sources || []), tools: new Set(saved.tools || []), criteria: new Set(saved.criteria || []),
-  prompt: saved.prompt || "", testPrompt: saved.testPrompt || "",
+  prompt: saved.prompt || "", testPrompt: saved.testPrompt || "", rules: saved.rules || "cms144",
   focus: { data: null, tools: null }, hood: saved.hood ?? false, hoodSeen: saved.hoodSeen ?? false, zoom: saved.zoom ?? 1, wide: false, busy: false,
   chart: { patient: "p000", tab: "summary", note: null },
 };
 const runs = [];
 let cfg;
 
-const save = () => { localStorage.setItem(KEY, JSON.stringify({ view: state.view, sources: [...state.sources], tools: [...state.tools], criteria: [...state.criteria], prompt: state.prompt, testPrompt: state.testPrompt, hood: state.hood, hoodSeen: state.hoodSeen, zoom: state.zoom })); recSync(); };
+const save = () => { localStorage.setItem(KEY, JSON.stringify({ view: state.view, sources: [...state.sources], tools: [...state.tools], criteria: [...state.criteria], prompt: state.prompt, testPrompt: state.testPrompt, rules: state.rules, hood: state.hood, hoodSeen: state.hoodSeen, zoom: state.zoom })); recSync(); };
 const build = (prompt) => ({ sources: [...state.sources], tools: [...state.tools], prompt });
 const offTask = (prompt) => !/beta|blocker|care gap|\bgap\b/i.test(prompt || "");
 
@@ -141,7 +141,7 @@ let chartData = null;
 async function loadChart(id) {
   state.chart.patient = id;
   state.chart.note = null;
-  chartData = await fetch(`/api/chart?patient=${id}`).then((r) => r.json());
+  chartData = await fetch(`/api/chart?patient=${id}&rules=${state.rules}`).then((r) => r.json());
   $("revealed").innerHTML = "";
   drawChart();
   hood();
@@ -321,7 +321,7 @@ async function runRosa() {
   rosaAbort = new AbortController();
   const off = offTask(state.prompt), ran = build(state.prompt);
   try {
-    await stream("/api/run", { build: ran, patient: cfg.rosa.id }, (m) => {
+    await stream("/api/run", { build: ran, patient: cfg.rosa.id, rules: state.rules }, (m) => {
       if (m.kind === "wiring") { termRosa.intro(m); lastWiring = m; }
       else if (m.kind === "result") {
         termRosa.line(off || m.score.correct ? "done" : "err", `■ ${esc(m.status === "ok" ? "done" : m.status)}${m.error ? `: ${esc(m.error)}` : ""}`, (m.seconds || 0) * 1000);
@@ -345,15 +345,32 @@ async function runRosa() {
 
 // ---- criteria ----
 
+// the rulebook is the answer key (agent/catalog.mjs RULES); its sentences are what the agent can be told
+const shown = () => cfg.criteria.filter((c) => c.rules.includes(state.rules));
+const ticked = () => shown().filter((c) => state.criteria.has(c.id)).map((c) => c.id);
+function rulebook() {
+  $("rulebook").innerHTML = Object.entries(cfg.rules).map(([id, r]) => `<button role="radio" aria-checked="${id === state.rules}" data-rules="${id}"><b>${esc(r.label)}</b><span>${esc(r.sub)}</span></button>`).join("") +
+    `<span class="gaps"><b>${cfg.rules[state.rules].gaps}</b>/${cfg.cohort} charts are care gaps</span>`;
+  $("rulesNow").innerHTML = `Checked against <b>${esc(cfg.rules[state.rules].label)}</b> · ${esc(cfg.rules[state.rules].sub)}`;
+}
+// switching keeps what both rulebooks share; everything ticked stays everything ticked
+function setRules(id) {
+  if (!cfg.rules[id] || id === state.rules) return;
+  const all = ticked().length === shown().length;
+  state.rules = id;
+  for (const c of cfg.criteria) if (!c.rules.includes(id) || all) state.criteria.delete(c.id);
+  if (all) shown().forEach((c) => state.criteria.add(c.id));
+  save(); rulebook(); criteria(); hood();
+  if (chartData) loadChart(state.chart.patient);
+}
 function criteria() {
-  $("criteria").innerHTML = Object.entries(cfg.criteriaGroups).map(([g, title]) => `<div class="cgroup"><div class="label">${esc(title)}</div>${cfg.criteria.filter((c) => c.group === g).map((c) =>
-    `<label class="crit"><input type="checkbox" data-id="${c.id}" ${state.criteria.has(c.id) ? "checked" : ""}><span>${esc(c.text)}</span></label>`).join("")}</div>`).join("") +
-    "";
-  $("tickAll").textContent = state.criteria.size === cfg.criteria.length ? "Untick all" : "Tick all";
+  $("criteria").innerHTML = Object.entries(cfg.criteriaGroups).map(([g, title]) => [title, shown().filter((c) => c.group === g)]).filter(([, list]) => list.length).map(([title, list]) => `<div class="cgroup"><div class="label">${esc(title)}</div>${list.map((c) =>
+    `<label class="crit"><input type="checkbox" data-id="${c.id}" ${state.criteria.has(c.id) ? "checked" : ""}><span>${esc(c.text)}</span></label>`).join("")}</div>`).join("");
+  $("tickAll").textContent = ticked().length === shown().length ? "Untick all" : "Tick all";
   criteriaText();
 }
 async function criteriaText() {
-  const { criteria: text } = await post("/api/preview", { build: build(""), criteria: [...state.criteria] });
+  const { criteria: text } = await post("/api/preview", { build: build(""), criteria: ticked() });
   $("criteriaText").textContent = text || "(nothing ticked)";
   return text;
 }
@@ -491,7 +508,7 @@ async function runCohort() {
   cohortAbort = new AbortController();
   runButton(true);
   try {
-    await stream("/api/cohort", { build: b, n, fresh: $("fresh").checked }, (m) => {
+    await stream("/api/cohort", { build: b, n, fresh: $("fresh").checked, rules: state.rules }, (m) => {
       if (m.kind === "wiring") lastWiring = m;
       else if (m.kind === "line") {
         if (ahead && !m.ahead) t0 = performance.now();     // its turn: the clock times the run, not the wait
@@ -520,7 +537,7 @@ async function runCohort() {
       } else if (m.kind === "summary") {
         const seconds = Math.round((performance.now() - t0) / 100) / 10;
         results(m.summary, cached, seconds);
-        runs.unshift({ build: b, summary: m.summary, seconds });
+        runs.unshift({ build: b, rules: m.rules || state.rules, summary: m.summary, seconds });
         runsTable();
       }
     }, cohortAbort.signal);
@@ -540,10 +557,10 @@ async function runCohort() {
 
 function runsTable() {
   const ics = (list, ids) => `<span class="ics">${list.filter((x) => ids.includes(x.id)).map((x) => `<span title="${esc(x.label)}">${icon(x.icon)}</span>`).join("") || "nothing"}</span>`;
-  $("runs").innerHTML = `<tr><th>Run</th><th>Sees</th><th>Does</th><th>Prompt</th><th>Right</th><th>Care gap · Why</th><th>Tokens</th><th>Wall clock</th></tr>` +
+  $("runs").innerHTML = `<tr><th>Run</th><th>Sees</th><th>Does</th><th>Prompt</th><th>Checked against</th><th>Right</th><th>Care gap · Why</th><th>Tokens</th><th>Wall clock</th></tr>` +
     runs.map((r, i) => `<tr><td>${runs.length - i}</td><td>${ics(cfg.data, r.build.sources)}</td><td>${ics(cfg.tools, r.build.tools)}</td>
       <td class="small muted" title="${esc(r.build.prompt)}">${esc(r.build.prompt.slice(0, 70))}${r.build.prompt.length > 70 ? "…" : ""}</td>
-      <td class="num">${r.summary.right}/${r.summary.n}</td><td class="num">${r.summary.questions.gap.right} · ${r.summary.questions.why.right}</td><td class="num">${num(r.summary.tokens)}</td><td class="num">${r.seconds} s</td></tr>`).join("");
+      <td>${esc(cfg.rules[r.rules]?.label || r.rules)}</td><td class="num">${r.summary.right}/${r.summary.n}</td><td class="num">${r.summary.questions.gap.right} · ${r.summary.questions.why.right}</td><td class="num">${num(r.summary.tokens)}</td><td class="num">${r.seconds} s</td></tr>`).join("");
 }
 
 // ---- replay: with no model the server replays recorded runs (replay.mjs); a picker loads one of their builds ----
@@ -554,7 +571,12 @@ const PICKERS = [["recRosa", "rosa", () => state.prompt], ["recCohort", "cohort"
 function loadRecorded(rec) {
   for (const [set, ids] of [[state.sources, rec.build.sources], [state.tools, rec.build.tools]]) { set.clear(); ids.forEach((id) => set.add(id)); }
   if (rec.kind === "rosa") { state.prompt = rec.build.prompt; $("prompt").value = state.prompt; }
-  else { state.testPrompt = rec.build.prompt; $("testPrompt").value = state.testPrompt; state.criteria.clear(); rec.criteria.forEach((id) => state.criteria.add(id)); criteria(); }
+  else {
+    state.testPrompt = rec.build.prompt; $("testPrompt").value = state.testPrompt; state.criteria.clear(); rec.criteria.forEach((id) => state.criteria.add(id));
+    const fits = (r) => rec.criteria.every((id) => cfg.criteria.find((c) => c.id === id)?.rules.includes(r));
+    if (!fits(state.rules)) state.rules = Object.keys(cfg.rules).find(fits) || state.rules;
+    rulebook(); criteria();
+  }
   cards($("dataCards"), cfg.data, state.sources, "data");
   cards($("toolCards"), cfg.tools, state.tools, "tools");
   summary();
@@ -719,7 +741,7 @@ async function hood() {
     return show(groups);
   }
 
-  const w = await post("/api/preview", { build: build(v === "criteria" ? [state.prompt.trim(), (await criteriaText()) || ""].filter(Boolean).join("\n\n") : state.prompt), patient: cfg.rosa.id, criteria: [...state.criteria] });
+  const w = await post("/api/preview", { build: build(v === "criteria" ? [state.prompt.trim(), (await criteriaText()) || ""].filter(Boolean).join("\n\n") : state.prompt), patient: cfg.rosa.id, criteria: ticked() });
   if (v === "tools") {
     const groups = [setup("setup", [block("given", "tools", w.tools.join("\n")), block("cmd", "pi command", fmtCmd(w.command), "sh", "", { collapsed: true })])];
     const focus = cfg.tools.find((t) => t.id === state.focus.tools) || cfg.tools.find((t) => state.tools.has(t.id));
@@ -736,10 +758,13 @@ async function hood() {
     example(`example · ${cfg.rosa.id}`, [block("first", "user message", w.prompt), block("given", "tools", w.tools.join("\n") || "(none)"),
       block("system", "system prompt", w.system, "text", "", { collapsed: true }), block("cmd", "pi command", fmtCmd(w.command), "sh", "", { collapsed: true })]),
   ]);
-  if (v === "criteria") return show([
-    setup("setup", [block("crit", "prompt += criteria", (await criteriaText()) || "(none)")]),
+  if (v === "criteria") {
+    const r = cfg.rules[state.rules], kinds = (l) => (l || []).join(", ").replaceAll("_", " ") || "(none)";
+    return show([
+    setup("setup", [block("rules", "answer key", `rulebook:    ${r.label} (${r.sub})\nexceptions:  ${kinds(r.accepts)}\ncautions:    ${kinds(r.cautions)}\ncare gaps:   ${r.gaps}/${cfg.cohort}\nsource:      ${r.source}`), block("crit", "prompt += criteria", (await criteriaText()) || "(none)")]),
     example(`example · ${cfg.rosa.id}`, [block("first", "user message", w.prompt), block("system", "system prompt", w.system, "text", "", { collapsed: true })]),
-  ]);
+    ]);
+  }
 }
 
 // ---- start ----
@@ -773,7 +798,7 @@ $("ehrTabs").onclick = (e) => { const b = e.target.closest("[data-tab]"); if (!b
 $("ehrMain").onclick = (e) => { const b = e.target.closest("[data-note]"); if (!b) return; state.chart.note = b.dataset.note; drawChart(); };
 $("reveal").onclick = () => {
   const a = chartData?.answer;
-  if (a) $("revealed").innerHTML = `<b>Care gap: ${a.gap ? "yes" : "no"} · Why: ${esc(cap(a.why))}</b><span class="muted">${esc(a.reason)}</span>`;
+  if (a) $("revealed").innerHTML = `<b>Care gap: ${a.gap ? "yes" : "no"} · Why: ${esc(cap(a.why))}</b><span class="muted">${esc(a.reason)}${state.rules === "cms144" ? "" : ` (${esc(a.rules)})`}</span>`;
 };
 
 cards($("dataCards"), cfg.data, state.sources, "data");
@@ -791,7 +816,8 @@ $("testPrompt").oninput = () => { state.testPrompt = $("testPrompt").value; save
 $("runRosa").onclick = runRosa;
 $("runCohort").onclick = runCohort;
 $("criteria").onchange = (e) => { const id = e.target.dataset.id; e.target.checked ? state.criteria.add(id) : state.criteria.delete(id); save(); criteria(); hood(); };
-$("tickAll").onclick = () => { if (state.criteria.size === cfg.criteria.length) state.criteria.clear(); else cfg.criteria.forEach((c) => state.criteria.add(c.id)); save(); criteria(); hood(); };
+$("tickAll").onclick = () => { if (ticked().length === shown().length) state.criteria.clear(); else shown().forEach((c) => state.criteria.add(c.id)); save(); criteria(); hood(); };
+$("rulebook").onclick = (e) => { const b = e.target.closest("[data-rules]"); if (b) setRules(b.dataset.rules); };
 $("useCriteria").onclick = async () => {
   const text = await criteriaText();
   state.testPrompt = [state.prompt.trim(), text].filter(Boolean).join("\n\n");
@@ -823,5 +849,7 @@ grid();
 new Windows($("agents"), cfg.concurrency);
 $("agentsLabel").textContent = `${cfg.concurrency} agents`;
 pickers();
+if (!cfg.rules[state.rules]) state.rules = "cms144";
+rulebook();
 criteria();
 go(state.view);

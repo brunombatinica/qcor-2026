@@ -55,20 +55,20 @@ const sleep = (ms, signal) => new Promise((resolve) => {
 });
 
 // a recorded row as the server would have sent it: scored now, its stream-only text deltas dropped
-const scored = (rec, { start, done, ...row }) => ({ ...row, trace: row.trace.filter((t) => t.kind !== "delta"), score: score(row, rec.build), replayed: true });
+const scored = (rec, { start, done, ...row }, rules) => ({ ...row, trace: row.trace.filter((t) => t.kind !== "delta"), score: score(row, rec.build, rules), replayed: true });
 
-/** Send a recording's messages (after the wiring) at the pace they were recorded. */
-export async function replay(rec, send, signal) {
+/** Send a recording's messages (after the wiring) at the pace they were recorded, checked against `rules`. */
+export async function replay(rec, send, signal, rules) {
   const timeline = [];
   if (rec.kind === "rosa") {
     const row = rec.rows[0];
     for (const item of row.trace) timeline.push([row.start + item.t, item]);
-    timeline.push([row.done, { kind: "result", ...scored(rec, row) }]);
+    timeline.push([row.done, { kind: "result", ...scored(rec, row, rules) }]);
   } else {
     for (const row of rec.rows) {
       timeline.push([0, { kind: "queued", patientId: row.patientId }]);
       for (const item of row.trace) timeline.push([row.start + item.t, { kind: "event", patientId: row.patientId, item: { ...item, text: item.text?.slice(0, 300) } }]);
-      timeline.push([row.done, { kind: "patient", row: scored(rec, row) }]);
+      timeline.push([row.done, { kind: "patient", row: scored(rec, row, rules) }]);
     }
   }
   timeline.sort((a, b) => a[0] - b[0]);

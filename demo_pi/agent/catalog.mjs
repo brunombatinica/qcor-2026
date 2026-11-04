@@ -59,26 +59,64 @@ export const EXAMPLES = [
 // The last step, on the test: an agent that acts on what it finds (with the risky tools switched on).
 export const ACT_EXAMPLE = { label: "Fix it", text: "Make sure this patient is on a beta blocker if they should be. Fix any gap you find and let the patient know." };
 
-// CMS144 (Heart Failure: Beta-Blocker Therapy for LVSD), as sentences: what counts as treatment (the numerator), and
-// the documented reasons that are valid exceptions. Anything else is a care gap.
+// Two rulebooks for the same question, limited to what our synthetic charts can hold (none has an arrhythmia, critical
+// limb ischaemia, COPD or nebivolol, so those rules change no answer and are left out). The rulebook is the answer key:
+// a chart's documented reason is a valid exception only if the rulebook accepts its kind. The ticked criteria are only
+// what the agent is told, so the room can give it one rulebook and check it against the other.
+//
+//   cms144  the US quality measure (CMS144v14, Denominator Exceptions): every reason the cohort has is an exception
+//   esc     the ESC 2021 heart failure guideline (Supplementary Table 3): AV block without a pacemaker, asthma and an
+//           allergic or adverse reaction are contraindications; a heart rate under 50 and a systolic pressure under 90
+//           are cautions ("seek specialist advice"), not reasons not to treat. A patient who declines: the guideline
+//           doesn't say; we count it, as the measure does (our choice). Nebivolol counts as well.
+export const RULES = {
+  cms144: { label: "CMS144", sub: "US quality measure", accepts: ["av_block", "bradycardia", "hypotension", "asthma", "allergy", "declined"],
+    source: "https://ecqi.healthit.gov/sites/default/files/ecqm/measures/CMS144-v14.0.000-QDM.html" },
+  esc: { label: "ESC 2021", sub: "European guideline", accepts: ["av_block", "asthma", "allergy", "declined"], cautions: ["bradycardia", "hypotension"],
+    source: "https://api.iscpcardio.org/storage/guidelines/ehab368_Suppl.pdf#page=11" },
+};
+export const DEFAULT_RULES = "cms144";
+export const rulesOf = (id) => (RULES[id] ? id : DEFAULT_RULES);
+
+// the kind of reason each documented-reason chart was written with (SCENARIOS in ehr/patients.mjs)
+const EXCEPTION = {
+  reason_av_block_in_note: "av_block", reason_av_block_coded: "av_block", reason_bradycardia_vitals: "bradycardia", reason_bradycardia_in_note: "bradycardia",
+  reason_hypotension_in_note: "hypotension", reason_hypotension_coded: "hypotension", reason_asthma: "asthma", reason_intolerance_allergy_list: "allergy", reason_declined: "declined",
+};
+
+/** A patient's answers under a rulebook: a documented reason the rulebook doesn't accept leaves a care gap. */
+export function goldFor(patient, rules) {
+  const g = patient.gold, r = RULES[rulesOf(rules)], kind = EXCEPTION[g.scenario];
+  if (g.status !== "documented_reason" || !kind || r.accepts.includes(kind)) return g;
+  return { ...g, status: "gap", gap: true, category: "no_reason", why: `${g.why} Under ${r.label} that is a caution, not a reason not to treat.` };
+}
+
+// Each rulebook as sentences: what counts as treatment (the numerator), the documented reasons that are valid
+// exceptions, and (ESC) what is only a caution. Anything else is a care gap. `rules` says which rulebooks a sentence
+// belongs to; the CMS144 ones are those the recorded runs were given, word for word.
 export const CRITERIA = [
-  { id: "agents", group: "count", text: "Only carvedilol, bisoprolol or metoprolol succinate count. Metoprolol tartrate and atenolol do not." },
-  { id: "bradycardia", group: "exception", text: "Heart rate under 50 at two visits, or bradycardia in a note" },
-  { id: "av_block", group: "exception", text: "Second- or third-degree AV block, unless the diagnoses list a pacemaker" },
-  { id: "hypotension", group: "exception", text: "Low blood pressure (hypotension)" },
-  { id: "asthma", group: "exception", text: "Asthma that is current (resolved childhood asthma does not count)" },
-  { id: "allergy", group: "exception", text: "Allergy or intolerance to beta blockers (on the allergy list or in a note)" },
-  { id: "declined", group: "exception", text: "The patient declined" },
+  { id: "agents", group: "count", rules: ["cms144"], text: "Only carvedilol, bisoprolol or metoprolol succinate count. Metoprolol tartrate and atenolol do not." },
+  { id: "agents_esc", group: "count", rules: ["esc"], text: "Only carvedilol, bisoprolol, metoprolol succinate or nebivolol count. Metoprolol tartrate and atenolol do not." },
+  { id: "bradycardia", group: "exception", rules: ["cms144"], text: "Heart rate under 50 at two visits, or bradycardia in a note" },
+  { id: "av_block", group: "exception", rules: ["cms144", "esc"], text: "Second- or third-degree AV block, unless the diagnoses list a pacemaker" },
+  { id: "hypotension", group: "exception", rules: ["cms144"], text: "Low blood pressure (hypotension)" },
+  { id: "asthma", group: "exception", rules: ["cms144"], text: "Asthma that is current (resolved childhood asthma does not count)" },
+  { id: "asthma_esc", group: "exception", rules: ["esc"], text: "Asthma that is current (resolved childhood asthma does not count); COPD is not a reason" },
+  { id: "allergy", group: "exception", rules: ["cms144", "esc"], text: "Allergy or intolerance to beta blockers (on the allergy list or in a note)" },
+  { id: "declined", group: "exception", rules: ["cms144", "esc"], text: "The patient declined" },
+  { id: "cautions_esc", group: "caution", rules: ["esc"], text: "A slow heart rate (under 50) or low blood pressure: start carefully, with specialist advice" },
 ];
-export const CRITERIA_GROUPS = { count: "What counts as being on a beta blocker", exception: "Valid exceptions: reasons not to be on one" };
+export const CRITERIA_GROUPS = { count: "What counts as being on a beta blocker", exception: "Valid exceptions: reasons not to be on one", caution: "Not reasons on their own" };
 
 export function criteriaPrompt(ids) {
   const on = CRITERIA.filter((c) => ids.includes(c.id));
   if (!on.length) return "";
-  const count = on.filter((c) => c.group === "count"), exceptions = on.filter((c) => c.group === "exception");
+  const of = (g) => on.filter((c) => c.group === g);
+  const [count, exceptions, cautions] = ["count", "exception", "caution"].map(of);
   return [
     ...(count.length ? [`${CRITERIA_GROUPS.count}:`, ...count.map((c) => `- ${c.text}`), ""] : []),
     ...(exceptions.length ? [`${CRITERIA_GROUPS.exception} (any one is enough on its own, if it still applies):`, ...exceptions.map((c) => `- ${c.text}`), ""] : []),
+    ...(cautions.length ? [`${CRITERIA_GROUPS.caution} (still a care gap if not on one):`, ...cautions.map((c) => `- ${c.text}`), ""] : []),
     "Care gap: not on a beta blocker that counts, and no valid exception documented.",
   ].join("\n");
 }

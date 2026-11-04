@@ -129,6 +129,20 @@ const PROMPT = "Is there a beta-blocker care gap for this patient? Why or why no
   }
 }
 
+// the rulebook is the answer key: it changes the scores, not the run (the same cache), and only for reasons it rejects
+{
+  const cfg = await (await fetch(`${base}/api/config`)).json();
+  assert.deepEqual([cfg.rules.cms144.gaps, cfg.rules.esc.gaps], [20, 31], "ESC 2021 turns the 11 slow-heart-rate and low-blood-pressure charts into care gaps");
+  const { PATIENTS } = await import("../ehr/patients.mjs");
+  const slow = PATIENTS.find((p) => p.gold.scenario === "reason_bradycardia_vitals").id, block = PATIENTS[0].id;
+  const answer = async (id, rules) => (await (await fetch(`${base}/api/chart?patient=${id}&rules=${rules}`)).json()).answer;
+  assert.deepEqual([(await answer(slow, "cms144")).gap, (await answer(slow, "esc")).gap, (await answer(block, "esc")).gap], [false, true, false]);
+  const build = { tools: ["read_records", "search_notes", "read_note", "structured"], sources: ["medications", "notes"], prompt: PROMPT };
+  const ev = await events("/api/cohort", { build, n: 4, rules: "esc" });
+  assert.equal(ev.find((e) => e.kind === "summary").rules, "esc");
+  assert.ok(ev.filter((e) => e.kind === "patient").every((e) => e.row.cached && e.row.score.rules === "esc"), "same runs from the cache, scored under ESC");
+}
+
 // one test at a time: a second, different test waits in line, is told how many are ahead, then runs
 {
   const a = { tools: ["read_records"], sources: ["medications"], prompt: `${PROMPT} (a)` };

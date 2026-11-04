@@ -24,7 +24,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { createServer } from "node:http";
 import { dirname, extname, join, normalize as normPath } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ACT_EXAMPLE, CRITERIA, CRITERIA_GROUPS, DATA, EXAMPLES, TOOLS, WHY, criteriaPrompt, normalize } from "./agent/catalog.mjs";
+import { ACT_EXAMPLE, CRITERIA, CRITERIA_GROUPS, DATA, EXAMPLES, RULES, TOOLS, WHY, criteriaPrompt, goldFor, normalize, rulesOf } from "./agent/catalog.mjs";
 import { read } from "./agent/grade.mjs";
 import { MODEL, connect, unlock } from "./agent/model.mjs";
 import { FHIR, byPatientId, commandLine, piTools, runSession, systemPrompt, userPrompt } from "./agent/session.mjs";
@@ -91,14 +91,14 @@ const buildKey = (b) => createHash("sha1").update(JSON.stringify([MODEL.baseUrl,
 
 // cache: "use" reads and writes it, "refresh" only writes it (the page's "ignore cache"), absent leaves it alone
 const cacheFile = (build, patientId) => join(CACHE, buildKey(build), `${patientId}.json`);
-async function runScored(patientId, build, { onEvent, signal, cache, stream, lane } = {}) {
+async function runScored(patientId, build, { onEvent, signal, cache, stream, lane, rules } = {}) {
   const file = cache && cacheFile(build, patientId);
-  if (cache === "use" && existsSync(file)) { const row = JSON.parse(readFileSync(file, "utf8")); return { ...row, score: score(row, build), cached: true }; }
+  if (cache === "use" && existsSync(file)) { const row = JSON.parse(readFileSync(file, "utf8")); return { ...row, score: score(row, build, rules), cached: true }; }
   const result = await slot(() => (signal?.aborted ? { patientId, trace: [], usage: { input: 0, output: 0 }, status: "cancelled" } : runSession({ patientId, build, onEvent, signal, stream })), lane);
   // free text is read by one more model call, for its two answers; the structured answer's fixed options need none
   const b = normalize(build);
   if (!b.tools.includes("structured") && answerText(result)) result.read = await read(answerText(result), b.prompt);
-  const row = { ...result, score: score(result, build) };
+  const row = { ...result, score: score(result, build, rules) };
   if (file && result.status === "ok") { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, JSON.stringify(row)); }
   return row;
 }
@@ -142,7 +142,8 @@ async function config() {
   return {
     model: { id: MODEL.id, baseUrl: MODEL.baseUrl, ok: MODEL.ok, error: MODEL.error, locked: MODEL.locked },
     replay: replayed ? replayInfo() : null, recorded: replayed ? catalog() : [],
-    data: DATA.map((d) => ({ ...d, scope: scopeOf(d) })), tools: TOOLS, criteria: CRITERIA, criteriaGroups: CRITERIA_GROUPS, examples: EXAMPLES, act: ACT_EXAMPLE, statuses: STATUSES, why: WHY,
+    data: DATA.map((d) => ({ ...d, scope: scopeOf(d) })), tools: TOOLS, criteria: CRITERIA, criteriaGroups: CRITERIA_GROUPS,
+    rules: Object.fromEntries(Object.entries(RULES).map(([id, r]) => [id, { ...r, gaps: PATIENTS.filter((p) => goldFor(p, id).gap).length }])), examples: EXAMPLES, act: ACT_EXAMPLE, statuses: STATUSES, why: WHY,
     cohort: PATIENTS.length, names: PATIENTS.map((p) => p.name), concurrency: CONCURRENCY, today: TODAY,
     rosa: { id: rosa.id, name: rosa.name, age: rosa.age, ef: rosa.ef, gold: rosa.gold, next: rosa.next.date },
   };
@@ -162,8 +163,8 @@ async function peek(sources, source, patient) {
 }
 
 // one patient's chart laid out as an EHR shows it to a person: the same records the FHIR server serves the agent
-function chart(id) {
-  const p = byPatientId(id);
+function chart(id, rules) {
+  const p = byPatientId(id), g = goldFor(p, rules);
   return {
     id: p.id, name: p.name, sex: p.sex, age: p.age, dob: p.dob, mrn: p.mrn, address: p.address, phone: p.phone, ef: p.ef,
     insurance: `${p.coverage.payer}, ${p.coverage.plan} (member ${p.coverage.member})`,
@@ -174,7 +175,7 @@ function chart(id) {
     allergies: p.allergies.map((a) => ({ substance: a.substance, type: a.type, reaction: a.reaction, date: a.date })),
     immunizations: p.immunizations.map((v) => ({ date: v.date, text: v.text })),
     notes: p.notes.map((n) => ({ id: n.id, date: n.date, title: n.title, author: n.author, text: n.text })),
-    answer: { gap: p.gold.gap, why: WHY[p.gold.category], reason: p.gold.why },
+    answer: { gap: g.gap, why: WHY[g.category], reason: g.why, rules: RULES[rulesOf(rules)].label },
   };
 }
 
@@ -210,7 +211,7 @@ const SOURCE_FILES = new Set([...TOOLS.map((t) => t.file), "fhir.ts"]);
 
 async function api(req, res, url) {
   if (url.pathname === "/api/config") return json(res, 200, await config());
-  if (url.pathname === "/api/chart") return json(res, 200, chart(url.searchParams.get("patient")));
+  if (url.pathname === "/api/chart") return json(res, 200, chart(url.searchParams.get("patient"), url.searchParams.get("rules")));
   if (url.pathname === "/api/source") {
     const file = url.searchParams.get("file");
     if (!SOURCE_FILES.has(file)) return json(res, 404, { error: "unknown file" });
@@ -226,6 +227,7 @@ async function api(req, res, url) {
   if (url.pathname === "/api/preview") return json(res, 200, { ...wiring(build, byPatientId(body.patient)), criteria: criteriaPrompt(body.criteria || []) });
   const kind = { "/api/run": "rosa", "/api/cohort": "cohort" }[url.pathname];
   if (!kind) return json(res, 404, { error: "unknown endpoint" });
+  const rules = rulesOf(body.rules);                 // the answer key: it changes the scores, not what the agent does
   let rec = null;
   if (await replaying()) {
     rec = recorded(kind, build, body.patient);
@@ -238,13 +240,13 @@ async function api(req, res, url) {
   if (kind === "rosa") {
     const patient = byPatientId(body.patient);
     send({ kind: "wiring", ...wiring(build, patient) });
-    if (rec) await replay(rec, send, abort.signal);
-    else send({ kind: "result", ...(await runScored(patient.id, build, { onEvent: send, signal: abort.signal, stream: true, lane: "rosa" })) });
+    if (rec) await replay(rec, send, abort.signal, rules);
+    else send({ kind: "result", ...(await runScored(patient.id, build, { onEvent: send, signal: abort.signal, stream: true, lane: "rosa", rules })) });
     return res.end();
   }
   const n = Math.max(1, Math.min(PATIENTS.length, Number(body.n) || PATIENTS.length));
   send({ kind: "wiring", ...wiring(build, PATIENTS[0]), n });
-  if (rec) { await replay(rec, send, abort.signal); return res.end(); }
+  if (rec) { await replay(rec, send, abort.signal, rules); return res.end(); }
   const cohort = PATIENTS.slice(0, n);
   const allCached = !body.fresh && cohort.every((p) => existsSync(cacheFile(build, p.id)));
   // while it waits, the place in line goes out again every 15 s, so no proxy closes a quiet stream
@@ -259,13 +261,13 @@ async function api(req, res, url) {
     const rows = await Promise.all(cohort.map(async (p) => {
       send({ kind: "queued", patientId: p.id });
       const row = await runScored(p.id, build, {
-        signal: abort.signal, cache: body.fresh ? "refresh" : "use",
+        signal: abort.signal, cache: body.fresh ? "refresh" : "use", rules,
         onEvent: (item) => item.kind !== "delta" && send({ kind: "event", patientId: p.id, item: { ...item, text: item.text?.slice(0, 300) } }),
       });
       send({ kind: "patient", row });
       return row;
     }));
-    send({ kind: "summary", build, summary: summarize(rows) });
+    send({ kind: "summary", build, rules, summary: summarize(rows) });
   } finally { end(); }
   return res.end();
 }

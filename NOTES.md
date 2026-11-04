@@ -3,6 +3,22 @@
 Handoff notes for picking the brainstorm back up in a new session. To restart, tell Claude:
 "read NOTES.md and let's continue the QCOR brainstorm."
 
+## Demo, rulebooks and the page (2026-11-04, evening; Ryan)
+
+Ryan, going through the hosted demo: the Task slide as the goal (an agent that reads the EHR and finds care gaps, as
+EHR → agent → care gaps); Prompt asks "What would you prompt to find beta-blocker care gaps?" and has the </> panel;
+the answer card says why it couldn't read the chart (no tools, no data, or tools that can't reach it); tokens, model
+calls, tool calls and time as large tiles on the card and the test. Then: do ESC, AHA or ACC count beta blockers and
+exceptions differently? Yes (CMS144 follows AHA/ACC/HFSA 2022; ESC 2021 adds nebivolol and makes a slow heart rate and
+low blood pressure cautions, not exceptions). They wanted to toggle between criteria "based on the constraints of our
+data" to show how criteria change the result.
+
+Done: a rulebook switch on Criteria (CMS144 · ESC 2021) that is the answer key, apart from the sentences the agent is
+told (`RULES`, `goldFor` in `agent/catalog.mjs`; README "Rulebooks"). 20 vs 31 care gaps; the CMS144 sentences are
+unchanged, so the recordings still match. Not done: no recording of a test given the ESC sentences (needs the live
+model: add it to `PLAN` in `record.mjs`, then `just demo-record <id>`). CMS144's arrhythmia exception isn't on the
+slide; no chart has one.
+
 ## Demo, second pass (2026-11-04, afternoon; branch demo-simplify)
 
 The user, after trying it: two opening slides (the plan, with no subtext; then the task and the data as pictures,
