@@ -208,6 +208,7 @@ textarea:focus { outline: none; border-color: var(--edge); }
 .vtop.right { color: var(--green); } .vtop.right .badge { background: var(--green); }
 .vtop.wrong { color: var(--red); } .vtop.wrong .badge { background: var(--red); color: #fff; }
 .vtop.na { color: var(--text); } .vtop.na .badge { background: var(--dim); color: var(--text); }
+.vwhy { margin: 8px 0 0 32px; font-size: 13.5px; color: var(--muted); }
 .said { margin: 10px 0 2px; color: var(--blue); font-size: 15px; line-height: 1.45; }
 .said div + div { margin-top: 4px; } .said .conf { color: var(--muted); font-size: 13px; }
 .said.none { color: var(--muted); font-style: italic; }

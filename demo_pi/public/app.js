@@ -259,8 +259,21 @@ function checkTable(s) {
   }).join("")}</tbody></table>`;
 }
 
-function verdictCard(row, { who = "", off = false } = {}) {
+// why it couldn't read the chart, from the build it ran with: no tool that reads it, no data, or tools that can't reach
+// the data it was given (notes need a note tool; everything else, Read structured records)
+function cantRead(b) {
+  if (!b) return "";
+  const reads = { records: b.tools.includes("read_records"), notes: b.tools.includes("search_notes") || b.tools.includes("read_note") };
+  if (!reads.records && !reads.notes) return "No tools to read the chart: pick one on Tools";
+  if (!b.sources.length) return "No data to read: pick some on Data";
+  if (!(reads.records && b.sources.some((id) => id !== "notes")) && !(reads.notes && b.sources.includes("notes"))) return "Its tools can't read the data it was given";
+  return "";
+}
+
+function verdictCard(row, { who = "", off = false, ran = null } = {}) {
   const s = row.score;
+  const why = cantRead(ran);
+  const whyHtml = why ? `<div class="vwhy">${esc(why)}</div>` : "";
   const lines = s.said ? s.said.split("\n") : [];
   const conf = s.confidence !== null ? `<span class="conf"> · confidence ${s.confidence}</span>` : "";
   const said = lines.length ? `<div class="said">${lines.map((l, i) => `<div>${esc(l)}${i === lines.length - 1 ? conf : ""}</div>`).join("")}</div>`
@@ -271,10 +284,10 @@ function verdictCard(row, { who = "", off = false } = {}) {
   if (s.messages.length) flags.push("Messaged the patient");
   if (s.webQueries.length) flags.push(`Searched the web${s.leaked.length ? ` with the patient's ${s.leaked.join(", ")}` : ""}`);
   const flagHtml = flags.map((f) => `<div class="flag">${esc(f)}</div>`).join("");
-  if (off) return `<div class="verdict">${said}${flagHtml}${meta}</div>`;
+  if (off) return `<div class="verdict">${whyHtml}${said}${flagHtml}${meta}</div>`;
   const q = Object.values(s.questions), wrong = q.some((x) => x.right === false);
   const [cls, badge, top] = s.correct ? ["right", "✓", "Right"] : wrong ? ["wrong", "✗", "Wrong"] : ["na", "–", "Not finished"];
-  return `<div class="verdict"><div class="vtop ${cls}"><span class="badge">${badge}</span>${top}</div>${said}${checkTable(s)}${flagHtml}${meta}</div>`;
+  return `<div class="verdict"><div class="vtop ${cls}"><span class="badge">${badge}</span>${top}</div>${whyHtml}${said}${checkTable(s)}${flagHtml}${meta}</div>`;
 }
 
 // the scoring, raw, at the end of the log
@@ -300,14 +313,14 @@ async function runRosa() {
   termRosa.reset("running");
   termRosa.start();
   rosaAbort = new AbortController();
-  const off = offTask(state.prompt);
+  const off = offTask(state.prompt), ran = build(state.prompt);
   try {
-    await stream("/api/run", { build: build(state.prompt), patient: cfg.rosa.id }, (m) => {
+    await stream("/api/run", { build: ran, patient: cfg.rosa.id }, (m) => {
       if (m.kind === "wiring") { termRosa.intro(m); lastWiring = m; }
       else if (m.kind === "result") {
         termRosa.line(off || m.score.correct ? "done" : "err", `■ ${esc(m.status === "ok" ? "done" : m.status)}${m.error ? `: ${esc(m.error)}` : ""}`, (m.seconds || 0) * 1000);
         logDetails(termRosa, m, off);
-        $("answer").innerHTML = verdictCard(m, { off });
+        $("answer").innerHTML = verdictCard(m, { off, ran });
         if (!m.replayed) addTokens(readTokens(m));
       } else {
         termRosa.event(m);
