@@ -12,8 +12,7 @@ what. The main views stay simple; the panel and the logs carry the detail.
 | Data | pick what it can see, next to the FHIR logo: nine cards, each adding informal **IRB review** weeks (insurance and immunizations play no part in the answer; demographics only adds identifiers) | what you're setting up (the token's permissions), and an example for Rosa: the request (403 if not granted), what the model reads, the FHIR JSON |
 | Tools | pick what it can do: read structured records, search notes, read a note, structured answer, estimate confidence, check its own work, and three stand-ins that act outside the chart (message the patient, search the web, place orders); each adds informal **IT setup** weeks | what you're setting up (the tools the model is given, the pi command), and an example: the call for Rosa and what comes back, with the tool's code |
 | Prompt | Rosa, a prompt (*On a beta blocker?*, *Care gap? Why?*, and *next appointment?* to show it is the same agent), **Run on Rosa**: the agent's answer and the two checks against her chart, nothing else; the terminal has everything the model is given and does, and ends with how it was checked | what you're setting up (the prompt), and an example for Rosa: the user message, the tools, the system prompt and the pi command |
-| Criteria | pick the rulebook, **CMS144** (US quality measure) or **ESC 2021** (European guideline), with how many of the 100 charts are care gaps under it (20 or 31); then tick what the agent is told: *what counts as being on a beta blocker*, *valid exceptions* and, for ESC, *not reasons on their own*; anything else is a care gap | what you're setting up (the answer key and the sentences), and the first message Rosa's agent gets |
-| Test | the prompt (Rosa's plus the criteria; *Fix it* is an agent that acts) on all 100 synthetic patients: a square per patient (green right, red wrong; hover for its answers, click for everything it did), a window per agent running, **Stop**, the score and the two answers' bars | none |
+| Test | the goal, *Screen your health system for beta-blocker care gaps* (n = 100), and how to play: write one prompt that finds as many of the true care gaps as it can without false alarms. Pick the definition it is checked against, **CMS144** (US quality measure) or **ESC 2021** (European guideline), with how many of the 100 have a care gap under it (20 or 31) and who wrote the answer key; the prompt box; under it, suggestions: *Ask* (*On a beta blocker?*, *Care gap? Why?*, *Fix it*, an agent that acts) and the definition's sentences (*what counts as being on a beta blocker*, *valid exceptions*, for ESC *not reasons on their own*), each going into the prompt or out of it as clicked. **Run on 100 patients**: care gaps found out of the answer key's, false alarms, right on both answers, the two answers' bars; a square per patient (green right, red wrong, a white ring for a care gap in the answer key; hover for its answers, click for everything it did), a window per agent running, **Stop** | none |
 
 The panel starts closed; from the second slide a curved arrow points at its button until someone opens it. The
 footer shows the agent as built so far, an icon for each card as it is picked; clicking one takes it away, so the room
@@ -33,8 +32,11 @@ measure; a question it didn't answer isn't right, and a patient is right only wh
 agent to be quick and answer only what it is asked, so *On a beta blocker?* gets a short answer that says nothing
 about a care gap: not finished.
 
-**Rulebooks.** The rulebook picked on Criteria is the answer key (`RULES` and `goldFor` in `agent/catalog.mjs`); the
-ticked sentences are only what the agent is told, so the room can tell it one rulebook and check it against the other.
+**Definitions.** The definition picked on Test is the answer key (`RULES` and `goldFor` in `agent/catalog.mjs`); the
+suggestions are only what the agent is told, so the room can tell it one definition and check it against the other
+(edit the prompt by hand after switching). A suggestion is in the prompt when its line is; clicking one rewrites the
+prompt's block of suggestions (`criteriaPrompt`), so the box always holds exactly what the agent gets, and the
+recorded prompts match.
 Both are limited to what the synthetic charts can hold: no chart has an arrhythmia, critical limb ischaemia, COPD or
 nebivolol, so those rules change no answer. **CMS144** ([v14, Denominator Exceptions](https://ecqi.healthit.gov/sites/default/files/ecqm/measures/CMS144-v14.0.000-QDM.html))
 accepts every documented reason in the cohort: 20 care gaps. **ESC 2021** ([Supplementary Table 3](https://api.iscpcardio.org/storage/guidelines/ehab368_Suppl.pdf#page=11))
@@ -45,6 +47,21 @@ choice). The rulebook changes the scores, not the run: cached and recorded runs 
 on the recordings: *Care gap? Why?* 85 (CMS144) and 80 (ESC); with every CMS144 sentence, 98 and 87. A test given the
 ESC sentences has a prompt of its own, so it needs the live model: it is planned (`cohort-gap-esc` in `record.mjs`,
 marked `live` until it is recorded, which `npm test` allows) and recorded with `just demo-record cohort-gap-esc`.
+
+**The v2 answer key: Opus 5.5.** Until now each answer came from how the chart was written (`SCENARIOS`). `label.mjs`
+has Claude Opus 5.5, at high effort, read every patient's whole chart against each definition (its sentences, plus what
+each answer means) and label it: on treatment, a documented reason (medical or declined), or a care gap, with a
+reason and the line that decides it. The labels go to `labels/answer-key.json`; the server scores against them where
+they exist (`DEMO_ANSWER_KEY=chart` ignores them), the Test slide says the key is Opus's and how many patients it
+differs from the charts on, and *Show the answer* on Chart says so too. The script prints every patient where Opus and
+the chart differ, with its reason and evidence, to review before committing the file. 200 calls (100 patients, two
+definitions), 8 at once, with the key in the environment:
+
+    ANTHROPIC_API_KEY=… npm run label                # or: node label.mjs --rules esc --only p012,p031
+
+A stopped run picks up where it was (`--redo` labels again). It uses `@anthropic-ai/sdk`, a dev dependency, so the
+image doesn't carry it. If a safety classifier declines a chart, the API re-runs it on its recommended fallback model
+(`fallbacks: "default"`); the label records which model answered.
 
 ## The story it tells
 
@@ -201,6 +218,7 @@ Checks:
 | `agent/session.mjs` | one session: the pi command, its event stream turned into the trace and the answer |
 | `score.mjs` | an answer against the chart's two answers (care gap, why), the checks, unsafe actions; a cohort summary |
 | `record.mjs`, `recorded/` | the planned builds, and their runs on the live model, one JSON file per build |
+| `label.mjs`, `labels/` | the v2 answer key: Opus 5.5's label for every patient under each definition |
 | `replay.mjs` | replays a recorded run when there is no model (or with `--replay`); skips stale recordings |
 | `encrypt-key.mjs`, `workshop-key.json` | the workshop key: the API key encrypted with the room's code (`agent/workshop-key.mjs`) |
 

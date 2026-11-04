@@ -24,7 +24,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { createServer } from "node:http";
 import { dirname, extname, join, normalize as normPath } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ACT_EXAMPLE, CRITERIA, CRITERIA_GROUPS, DATA, EXAMPLES, RULES, TOOLS, WHY, criteriaPrompt, goldFor, normalize, rulesOf } from "./agent/catalog.mjs";
+import { ACT_EXAMPLE, CRITERIA, CRITERIA_GROUPS, DATA, EXAMPLES, RULES, TOOLS, WHY, criteriaPrompt, goldFor, keyInfo, normalize, rulesOf } from "./agent/catalog.mjs";
 import { read } from "./agent/grade.mjs";
 import { MODEL, connect, unlock } from "./agent/model.mjs";
 import { FHIR, byPatientId, commandLine, piTools, runSession, systemPrompt, userPrompt } from "./agent/session.mjs";
@@ -143,6 +143,8 @@ async function config() {
     model: { id: MODEL.id, baseUrl: MODEL.baseUrl, ok: MODEL.ok, error: MODEL.error, locked: MODEL.locked },
     replay: replayed ? replayInfo() : null, recorded: replayed ? catalog() : [],
     data: DATA.map((d) => ({ ...d, scope: scopeOf(d) })), tools: TOOLS, criteria: CRITERIA, criteriaGroups: CRITERIA_GROUPS,
+    // the lines criteriaPrompt adds around the sentences (headings, the closing line), so the page can take its block out
+    criteriaFrame: criteriaPrompt(CRITERIA.map((c) => c.id)).split("\n").filter((l) => l && !l.startsWith("- ")), key: keyInfo(PATIENTS),
     rules: Object.fromEntries(Object.entries(RULES).map(([id, r]) => [id, { ...r, gaps: PATIENTS.filter((p) => goldFor(p, id).gap).length }])), examples: EXAMPLES, act: ACT_EXAMPLE, statuses: STATUSES, why: WHY,
     cohort: PATIENTS.length, names: PATIENTS.map((p) => p.name), concurrency: CONCURRENCY, today: TODAY,
     rosa: { id: rosa.id, name: rosa.name, age: rosa.age, ef: rosa.ef, gold: rosa.gold, next: rosa.next.date },
@@ -175,7 +177,7 @@ function chart(id, rules) {
     allergies: p.allergies.map((a) => ({ substance: a.substance, type: a.type, reaction: a.reaction, date: a.date })),
     immunizations: p.immunizations.map((v) => ({ date: v.date, text: v.text })),
     notes: p.notes.map((n) => ({ id: n.id, date: n.date, title: n.title, author: n.author, text: n.text })),
-    answer: { gap: g.gap, why: WHY[g.category], reason: g.why, rules: RULES[rulesOf(rules)].label },
+    answer: { gap: g.gap, why: WHY[g.category], reason: g.why, rules: RULES[rulesOf(rules)].label, by: g.by || "chart" },
   };
 }
 

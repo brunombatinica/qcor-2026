@@ -223,24 +223,40 @@ textarea:focus { outline: none; border-color: var(--edge); }
 .verdict { container-type: inline-size; }
 .stats { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 8px; margin-top: 14px; }
 @container (max-width: 440px) { .stats { grid-template-columns: 1fr 1fr; } }
-#results .stats { grid-template-columns: 1.4fr 1fr 1fr; margin-top: 18px; }
+#results .stats { grid-template-columns: 1.4fr 1fr 1fr; margin-top: 14px; }
+#results:not(:empty) { margin-bottom: 18px; container-type: inline-size; }
+.resTop { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 32px; align-items: end; }
+.resTop .score { margin-top: 0; } .resBars .barRow:first-child { margin-top: 0; }
+@container (max-width: 560px) { .resTop { grid-template-columns: 1fr; } }
 .stat { background: var(--raised); border-radius: 10px; padding: 10px 12px; font-variant-numeric: tabular-nums; min-width: 0; }
 .stat b { display: block; font-size: 26px; line-height: 1.1; font-weight: 700; color: var(--text); }
 .stat span { display: block; font-size: 13px; color: #d1d1d6; margin-top: 2px; }
 .stat small { display: block; font-size: 11.5px; color: var(--muted); margin-top: 4px; }
 
-/* criteria */
-/* the rulebook: which answer key the agent is checked against */
-.rulebook { display: flex; align-items: stretch; gap: 8px; margin: 0 0 18px; flex-wrap: wrap; }
-.rulebook button { background: var(--card); border: 2px solid transparent; border-radius: 12px; padding: 8px 14px; text-align: left; cursor: pointer; color: var(--muted); }
-.rulebook button b { display: block; font-size: 16px; color: #c7c7cc; } .rulebook button span { font-size: 12.5px; }
+/* Test: the goal, the definition (the answer key) and the suggestions under the prompt */
+.goalHead .label { margin-top: 0; color: var(--blue); font-weight: 700; }
+.goalHead h2 { margin: 0 0 8px; font-size: 26px; }
+.runRow { margin: 0 0 16px; }
+.nPill { display: inline-block; vertical-align: middle; font-size: 14px; font-weight: 600; color: var(--muted); border: 1px solid var(--dim); border-radius: 999px; padding: 2px 10px; margin-left: 6px; white-space: nowrap; }
+.howto { margin: 0 0 16px; font-size: 13.5px; line-height: 1.5; color: var(--muted); max-width: 64ch; } .howto b { color: #d1d1d6; font-weight: 600; }
+.rulebook { display: flex; align-items: stretch; gap: 8px; margin: 0 0 6px; flex-wrap: wrap; }
+.rulebook button { background: var(--card); border: 2px solid transparent; border-radius: 12px; padding: 7px 14px; text-align: left; cursor: pointer; color: var(--muted); }
+.rulebook button b { display: block; font-size: 15px; color: #c7c7cc; } .rulebook button span { font-size: 12px; }
 .rulebook button[aria-checked="true"] { border-color: var(--text); background: var(--raised); } .rulebook button[aria-checked="true"] b { color: var(--text); }
-.rulebook .gaps { align-self: center; margin-left: 8px; font-size: 14px; color: var(--muted); } .rulebook .gaps b { font-size: 24px; color: var(--text); margin-right: 2px; }
-.rulesNow { margin-top: 10px; font-size: 13.5px; color: var(--muted); } .rulesNow b { color: var(--text); }
-.cgroup { margin-bottom: 14px; }
-.crit { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; padding: 8px 12px; border-radius: 10px; cursor: pointer; font-size: 15.5px; }
-.crit:hover { background: var(--card); }
-.crit input { accent-color: var(--text); width: 16px; height: 16px; margin-top: 3px; }
+.keyNote { font-size: 13px; color: var(--muted); margin: 0 0 12px; } .keyNote b { color: var(--text); }
+.suggest { margin: 4px 0 6px; }
+.sgroup { margin-top: 8px; } .sgroup .label { margin: 10px 0 6px; }
+.sgroup .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sug { background: none; border: 1px dashed var(--edge); border-radius: 10px; padding: 5px 11px; font-size: 13px; line-height: 1.35; cursor: pointer; color: #c7c7cc; text-align: left; }
+.sug:hover { border-color: var(--text); color: var(--text); }
+.sug.on { border-style: solid; border-color: var(--blue); background: var(--blue-s); color: var(--text); }
+.sug .tick { display: inline-block; width: 1.1em; font-weight: 700; color: var(--muted); } .sug.on .tick { color: var(--blue); }
+.ghost.small { font-size: 13px; padding: 5px 12px; }
+.subScore { display: flex; gap: 18px; flex-wrap: wrap; margin: 6px 0 4px; font-size: 14px; color: var(--muted); } .subScore b { color: var(--text); font-size: 17px; }
+.subScore .warnTxt b { color: var(--red); }
+.sq.key { box-shadow: inset 0 0 0 3px #fff; }
+.legend .sq.key { background: var(--card); }
+.tally .key { color: var(--text); font-weight: 700; }
 
 /* code */
 .code { background: #0a0a0b; border: 1px solid var(--card); border-radius: 12px; padding: 12px 14px; margin: 0; font: 13px/1.55 var(--mono); white-space: pre-wrap; word-break: break-word; color: #d1d1d6; max-height: 60vh; overflow: auto; }

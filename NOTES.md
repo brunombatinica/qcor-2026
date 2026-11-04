@@ -3,6 +3,23 @@
 Handoff notes for picking the brainstorm back up in a new session. To restart, tell Claude:
 "read NOTES.md and let's continue the QCOR brainstorm."
 
+## Demo, Test as the game, and an Opus answer key (2026-11-04, late; Ryan)
+
+Ryan: the room at QCOR should play with it to find the best way to work. Criteria and Test become one slide, with a
+goal ("Screen your health system for beta-blocker care gaps", n = 100) and short instructions above the prompt box,
+suggestions under it, and a score for finding the gold-standard care gaps. The answer key should be labelled by Opus
+5.5 at high effort, under each definition. A Luna run on "Is this patient on a beta blocker?" scored 21/100: its "yes,
+on one" was read as "yes, a care gap"; the right question is the "Care gap? Why?" one.
+
+Done: Criteria is merged into Test. The definition switch (CMS144 · ESC 2021) is the answer key; the suggestions
+(*Ask*, and the definition's sentences) go into the prompt text and out of it, so the box is what the agent gets and
+the recorded prompts still match. The run button and results sit above the grid: care gaps found / the key's, false
+alarms, right on both answers; a white ring marks the key's care gaps. `label.mjs` (Opus 5.5, high effort, adaptive
+thinking, structured output, `fallbacks: "default"`) writes `labels/answer-key.json`, which the server scores against
+where it exists (README "The v2 answer key"). Not done: the labels themselves need an Anthropic key (`ANTHROPIC_API_KEY=…
+npm run label`, 200 calls); review the patients it prints as differing from the charts before committing the file.
+Tested on a stand-in API only.
+
 ## Demo, rulebooks and the page (2026-11-04, evening; Ryan)
 
 Ryan, going through the hosted demo: the Task slide as the goal (an agent that reads the EHR and finds care gaps, as

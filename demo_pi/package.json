@@ -6,10 +6,14 @@
   "description": "QCOR 2026 agent demo: the page picks data, tools, a prompt and criteria; server.mjs wires them into a real pi agent session",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node test/e2e.mjs && node test/replay.mjs && node test/unlock.mjs && node test/openai-request.mjs",
-    "record": "node record.mjs"
+    "test": "node test/e2e.mjs && node test/replay.mjs && node test/unlock.mjs && node test/openai-request.mjs && node test/answer-key.mjs",
+    "record": "node record.mjs",
+    "label": "node label.mjs"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.80.6"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^1.5.0"
   }
 }

@@ -7,6 +7,7 @@
 //
 // `icon` is a Font Awesome icon in public/icons/. `hint` is what the presenter can say after a run; it is not shown.
 
+import { existsSync, readFileSync } from "node:fs";
 import { SOURCES } from "../ehr/fhir.mjs";
 import { WHY } from "../ehr/patients.mjs";
 
@@ -84,11 +85,36 @@ const EXCEPTION = {
   reason_hypotension_in_note: "hypotension", reason_hypotension_coded: "hypotension", reason_asthma: "asthma", reason_intolerance_allergy_list: "allergy", reason_declined: "declined",
 };
 
-/** A patient's answers under a rulebook: a documented reason the rulebook doesn't accept leaves a care gap. */
-export function goldFor(patient, rules) {
+/** A patient's answers under a rulebook, from how the chart was written: a documented reason the rulebook doesn't
+ *  accept leaves a care gap. */
+export function chartGold(patient, rules) {
   const g = patient.gold, r = RULES[rulesOf(rules)], kind = EXCEPTION[g.scenario];
   if (g.status !== "documented_reason" || !kind || r.accepts.includes(kind)) return g;
   return { ...g, status: "gap", gap: true, category: "no_reason", why: `${g.why} Under ${r.label} that is a caution, not a reason not to treat.` };
+}
+
+// The v2 answer key: Opus 5.5 read every chart against each rulebook (label.mjs writes labels/answer-key.json). Where it
+// labelled a patient, its label is the answer; where it didn't, the chart's own is. DEMO_ANSWER_KEY=chart ignores the
+// file; DEMO_ANSWER_KEY=<path> reads another (the tests).
+export const KEY_FILE = new URL("../labels/answer-key.json", import.meta.url);
+const keyPath = process.env.DEMO_ANSWER_KEY === "chart" ? null : process.env.DEMO_ANSWER_KEY || KEY_FILE;
+export const ANSWER_KEY = keyPath && existsSync(keyPath) ? JSON.parse(readFileSync(keyPath, "utf8")) : null;
+
+/** A patient's answers under a rulebook: the v2 answer key's label, else the chart's. */
+export function goldFor(patient, rules) {
+  const id = rulesOf(rules), k = ANSWER_KEY?.rules?.[id]?.[patient.id];
+  if (!k) return chartGold(patient, id);
+  return { ...patient.gold, status: k.status, gap: k.status === "gap", category: k.why, why: k.reason, by: "opus" };
+}
+
+/** Who the answer key is by, per rulebook, for the page: Opus (and how often it differs from the charts) or the charts. */
+export function keyInfo(patients) {
+  return Object.fromEntries(Object.keys(RULES).map((id) => {
+    const labelled = patients.filter((p) => ANSWER_KEY?.rules?.[id]?.[p.id]);
+    if (!labelled.length) return [id, { by: "chart" }];
+    const differ = labelled.filter((p) => goldFor(p, id).gap !== chartGold(p, id).gap).length;
+    return [id, { by: "opus", model: ANSWER_KEY.label || ANSWER_KEY.model, effort: ANSWER_KEY.effort, labelled: labelled.length, disagree: differ }];
+  }));
 }
 
 // Each rulebook as sentences: what counts as treatment (the numerator), the documented reasons that are valid

@@ -101,36 +101,25 @@
       </section>
 
       <!-- 7 -->
-      <section class="view" data-view="criteria" data-title="Criteria" data-icon="list-check">
-        <div class="split">
-          <div class="col">
-            <h2>What counts?</h2>
-            <div class="rulebook" id="rulebook" role="radiogroup" aria-label="Rulebook"></div>
-            <div id="criteria"></div>
-            <div class="row"><button id="tickAll" class="ghost">Tick all</button><button id="useCriteria" class="primary">Use for the test →</button></div>
-          </div>
-          <div class="col">
-            <div class="label">Added to the prompt</div>
-            <pre class="code" id="criteriaText"></pre>
-          </div>
-        </div>
-      </section>
-
-      <!-- 8 -->
       <section class="view" data-view="test" data-title="Test" data-icon="users">
         <div class="split runSplit">
           <div class="col">
-            <h2>Run it on all 100 patients</h2>
-            <textarea id="testPrompt" rows="9" placeholder="The prompt for every patient…"></textarea>
-            <div class="examples"><button class="chipBtn" id="actExample"></button></div>
-            <div class="row"><button id="runCohort" class="primary">Run on 100 patients</button><label class="muted small" id="freshLabel"><input type="checkbox" id="fresh"> ignore cache</label><select id="recCohort" class="rec" hidden></select></div>
-            <div class="rulesNow" id="rulesNow"></div>
-            <div id="results"></div>
+            <div class="goalHead">
+              <div class="label">Goal</div>
+              <h2>Screen your health system for <span style="white-space: nowrap">beta-blocker care gaps</span> <span class="nPill">n = 100</span></h2>
+              <p class="howto">Every patient here has heart failure with reduced ejection fraction. Write one prompt: <b data-model>the model</b> runs it on each chart, one agent per patient, and says who has a care gap. You score by how many of the true care gaps it finds, without flagging patients who don't have one. Add what counts from the suggestions under the box, pick the definition you're checked against, then run it.</p>
+            </div>
+            <div class="rulebook" id="rulebook" role="radiogroup" aria-label="Definition"></div>
+            <div class="keyNote" id="keyNote"></div>
+            <textarea id="testPrompt" rows="7" placeholder="Your prompt for every patient…"></textarea>
+            <div class="suggest" id="suggest"></div>
           </div>
           <div class="col">
+            <div class="row runRow"><button id="runCohort" class="primary">Run on 100 patients</button><label class="muted small" id="freshLabel"><input type="checkbox" id="fresh"> ignore cache</label><select id="recCohort" class="rec" hidden></select></div>
+            <div id="results"></div>
             <div class="tally" id="tally"></div>
             <div class="grid" id="grid"></div>
-            <div class="legend"><span><i class="sq right"></i>right</span><span><i class="sq wrong"></i>wrong</span><span><i class="sq run"></i>running</span></div>
+            <div class="legend"><span><i class="sq right"></i>right</span><span><i class="sq wrong"></i>wrong</span><span><i class="sq run"></i>running</span><span><i class="sq key"></i>a care gap in the answer key</span></div>
             <div class="label" id="agentsLabel">Agents</div>
             <div class="wins" id="agents"></div>
           </div>

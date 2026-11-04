@@ -1,5 +1,5 @@
-// The page: the plan, the task, the chart by hand, then the views that build one agent (data → tools → prompt →
-// criteria → test). Every choice is sent to the server, which turns it into a FHIR token and a real pi session;
+// The page: the plan, the task, the chart by hand, then the views that build one agent (data → tools → prompt → test,
+// where the prompt for every patient is written with the definition's suggestions). Every choice is sent to the server, which turns it into a FHIR token and a real pi session;
 // nothing here decides anything about a patient, it only draws. The main views stay simple; the under-the-hood panel
 // and the logs carry the detail.
 
@@ -14,8 +14,8 @@ const OWN = ["test"];                                   // views that give the p
 const KEY = "qcor-demo-v3";
 const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
 const state = {
-  view: VIEWS.includes(saved.view) ? saved.view : "overview",
-  sources: new Set(saved.sources || []), tools: new Set(saved.tools || []), criteria: new Set(saved.criteria || []),
+  view: VIEWS.includes(saved.view) ? saved.view : saved.view === "criteria" ? "test" : "overview",   // Criteria is on Test now
+  sources: new Set(saved.sources || []), tools: new Set(saved.tools || []),
   prompt: saved.prompt || "", testPrompt: saved.testPrompt || "", rules: saved.rules || "cms144",
   focus: { data: null, tools: null }, hood: saved.hood ?? false, hoodSeen: saved.hoodSeen ?? false, zoom: saved.zoom ?? 1, wide: false, busy: false,
   chart: { patient: "p000", tab: "summary", note: null },
@@ -23,7 +23,8 @@ const state = {
 const runs = [];
 let cfg;
 
-const save = () => { localStorage.setItem(KEY, JSON.stringify({ view: state.view, sources: [...state.sources], tools: [...state.tools], criteria: [...state.criteria], prompt: state.prompt, testPrompt: state.testPrompt, rules: state.rules, hood: state.hood, hoodSeen: state.hoodSeen, zoom: state.zoom })); recSync(); };
+const save = () => { localStorage.setItem(KEY, JSON.stringify({ view: state.view, sources: [...state.sources], tools: [...state.tools], prompt: state.prompt, testPrompt: state.testPrompt, rules: state.rules, hood: state.hood, hoodSeen: state.hoodSeen, zoom: state.zoom })); recSync(); };
+const modelName = () => (cfg.replay ? cfg.replay.models[0] : cfg.model.id)?.split("/").pop() || "the model";
 const build = (prompt) => ({ sources: [...state.sources], tools: [...state.tools], prompt });
 const offTask = (prompt) => !/beta|blocker|care gap|\bgap\b/i.test(prompt || "");
 
@@ -86,7 +87,7 @@ function go(view) {
   $("back").style.visibility = i ? "visible" : "hidden";
   $("next").style.visibility = i < VIEWS.length - 1 ? "visible" : "hidden";
   $("next").textContent = i === 0 ? "Start →" : "Next →";
-  if (view === "test" && !state.testPrompt) { state.testPrompt = state.prompt; $("testPrompt").value = state.testPrompt; }
+  if (view === "test" && !state.testPrompt) { state.testPrompt = state.prompt; $("testPrompt").value = state.testPrompt; suggest(); }
   if (view === "chart" && !chartData) loadChart(state.chart.patient);
   summary();
   save();
@@ -343,36 +344,51 @@ async function runRosa() {
   $("runRosa").disabled = false;
 }
 
-// ---- criteria ----
+// ---- the definition and the suggestions (Test) ----
 
-// the rulebook is the answer key (agent/catalog.mjs RULES); its sentences are what the agent can be told
+// The definition is the answer key (agent/catalog.mjs RULES, labelled per patient by label.mjs when that has run); its
+// sentences are suggestions for the prompt. A suggestion is in the prompt when its line is: ticking one rewrites the
+// prompt's block of suggestions (criteriaPrompt on the server), so the text in the box is always what the agent gets.
 const shown = () => cfg.criteria.filter((c) => c.rules.includes(state.rules));
-const ticked = () => shown().filter((c) => state.criteria.has(c.id)).map((c) => c.id);
-function rulebook() {
-  $("rulebook").innerHTML = Object.entries(cfg.rules).map(([id, r]) => `<button role="radio" aria-checked="${id === state.rules}" data-rules="${id}"><b>${esc(r.label)}</b><span>${esc(r.sub)}</span></button>`).join("") +
-    `<span class="gaps"><b>${cfg.rules[state.rules].gaps}</b>/${cfg.cohort} charts are care gaps</span>`;
-  $("rulesNow").innerHTML = `Checked against <b>${esc(cfg.rules[state.rules].label)}</b> · ${esc(cfg.rules[state.rules].sub)}`;
+const lineOf = (c) => `- ${c.text}`;
+const lines = (p) => new Set(String(p || "").split("\n").map((l) => l.trim()));
+const inPrompt = (p = state.testPrompt) => { const l = lines(p); return cfg.criteria.filter((c) => l.has(lineOf(c))).map((c) => c.id); };
+const ticked = () => inPrompt().filter((id) => shown().some((c) => c.id === id));
+const blockText = async (ids) => (await post("/api/preview", { build: build(""), criteria: ids })).criteria || "";
+// the prompt without our block: the suggestion lines, their headings and the closing line come out
+const stripBlock = (p) => { const drop = new Set([...cfg.criteria.map(lineOf), ...cfg.criteriaFrame]);
+  return String(p || "").split("\n").filter((l) => !drop.has(l.trim())).join("\n").replace(/\n{3,}/g, "\n\n").trim(); };
+async function setTicked(ids) {
+  const block = await blockText(ids);
+  setTestPrompt([stripBlock(state.testPrompt), block].filter(Boolean).join("\n\n"));
 }
-// switching keeps what both rulebooks share; everything ticked stays everything ticked
-function setRules(id) {
+function setTestPrompt(text) { state.testPrompt = text; $("testPrompt").value = text; save(); suggest(); }
+
+const keyBy = () => cfg.key[state.rules];
+function rulebook() {
+  $("rulebook").innerHTML = Object.entries(cfg.rules).map(([id, r]) => `<button role="radio" aria-checked="${id === state.rules}" data-rules="${id}"><b>${esc(r.label)}</b><span>${esc(r.sub)}</span></button>`).join("");
+  const r = cfg.rules[state.rules], k = keyBy();
+  $("keyNote").innerHTML = `<b>${r.gaps}</b> of ${cfg.cohort} patients have a care gap under ${esc(r.label)} · answer key ${k.by === "opus" ? `labelled by <b>${esc(k.model)}</b> (${esc(k.effort)} effort)${k.disagree ? `, ${k.disagree} differ from how the charts were written` : ""}` : "from how each chart was written"}`;
+}
+// switching keeps the suggestions both definitions share; all of one stays all of the other
+async function setRules(id) {
   if (!cfg.rules[id] || id === state.rules) return;
-  const all = ticked().length === shown().length;
+  const had = ticked(), all = had.length === shown().length;
   state.rules = id;
-  for (const c of cfg.criteria) if (!c.rules.includes(id) || all) state.criteria.delete(c.id);
-  if (all) shown().forEach((c) => state.criteria.add(c.id));
-  save(); rulebook(); criteria(); hood();
+  save(); rulebook();
+  if (had.length) await setTicked(all ? shown().map((c) => c.id) : had.filter((x) => shown().some((c) => c.id === x)));
+  else suggest();
   if (chartData) loadChart(state.chart.patient);
 }
-function criteria() {
-  $("criteria").innerHTML = Object.entries(cfg.criteriaGroups).map(([g, title]) => [title, shown().filter((c) => c.group === g)]).filter(([, list]) => list.length).map(([title, list]) => `<div class="cgroup"><div class="label">${esc(title)}</div>${list.map((c) =>
-    `<label class="crit"><input type="checkbox" data-id="${c.id}" ${state.criteria.has(c.id) ? "checked" : ""}><span>${esc(c.text)}</span></label>`).join("")}</div>`).join("");
-  $("tickAll").textContent = ticked().length === shown().length ? "Untick all" : "Tick all";
-  criteriaText();
-}
-async function criteriaText() {
-  const { criteria: text } = await post("/api/preview", { build: build(""), criteria: ticked() });
-  $("criteriaText").textContent = text || "(nothing ticked)";
-  return text;
+function suggest() {
+  const on = new Set(inPrompt()), mark = (b) => `<span class="tick">${b ? "✓" : "+"}</span>`;
+  const starts = [...cfg.examples.filter((x) => !x.offTask), { label: cfg.act.label, text: cfg.act.text }];
+  const base = stripBlock(state.testPrompt);
+  $("suggest").innerHTML = `<div class="sgroup"><div class="label">Ask</div><div class="chips">${starts.map((x, i) => `<button class="sug${base === x.text ? " on" : ""}" data-start="${i}" title="${esc(x.text)}">${esc(x.label)}</button>`).join("")}</div></div>` +
+    Object.entries(cfg.criteriaGroups).map(([g, title]) => [title, shown().filter((c) => c.group === g)]).filter(([, list]) => list.length).map(([title, list]) =>
+      `<div class="sgroup"><div class="label">${esc(title)}</div><div class="chips">${list.map((c) => `<button class="sug${on.has(c.id) ? " on" : ""}" data-crit="${c.id}" aria-pressed="${on.has(c.id)}">${mark(on.has(c.id))}${esc(c.text)}</button>`).join("")}</div></div>`).join("") +
+    `<div class="sgroup"><button class="ghost small" id="tickAll">${ticked().length === shown().length ? "Take out all suggestions" : `Add all of ${esc(cfg.rules[state.rules].label)}`}</button></div>`;
+  suggest.starts = starts;
 }
 
 // ---- the cohort ----
@@ -382,6 +398,14 @@ const rowsById = new Map();
 const pct = (a, b) => (b ? Math.round((100 * a) / b) : 0);
 const bars = (groups) => groups.map((g) => `<div class="barRow"><span>${esc(g.label)}</span><span class="track"><i style="width:${pct(g.right, g.n)}%"></i></span><span class="num">${g.right}/${g.n}</span></div>`).join("");
 
+// the headline: of the patients with a care gap in the answer key, how many it found; then its false alarms, and how
+// many patients it got wholly right (both answers)
+function gapScore(s) {
+  const g = s.gaps || { total: 0, found: 0, falseAlarms: 0 }, all = g.found === g.total;
+  return `<div class="score"><span class="big ${all ? "good" : "bad"}">${g.found}<small>/${g.total}</small></span><span class="muted">care gaps found</span></div>
+    <div class="subScore"><span class="${g.falseAlarms ? "warnTxt" : ""}"><b>${g.falseAlarms}</b> false alarm${g.falseAlarms === 1 ? "" : "s"}</span><span><b>${s.right}</b>/${s.n} right on both answers</span></div>`;
+}
+
 function results(s, cached, seconds) {
   const flags = [];
   if (s.harmfulOrders) flags.push(`<span class="chip warn">${s.harmfulOrders} harmful orders</span>`);
@@ -390,9 +414,8 @@ function results(s, cached, seconds) {
   if (s.leakedPatients) flags.push(`<span class="chip warn">${s.leakedPatients} patients' details sent to the web</span>`);
   if (s.errors) flags.push(`<span class="chip warn">${s.errors} sessions failed</span>`);
   $("results").innerHTML = `
-    <div class="score"><span class="big ${s.right === s.n ? "good" : "bad"}">${s.right}<small>/${s.n}</small></span><span class="muted">right</span></div>
-    ${bars(QUESTIONS.map(([k, label]) => ({ label, right: s.questions[k].right, n: s.n })))}
-    ${flags.length ? `<div class="flags">${flags.join("")}</div>` : ""}
+    <div class="resTop"><div>${gapScore(s)}</div><div class="resBars">${bars(QUESTIONS.map(([k, label]) => ({ label, right: s.questions[k].right, n: s.n })))}
+    ${flags.length ? `<div class="flags">${flags.join("")}</div>` : ""}</div></div>
     <div class="stats">${stat(num(s.tokens), "tokens", [`${num(s.tokensPerPatient)} per patient`, s.tokensRead ? `${num(s.tokens - s.tokensRead)} agent · ${num(s.tokensRead)} reading its answers` : ""].filter(Boolean).join("<br>"))}${stat(num(s.modelCalls ?? 0), "model calls", s.n ? `${Math.round(((s.modelCalls ?? 0) / s.n) * 10) / 10} per patient` : "")}${stat(seconds != null ? `${seconds} s` : "–", "wall clock", `${s.secondsPerPatient} s per patient, ${cfg.concurrency} at once`)}</div>
     ${cached ? `<div class="meta">${cached} from cache</div>` : ""}`;
 }
@@ -401,7 +424,7 @@ const liveAct = new Map();     // patient → its latest tool call, for the hove
 
 function square(row) {
   const s = row.score;
-  $(`sq-${row.patientId}`).className = `sq ${s.correct ? "right" : "wrong"} ${s.unsafe ? "harm" : ""}`;
+  $(`sq-${row.patientId}`).className = `sq ${s.correct ? "right" : "wrong"}${s.questions.gap.gold === "yes" ? " key" : ""} ${s.unsafe ? "harm" : ""}`;
 }
 
 const tipQa = (s) => `<table class="qa">${QUESTIONS.map(([k, label]) => { const x = s.questions[k]; return `<tr><th>${label}</th><td>${x.agent ? `<span class="ag">${esc(answerLabel(k, x.agent))}</span>` : `<span class="na">–</span>`}</td><td>${esc(answerLabel(k, x.gold))}</td><td>${mark(x.right)}</td></tr>`; }).join("")}</table>`;
@@ -495,11 +518,12 @@ async function runCohort() {
   liveAct.clear();
   const wins = new Windows($("agents"), cfg.concurrency);
   let t0 = performance.now();
-  let done = 0, active = 0, cached = 0, right = 0, ahead = 0, stopped = false;
+  let done = 0, active = 0, cached = 0, right = 0, found = 0, ahead = 0, stopped = false;
+  const gaps = cfg.rules[state.rules].gaps;
   const status = () => {
     // the server runs one test at a time: while it waits its turn, say how many are ahead
     if (ahead) { $("tally").innerHTML = `<span class="t run">In line: ${ahead} ${ahead === 1 ? "test" : "tests"} ahead of yours</span><span class="t">${clock(performance.now() - t0)}</span>`; return; }
-    $("tally").innerHTML = `<span class="t ok">✓ ${right} right</span><span class="t no">✗ ${done - right} wrong</span><span class="t run">${stopped ? "stopped" : `${active} running`}</span><span class="t">${n - done - (stopped ? 0 : active)} ${stopped ? "not run" : "waiting"}</span><span class="t">${clock(performance.now() - t0)}</span>`;
+    $("tally").innerHTML = `<span class="t key">◎ ${found}/${gaps} care gaps found</span><span class="t ok">✓ ${right} right</span><span class="t no">✗ ${done - right} wrong</span><span class="t run">${stopped ? "stopped" : `${active} running`}</span><span class="t">${n - done - (stopped ? 0 : active)} ${stopped ? "not run" : "waiting"}</span><span class="t">${clock(performance.now() - t0)}</span>`;
   };
   status();
   const ticker = setInterval(status, 200);
@@ -531,6 +555,7 @@ async function runCohort() {
         done += 1;
         if (r.cached) cached += 1;
         if (r.score.correct) right += 1;
+        if (r.score.questions.gap.gold === "yes" && r.score.questions.gap.agent === "yes") found += 1;
         if (!r.cached && !r.replayed) addTokens(readTokens(r));
         square(r);
         if (!r.cached || done <= cfg.concurrency) wins.finish(r);
@@ -557,10 +582,10 @@ async function runCohort() {
 
 function runsTable() {
   const ics = (list, ids) => `<span class="ics">${list.filter((x) => ids.includes(x.id)).map((x) => `<span title="${esc(x.label)}">${icon(x.icon)}</span>`).join("") || "nothing"}</span>`;
-  $("runs").innerHTML = `<tr><th>Run</th><th>Sees</th><th>Does</th><th>Prompt</th><th>Checked against</th><th>Right</th><th>Care gap · Why</th><th>Tokens</th><th>Wall clock</th></tr>` +
+  $("runs").innerHTML = `<tr><th>Run</th><th>Sees</th><th>Does</th><th>Prompt</th><th>Checked against</th><th>Care gaps found</th><th>False alarms</th><th>Right</th><th>Care gap · Why</th><th>Tokens</th><th>Wall clock</th></tr>` +
     runs.map((r, i) => `<tr><td>${runs.length - i}</td><td>${ics(cfg.data, r.build.sources)}</td><td>${ics(cfg.tools, r.build.tools)}</td>
       <td class="small muted" title="${esc(r.build.prompt)}">${esc(r.build.prompt.slice(0, 70))}${r.build.prompt.length > 70 ? "…" : ""}</td>
-      <td>${esc(cfg.rules[r.rules]?.label || r.rules)}</td><td class="num">${r.summary.right}/${r.summary.n}</td><td class="num">${r.summary.questions.gap.right} · ${r.summary.questions.why.right}</td><td class="num">${num(r.summary.tokens)}</td><td class="num">${r.seconds} s</td></tr>`).join("");
+      <td>${esc(cfg.rules[r.rules]?.label || r.rules)}</td><td class="num">${r.summary.gaps ? `${r.summary.gaps.found}/${r.summary.gaps.total}` : "–"}</td><td class="num">${r.summary.gaps?.falseAlarms ?? "–"}</td><td class="num">${r.summary.right}/${r.summary.n}</td><td class="num">${r.summary.questions.gap.right} · ${r.summary.questions.why.right}</td><td class="num">${num(r.summary.tokens)}</td><td class="num">${r.seconds} s</td></tr>`).join("");
 }
 
 // ---- replay: with no model the server replays recorded runs (replay.mjs); a picker loads one of their builds ----
@@ -572,11 +597,11 @@ function loadRecorded(rec) {
   for (const [set, ids] of [[state.sources, rec.build.sources], [state.tools, rec.build.tools]]) { set.clear(); ids.forEach((id) => set.add(id)); }
   if (rec.kind === "rosa") { state.prompt = rec.build.prompt; $("prompt").value = state.prompt; }
   else {
-    state.testPrompt = rec.build.prompt; $("testPrompt").value = state.testPrompt; state.criteria.clear(); rec.criteria.forEach((id) => state.criteria.add(id));
+    state.testPrompt = rec.build.prompt; $("testPrompt").value = state.testPrompt;
     const fits = (r) => rec.criteria.every((id) => cfg.criteria.find((c) => c.id === id)?.rules.includes(r));
     if (cfg.rules[rec.rules]) state.rules = rec.rules;                     // a recording says what it was checked against
     else if (!fits(state.rules)) state.rules = Object.keys(cfg.rules).find(fits) || state.rules;
-    rulebook(); criteria();
+    rulebook(); suggest();
   }
   cards($("dataCards"), cfg.data, state.sources, "data");
   cards($("toolCards"), cfg.tools, state.tools, "tools");
@@ -742,7 +767,7 @@ async function hood() {
     return show(groups);
   }
 
-  const w = await post("/api/preview", { build: build(v === "criteria" ? [state.prompt.trim(), (await criteriaText()) || ""].filter(Boolean).join("\n\n") : state.prompt), patient: cfg.rosa.id, criteria: ticked() });
+  const w = await post("/api/preview", { build: build(state.prompt), patient: cfg.rosa.id });
   if (v === "tools") {
     const groups = [setup("setup", [block("given", "tools", w.tools.join("\n")), block("cmd", "pi command", fmtCmd(w.command), "sh", "", { collapsed: true })])];
     const focus = cfg.tools.find((t) => t.id === state.focus.tools) || cfg.tools.find((t) => state.tools.has(t.id));
@@ -759,13 +784,6 @@ async function hood() {
     example(`example · ${cfg.rosa.id}`, [block("first", "user message", w.prompt), block("given", "tools", w.tools.join("\n") || "(none)"),
       block("system", "system prompt", w.system, "text", "", { collapsed: true }), block("cmd", "pi command", fmtCmd(w.command), "sh", "", { collapsed: true })]),
   ]);
-  if (v === "criteria") {
-    const r = cfg.rules[state.rules], kinds = (l) => (l || []).join(", ").replaceAll("_", " ") || "(none)";
-    return show([
-    setup("setup", [block("rules", "answer key", `rulebook:    ${r.label} (${r.sub})\nexceptions:  ${kinds(r.accepts)}\ncautions:    ${kinds(r.cautions)}\ncare gaps:   ${r.gaps}/${cfg.cohort}\nsource:      ${r.source}`), block("crit", "prompt += criteria", (await criteriaText()) || "(none)")]),
-    example(`example · ${cfg.rosa.id}`, [block("first", "user message", w.prompt), block("system", "system prompt", w.system, "text", "", { collapsed: true })]),
-    ]);
-  }
 }
 
 // ---- start ----
@@ -799,7 +817,7 @@ $("ehrTabs").onclick = (e) => { const b = e.target.closest("[data-tab]"); if (!b
 $("ehrMain").onclick = (e) => { const b = e.target.closest("[data-note]"); if (!b) return; state.chart.note = b.dataset.note; drawChart(); };
 $("reveal").onclick = () => {
   const a = chartData?.answer;
-  if (a) $("revealed").innerHTML = `<b>Care gap: ${a.gap ? "yes" : "no"} · Why: ${esc(cap(a.why))}</b><span class="muted">${esc(a.reason)}${state.rules === "cms144" ? "" : ` (${esc(a.rules)})`}</span>`;
+  if (a) $("revealed").innerHTML = `<b>Care gap: ${a.gap ? "yes" : "no"} · Why: ${esc(cap(a.why))}</b><span class="muted">${esc(a.reason)}${state.rules === "cms144" ? "" : ` (${esc(a.rules)})`}${a.by === "opus" ? ` · answer key: ${esc(cfg.key[state.rules].model)}` : ""}</span>`;
 };
 
 cards($("dataCards"), cfg.data, state.sources, "data");
@@ -807,23 +825,20 @@ cards($("toolCards"), cfg.tools, state.tools, "tools");
 $("buildBar").onclick = (e) => { const b = e.target.closest(".chip[data-id]"); if (b) toggle(b.dataset.kind, b.dataset.id); };
 $("examples").innerHTML = cfg.examples.map((x, i) => `<button class="chipBtn" data-i="${i}">${esc(x.label)}</button>`).join("");
 $("examples").onclick = (e) => { const b = e.target.closest("[data-i]"); if (!b) return; state.prompt = cfg.examples[b.dataset.i].text; $("prompt").value = state.prompt; save(); hood(); };
-$("actExample").textContent = `${cfg.act.label}: an agent that acts`;
-$("actExample").onclick = () => { state.testPrompt = cfg.act.text; $("testPrompt").value = state.testPrompt; save(); hood(); };
 $("prompt").value = state.prompt;
 $("testPrompt").value = state.testPrompt;
 let typing;
 $("prompt").oninput = () => { state.prompt = $("prompt").value; save(); clearTimeout(typing); typing = setTimeout(hood, 300); };
-$("testPrompt").oninput = () => { state.testPrompt = $("testPrompt").value; save(); clearTimeout(typing); typing = setTimeout(hood, 300); };
+$("testPrompt").oninput = () => { state.testPrompt = $("testPrompt").value; save(); clearTimeout(typing); typing = setTimeout(suggest, 300); };
 $("runRosa").onclick = runRosa;
 $("runCohort").onclick = runCohort;
-$("criteria").onchange = (e) => { const id = e.target.dataset.id; e.target.checked ? state.criteria.add(id) : state.criteria.delete(id); save(); criteria(); hood(); };
-$("tickAll").onclick = () => { if (ticked().length === shown().length) state.criteria.clear(); else shown().forEach((c) => state.criteria.add(c.id)); save(); criteria(); hood(); };
 $("rulebook").onclick = (e) => { const b = e.target.closest("[data-rules]"); if (b) setRules(b.dataset.rules); };
-$("useCriteria").onclick = async () => {
-  const text = await criteriaText();
-  state.testPrompt = [state.prompt.trim(), text].filter(Boolean).join("\n\n");
-  $("testPrompt").value = state.testPrompt;
-  go("test");
+// an Ask suggestion replaces the question and keeps the definition's lines; a definition line goes in or comes out
+$("suggest").onclick = (e) => {
+  const st = e.target.closest("[data-start]"), cr = e.target.closest("[data-crit]");
+  if (st) { const keep = ticked(); setTestPrompt(suggest.starts[st.dataset.start].text); if (keep.length) setTicked(keep); }
+  else if (cr) { const id = cr.dataset.crit, now = ticked(); setTicked(now.includes(id) ? now.filter((x) => x !== id) : [...now, id]); }
+  else if (e.target.id === "tickAll") setTicked(ticked().length === shown().length ? [] : shown().map((c) => c.id));
 };
 $("grid").onmouseover = tip;
 $("grid").onmouseleave = () => ($("tip").hidden = true);
@@ -852,5 +867,6 @@ $("agentsLabel").textContent = `${cfg.concurrency} agents`;
 pickers();
 if (!cfg.rules[state.rules]) state.rules = "cms144";
 rulebook();
-criteria();
+suggest();
+document.querySelectorAll("[data-model]").forEach((el) => (el.textContent = modelName()));
 go(state.view);

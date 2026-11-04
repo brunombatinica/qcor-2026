@@ -11,6 +11,7 @@ const model = await start(0);
 process.env.DEMO_BASE_URL = `http://127.0.0.1:${model.address().port}/v1`;
 process.env.PORT = "0";
 process.env.HOST = "127.0.0.1";
+process.env.DEMO_ANSWER_KEY = "chart";          // the answers as the charts were written (test/answer-key.mjs checks the v2 key)
 const { server, ready } = await import("../server.mjs");
 const base = `http://127.0.0.1:${await ready}`;
 
@@ -133,13 +134,18 @@ const PROMPT = "Is there a beta-blocker care gap for this patient? Why or why no
 {
   const cfg = await (await fetch(`${base}/api/config`)).json();
   assert.deepEqual([cfg.rules.cms144.gaps, cfg.rules.esc.gaps], [20, 31], "ESC 2021 turns the 11 slow-heart-rate and low-blood-pressure charts into care gaps");
+  assert.deepEqual(cfg.key, { cms144: { by: "chart" }, esc: { by: "chart" } });
+  assert.ok(cfg.criteriaFrame.includes("Care gap: not on a beta blocker that counts, and no valid exception documented."), "the page can find our block in a prompt");
   const { PATIENTS } = await import("../ehr/patients.mjs");
   const slow = PATIENTS.find((p) => p.gold.scenario === "reason_bradycardia_vitals").id, block = PATIENTS[0].id;
   const answer = async (id, rules) => (await (await fetch(`${base}/api/chart?patient=${id}&rules=${rules}`)).json()).answer;
   assert.deepEqual([(await answer(slow, "cms144")).gap, (await answer(slow, "esc")).gap, (await answer(block, "esc")).gap], [false, true, false]);
   const build = { tools: ["read_records", "search_notes", "read_note", "structured"], sources: ["medications", "notes"], prompt: PROMPT };
   const ev = await events("/api/cohort", { build, n: 4, rules: "esc" });
-  assert.equal(ev.find((e) => e.kind === "summary").rules, "esc");
+  const sum = ev.find((e) => e.kind === "summary");
+  assert.equal(sum.rules, "esc");
+  const rows = ev.filter((e) => e.kind === "patient").map((e) => e.row.score.questions.gap);
+  assert.deepEqual(sum.summary.gaps, { total: rows.filter((q) => q.gold === "yes").length, found: rows.filter((q) => q.gold === "yes" && q.agent === "yes").length, falseAlarms: rows.filter((q) => q.gold === "no" && q.agent === "yes").length });
   assert.ok(ev.filter((e) => e.kind === "patient").every((e) => e.row.cached && e.row.score.rules === "esc"), "same runs from the cache, scored under ESC");
 }
 
