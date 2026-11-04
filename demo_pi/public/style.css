@@ -88,8 +88,17 @@ footer { display: flex; justify-content: space-between; align-items: center; gap
 .arrow::after { content: ""; position: absolute; right: -1px; top: -4px; border: 5px solid transparent; border-left: 7px solid var(--edge); border-right: 0; }
 .overview .arrow { margin-bottom: 70px; }
 
-/* 2: the task and the data */
-.introGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 2vh; }
+/* 2: the goal, as a pipeline: the EHR's records → the agent (blue: the model) → the care gaps it finds */
+.view[data-view="intro"] { max-width: 1320px; container-type: inline-size; }
+.goal { text-align: center; font-size: 32px; margin: 1vh 0 3.5vh; }
+.pipe { display: grid; grid-template-columns: minmax(0, 1.1fr) 56px 140px 56px minmax(0, 1fr); align-items: center; }
+.pipe > .panel { align-self: stretch; } .pipe .lake div { white-space: nowrap; }
+.pipeArrow { position: relative; height: 2px; background: var(--edge); margin: 0 8px; }
+.pipeArrow::after { content: ""; position: absolute; right: -1px; top: -4px; border: 5px solid transparent; border-left: 7px solid var(--edge); border-right: 0; }
+.pipeArrow span { position: absolute; left: -8px; right: -8px; top: -22px; text-align: center; font-size: 13px; color: var(--muted); }
+.agentCol { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.agentTile { width: 112px; height: 112px; border-radius: 50%; background: var(--blue); display: grid; place-items: center; font-size: 50px; color: #fff; margin-bottom: 8px; }
+.agentCol b { font-size: 20px; } .agentCol .muted { font-size: 14px; }
 .panel { background: var(--card); border-radius: 18px; padding: 24px 26px; }
 .panel > p { margin: 6px 0 18px; font-size: 15.5px; }
 .panelHead { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 700; }
@@ -300,12 +309,29 @@ aside.wide { width: min(1100px, 68vw); }
   .ehrSide { padding: 12px 10px; } .ehr { grid-template-columns: 220px 1fr; min-height: 0; } .notes { grid-template-columns: 240px 1fr; }
   .ehrMain { min-height: 340px; max-height: calc(100vh - 290px); } .ehrTabs button { padding: 6px 10px; } .ask { margin-bottom: 12px; }
 }
+/* narrower (the panel open, a laptop): the same pipeline, compact; on a phone it runs downwards */
+@container (max-width: 1080px) {
+  .goal { font-size: 26px; margin-bottom: 22px; }
+  .pipe { grid-template-columns: minmax(0, 1fr) 40px 92px 40px minmax(0, 1fr); }
+  .pipe > .panel { padding: 16px 16px; } .pipe .panelHead { font-size: 20px; } .pipe .panel > p { font-size: 13.5px; margin-bottom: 12px; }
+  .pipe .lake { grid-template-columns: repeat(2, 1fr); gap: 6px; } .pipe .lake div { padding: 7px 9px; font-size: 13px; }
+  .pipe .hundred b { font-size: 34px; } .pipe .hundred span { font-size: 14px; }
+  .pipe .flow { grid-template-columns: minmax(0, 1fr) 44px minmax(0, 0.8fr); } .pipe .fq, .pipe .fa { font-size: 14px; padding: 10px 10px; } .pipe .fn { height: 30px; }
+  .pipe .fy::before { top: -18px; } .pipeArrow { margin: 0 4px; } .pipeArrow span { font-size: 12px; }
+  .agentTile { width: 76px; height: 76px; font-size: 34px; margin-bottom: 4px; } .agentCol b { font-size: 16px; } .agentCol .muted { font-size: 12px; }
+}
+@container (max-width: 700px) {
+  .pipe { grid-template-columns: minmax(0, 1fr); }
+  .pipeArrow { width: 2px; height: 36px; margin: 6px auto; } .pipeArrow::after { right: -4px; top: auto; bottom: -1px; border: 5px solid transparent; border-top: 7px solid var(--edge); border-bottom: 0; }
+  .pipeArrow span { left: 12px; right: auto; top: 10px; }
+  .agentCol { flex-direction: row; justify-content: center; gap: 12px; } .agentTile { width: 56px; height: 56px; font-size: 26px; margin: 0; }
+}
 @media (max-width: 1100px) { .cards { grid-template-columns: repeat(2, 1fr); } .wins { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 860px) {
   header { flex-wrap: wrap; gap: 8px; padding: 10px 14px; } .brand { flex: 1; }
   nav { order: 3; width: 100%; flex: none; justify-content: flex-start; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
   footer { padding: 10px 14px; } .buildBar, .model, .tokens, .hoodHint { display: none; }
-  main { padding: 18px 14px 30px; } .split, .introGrid, .ehr, .notes { grid-template-columns: 1fr; } .overview { flex-direction: column; } .overview .arrow { display: none; }
+  main { padding: 18px 14px 30px; } .split, .ehr, .notes { grid-template-columns: 1fr; } .overview { flex-direction: column; } .overview .arrow { display: none; }
   .cards { grid-template-columns: 1fr; } .card { min-height: 0; }
   aside { position: fixed; inset: 0; width: auto; z-index: 5; }
   .grid { grid-template-columns: repeat(10, 1fr); }

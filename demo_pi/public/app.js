@@ -719,7 +719,7 @@ async function hood() {
 // ---- start ----
 
 cfg = await (await fetch("/api/config")).json();
-await loadIcons(["house", "bullseye", "file-medical", "database", "screwdriver-wrench", "file-pen", "list-check", "users", "user", "triangle-exclamation",
+await loadIcons(["house", "bullseye", "brain", "file-medical", "database", "screwdriver-wrench", "file-pen", "list-check", "users", "user", "triangle-exclamation",
   ...cfg.data.map((d) => d.icon), ...cfg.tools.map((t) => t.icon), ...TABS.map((t) => t[2])]);
 fillIcons();
 $("model").textContent = cfg.replay ? `replay · ${cfg.replay.models.map((m) => m.split("/").pop()).join(", ") || "nothing recorded"}` : cfg.model.ok ? cfg.model.id.split("/").pop() : "no model";

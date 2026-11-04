@@ -35,17 +35,21 @@
         </div>
       </section>
 
-      <!-- 2: the task and the data -->
+      <!-- 2: the goal: an agent that reads the EHR and finds care gaps -->
       <section class="view" data-view="intro" data-title="Task" data-icon="bullseye">
-        <div class="introGrid">
+        <h2 class="goal">Build an agent that reads the EHR and finds care gaps</h2>
+        <div class="pipe">
           <div class="panel">
-            <div class="panelHead"><i data-icon="database"></i>The data</div>
-            <p class="muted">Data lake or EHR → API → agent</p>
+            <div class="panelHead"><i data-icon="database"></i>The EHR</div>
+            <p class="muted">Data lake or EHR, through its API</p>
             <div class="lake" id="lake"></div>
             <div class="hundred"><i data-icon="users"></i><b>100</b><span>synthetic patients with heart failure</span></div>
           </div>
+          <div class="pipeArrow"><span>reads</span></div>
+          <div class="agentCol"><span class="agentTile"><i data-icon="brain"></i></span><b>The agent</b><span class="muted">one chart at a time</span></div>
+          <div class="pipeArrow"><span>finds</span></div>
           <div class="panel">
-            <div class="panelHead"><i data-icon="bullseye"></i>The task</div>
+            <div class="panelHead"><i data-icon="bullseye"></i>Care gaps</div>
             <p class="muted">Care gap? Why?</p>
             <div class="flow">
               <div class="fq">On a beta blocker that counts?</div><div class="fy"></div><div class="fa">No care gap</div>
