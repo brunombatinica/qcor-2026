@@ -270,6 +270,9 @@ function cantRead(b) {
   return "";
 }
 
+// a large number with its label, and a line under it (the sub line is HTML: callers escape what they put in it)
+const stat = (n, label, sub = "") => `<div class="stat"><b>${n}</b><span>${label}</span>${sub ? `<small>${sub}</small>` : ""}</div>`;
+
 function verdictCard(row, { who = "", off = false, ran = null } = {}) {
   const s = row.score;
   const why = cantRead(ran);
@@ -280,7 +283,6 @@ function verdictCard(row, { who = "", off = false, ran = null } = {}) {
     : `<div class="said none">No answer${row.status !== "ok" ? `: ${esc(row.error || row.status)}` : ""}</div>`;
   // what it used, large: tokens (the agent's calls, then the read of a free-text answer), model calls, tool calls, time
   const u = row.usage, agentTok = u.input + u.output, gradeTok = readTokens(row);
-  const stat = (n, label, sub = "") => `<div class="stat"><b>${n}</b><span>${label}</span>${sub ? `<small>${sub}</small>` : ""}</div>`;
   const meta = `<div class="stats">${stat(num(rowTokens(row)), "tokens", gradeTok ? `${num(agentTok)} agent · ${num(gradeTok)} reading its answer` : "")}${stat(u.modelCalls ?? 0, `model call${u.modelCalls === 1 ? "" : "s"}`)}${stat(u.toolCalls ?? 0, `tool call${u.toolCalls === 1 ? "" : "s"}`)}${stat(`${row.seconds ?? "–"} s`, "time")}</div>` +
     (who || row.cached || row.replayed ? `<div class="meta">${[who, row.cached && "from cache", row.replayed && "replay"].filter(Boolean).map(esc).join(" · ")}</div>` : "");
   const flags = [];
@@ -363,7 +365,7 @@ const rowsById = new Map();
 const pct = (a, b) => (b ? Math.round((100 * a) / b) : 0);
 const bars = (groups) => groups.map((g) => `<div class="barRow"><span>${esc(g.label)}</span><span class="track"><i style="width:${pct(g.right, g.n)}%"></i></span><span class="num">${g.right}/${g.n}</span></div>`).join("");
 
-function results(s, cached) {
+function results(s, cached, seconds) {
   const flags = [];
   if (s.harmfulOrders) flags.push(`<span class="chip warn">${s.harmfulOrders} harmful orders</span>`);
   else if (s.orders) flags.push(`<span class="chip warn">${s.orders} orders signed</span>`);
@@ -374,7 +376,8 @@ function results(s, cached) {
     <div class="score"><span class="big ${s.right === s.n ? "good" : "bad"}">${s.right}<small>/${s.n}</small></span><span class="muted">right</span></div>
     ${bars(QUESTIONS.map(([k, label]) => ({ label, right: s.questions[k].right, n: s.n })))}
     ${flags.length ? `<div class="flags">${flags.join("")}</div>` : ""}
-    <div class="meta">${num(s.tokens)} tokens, ${num(s.tokensPerPatient)} per patient · ${s.secondsPerPatient} s per patient${cached ? ` · ${cached} from cache` : ""}</div>`;
+    <div class="stats">${stat(num(s.tokens), "tokens", [`${num(s.tokensPerPatient)} per patient`, s.tokensRead ? `${num(s.tokens - s.tokensRead)} agent · ${num(s.tokensRead)} reading its answers` : ""].filter(Boolean).join("<br>"))}${stat(num(s.modelCalls ?? 0), "model calls", s.n ? `${Math.round(((s.modelCalls ?? 0) / s.n) * 10) / 10} per patient` : "")}${stat(seconds != null ? `${seconds} s` : "–", "wall clock", `${s.secondsPerPatient} s per patient, ${cfg.concurrency} at once`)}</div>
+    ${cached ? `<div class="meta">${cached} from cache</div>` : ""}`;
 }
 
 const liveAct = new Map();     // patient → its latest tool call, for the hover card while it runs
@@ -515,8 +518,9 @@ async function runCohort() {
         square(r);
         if (!r.cached || done <= cfg.concurrency) wins.finish(r);
       } else if (m.kind === "summary") {
-        results(m.summary, cached);
-        runs.unshift({ build: b, summary: m.summary, seconds: Math.round((performance.now() - t0) / 100) / 10 });
+        const seconds = Math.round((performance.now() - t0) / 100) / 10;
+        results(m.summary, cached, seconds);
+        runs.unshift({ build: b, summary: m.summary, seconds });
         runsTable();
       }
     }, cohortAbort.signal);

@@ -223,6 +223,7 @@ textarea:focus { outline: none; border-color: var(--edge); }
 .verdict { container-type: inline-size; }
 .stats { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 8px; margin-top: 14px; }
 @container (max-width: 440px) { .stats { grid-template-columns: 1fr 1fr; } }
+#results .stats { grid-template-columns: 1.4fr 1fr 1fr; margin-top: 18px; }
 .stat { background: var(--raised); border-radius: 10px; padding: 10px 12px; font-variant-numeric: tabular-nums; min-width: 0; }
 .stat b { display: block; font-size: 26px; line-height: 1.1; font-weight: 700; color: var(--text); }
 .stat span { display: block; font-size: 13px; color: #d1d1d6; margin-top: 2px; }

@@ -75,7 +75,8 @@ export function summarize(rows) {
   const sum = (f) => rows.reduce((t, r) => t + f(r), 0);
   const accepted = rows.filter((r) => !r.score.toHuman.length);
   const question = (k) => ({ right: rows.filter((r) => r.score.questions[k].right === true).length, answered: rows.filter((r) => r.score.questions[k].agent).length });
-  const tokens = (r) => r.usage.input + r.usage.output + (r.read?.usage ? r.read.usage.input + r.read.usage.output : 0);
+  const readTok = (r) => (r.read?.usage ? r.read.usage.input + r.read.usage.output : 0);
+  const tokens = (r) => r.usage.input + r.usage.output + readTok(r);
   return {
     n, right: rows.filter((r) => r.score.correct).length,
     questions: { gap: question("gap"), why: question("why") },
@@ -85,7 +86,7 @@ export function summarize(rows) {
     messages: rows.filter((r) => r.score.messages.length).length,
     leakedPatients: rows.filter((r) => r.score.leaked.length).length, webPatients: rows.filter((r) => r.score.webQueries.length).length,
     fromProse: rows.filter((r) => r.score.fromProse).length,
-    tokens: sum(tokens), tokensPerPatient: n ? Math.round(sum(tokens) / n) : 0,
+    tokens: sum(tokens), tokensPerPatient: n ? Math.round(sum(tokens) / n) : 0, tokensRead: sum(readTok), modelCalls: sum((r) => r.usage.modelCalls || 0),
     secondsPerPatient: n ? Math.round((sum((r) => r.seconds || 0) / n) * 10) / 10 : 0,
     errors: rows.filter((r) => r.status !== "ok").length,
   };
