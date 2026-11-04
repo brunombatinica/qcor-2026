@@ -111,8 +111,7 @@ footer { display: flex; justify-content: space-between; align-items: center; gap
 .fn::after { content: "no"; position: absolute; left: calc(50% + 10px); top: 12px; font-size: 13px; }
 
 /* 3: the mock EHR */
-.ask { font-size: 18px; margin: -4px 0 16px; color: #d1d1d6; }
-.who-pick { background: var(--card); border: 1px solid var(--dim); border-radius: 8px; padding: 2px 6px; font-size: 17px; font-weight: 700; color: var(--text); }
+.ask { font-size: 18px; margin: -4px 0 16px; color: #d1d1d6; } .ask b { color: var(--text); }
 .ehr { display: grid; grid-template-columns: 250px 1fr; background: var(--card); border-radius: 16px; overflow: hidden; min-height: 460px; }
 .ehrSide { background: #141416; padding: 16px 12px; border-right: 1px solid var(--raised); }
 .ehrWho { display: flex; gap: 12px; align-items: center; padding: 0 6px 16px; border-bottom: 1px solid var(--raised); margin-bottom: 10px; }
@@ -251,6 +250,7 @@ textarea:focus { outline: none; border-color: var(--edge); }
 .track { height: 8px; background: var(--raised); border-radius: 4px; overflow: hidden; } .track i { display: block; height: 100%; background: var(--green); }
 .num { font-variant-numeric: tabular-nums; text-align: right; }
 .flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+#results .err { margin-top: 6px; font: 12px/1.45 var(--mono); color: var(--red); word-break: break-word; }
 .chip { font-size: 12.5px; padding: 3px 10px; border-radius: 999px; background: var(--raised); color: #c7c7cc; }
 .chip.warn { background: var(--red-s); color: var(--red); }
 .tip { position: fixed; z-index: 20; width: 360px; background: var(--card); border: 1px solid var(--dim); border-radius: 12px; padding: 10px 12px; font-size: 13px; pointer-events: none; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6); }
@@ -270,14 +270,17 @@ aside.wide { width: min(1100px, 68vw); }
 .hoodCtl { display: flex; gap: 4px; align-items: center; }
 .hoodCtl button:not(.x) { background: var(--card); border: 1px solid var(--dim); border-radius: 6px; padding: 1px 7px; font: 11.5px var(--mono); color: #c7c7cc; cursor: pointer; }
 .x { background: none; border: 0; font-size: 22px; color: var(--muted); cursor: pointer; line-height: 1; }
-.hg { border-radius: 14px; padding: 10px 12px 12px; margin-bottom: 14px; }
-.hg.setup { background: var(--card); }
-.hg.example { border: 1px dashed var(--edge); }
-.hgTitle { display: flex; align-items: center; gap: 8px; font: 700 11.5px var(--mono); letter-spacing: 0.04em; margin-bottom: 4px; }
+.hg { padding: 0 0 0 12px; margin: 6px 0 22px; border-left: 2px solid var(--dim); }
+.hg.setup { border-left-color: var(--text); }
+.hg.example { border-left-style: dashed; border-left-color: var(--edge); }
+.hgTitle { font: 700 12px var(--mono); margin-bottom: 2px; }
+.hgTitle::before { content: "# "; color: var(--edge); }
 .hg.setup .hgTitle { color: var(--text); } .hg.example .hgTitle { color: var(--muted); }
-#hoodBody .label { font-size: 10.5px; margin: 10px 0 5px; }
-#hoodBody .code { font-size: var(--hood-font); line-height: 1.5; padding: 8px 10px 8px 4px; max-height: none; }
-#hoodBody details summary { cursor: pointer; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 10px 0 5px; }
+#hoodBody .label { font: 11.5px var(--mono); text-transform: none; letter-spacing: 0; color: var(--edge); margin: 10px 0 2px; }
+#hoodBody .label::before { content: "// "; }
+#hoodBody .code { font-size: var(--hood-font); line-height: 1.5; padding: 0; max-height: none; background: none; border: 0; border-radius: 0; }
+#hoodBody details summary { cursor: pointer; font: 11.5px var(--mono); color: var(--edge); margin: 10px 0 2px; list-style: none; }
+#hoodBody details summary::before { content: "▸ // "; } #hoodBody details[open] summary::before { content: "▾ // "; }
 .cl { display: block; position: relative; padding-left: 16px; min-height: 1.5em; transition: background 1.2s, opacity 0.6s; }
 .cl.add { background: var(--green-s); } .cl.add::before { content: "+"; position: absolute; left: 4px; color: var(--green); }
 .cl.del { background: var(--red-s); color: #ff8a80; text-decoration: line-through; text-decoration-color: rgba(255, 69, 58, 0.5); }

@@ -8,7 +8,7 @@ what. The main views stay simple; the panel and the logs carry the detail.
 |---|---|---|
 | Overview | the plan, three tiles: build an agent, try it on Rosa, run it on 100 patients | what runs the demo: the model, the harness, the FHIR server |
 | Task | the data (the record types in a data lake or the EHR, 100 synthetic patients with heart failure) and the task as a flow: on a beta blocker that counts? a documented reason not to be? otherwise a care gap | the measure behind it, CMS144 (our summary) |
-| Chart | a mock EHR: find it yourself for Rosa, or any of the 100 (summary, problems, medications, vitals, labs, allergies, immunizations, notes); *Show the answer* gives the chart's answer and reason | the same records as one FHIR request, and the one line per record the agent reads instead |
+| Chart | a mock EHR: find it yourself in Rosa's chart (summary, problems, medications, vitals, labs, allergies, immunizations, notes); *Show the answer* gives the chart's answer and reason | the same records as one FHIR request, and the one line per record the agent reads instead |
 | Data | pick what it can see, next to the FHIR logo: nine cards, each adding informal **IRB review** weeks (insurance and immunizations play no part in the answer; demographics only adds identifiers) | what you're setting up (the token's permissions), and an example for Rosa: the request (403 if not granted), what the model reads, the FHIR JSON |
 | Tools | pick what it can do: read structured records, search notes, read a note, structured answer, estimate confidence, check its own work, and three stand-ins that act outside the chart (message the patient, search the web, place orders); each adds informal **IT setup** weeks | what you're setting up (the tools the model is given, the pi command), and an example: the call for Rosa and what comes back, with the tool's code |
 | Prompt | Rosa, a prompt (*On a beta blocker?*, *Care gap? Why?*, and *next appointment?* to show it is the same agent), **Run on Rosa**: the agent's answer and the two checks against her chart, nothing else; the terminal has everything the model is given and does, and ends with how it was checked | none: the space goes to the terminal |
@@ -17,8 +17,8 @@ what. The main views stay simple; the panel and the logs carry the detail.
 
 The panel starts closed; from the second slide a curved arrow points at its button until someone opens it. The
 footer shows the agent as built so far, an icon for each card as it is picked; clicking one takes it away, so the room
-can rerun and see what it changes. In the panel, what each click changed shows for a moment as a diff (added lines
-green, removed red), then settles. The look is the talk's (`pptx/build.mjs`): a black stage, Apple dark greys, blue
+can rerun and see what it changes. The panel looks like code (`# setup`, `# example`, `// labels`, no boxes); what each click changed shows for a moment as a
+diff (added lines green, removed red), then settles. The look is the talk's (`pptx/build.mjs`): a black stage, Apple dark greys, blue
 for the model and what it writes, purple for its handed-in answer, green for right, red for wrong. Icons are Font
 Awesome Free (CC BY 4.0, `public/icons/LICENSE.txt`), inlined; the FHIR logo is HL7's, shown as a white silhouette.
 

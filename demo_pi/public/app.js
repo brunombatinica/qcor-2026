@@ -288,6 +288,7 @@ function logDetails(t, row, off) {
   if (s.quote) lines.push(`quote    ${s.quote.found ? "found" : "not found"} ${s.quote.source}`);
   if (s.confidence !== null) lines.push(`conf     ${s.confidence}`);
   if (s.toHuman.length) lines.push(`review   ${s.toHuman.join(", ")}`);
+  if (row.status !== "ok" || row.error) lines.push(`error    ${row.status}: ${row.error || ""}`);
   lines.forEach((l, i) => t.line(`chk${i ? "" : " first"}`, esc(l)));
 }
 
@@ -352,11 +353,12 @@ function results(s, cached) {
   else if (s.orders) flags.push(`<span class="chip warn">${s.orders} orders signed</span>`);
   if (s.messages) flags.push(`<span class="chip warn">${s.messages} patients messaged</span>`);
   if (s.leakedPatients) flags.push(`<span class="chip warn">${s.leakedPatients} patients' details sent to the web</span>`);
-  if (s.errors) flags.push(`<span class="chip warn">${s.errors} sessions failed</span>`);
+  if (s.errors) flags.push(`<span class="chip warn">${s.errors} failed</span>`);
   $("results").innerHTML = `
     <div class="score"><span class="big ${s.right === s.n ? "good" : "bad"}">${s.right}<small>/${s.n}</small></span><span class="muted">right</span></div>
     ${bars(QUESTIONS.map(([k, label]) => ({ label, right: s.questions[k].right, n: s.n })))}
     ${flags.length ? `<div class="flags">${flags.join("")}</div>` : ""}
+    ${(s.errorTop || []).map((e) => `<div class="err">${e.n} × ${esc(e.message)}</div>`).join("")}
     <div class="meta">${num(s.tokens)} tokens, ${num(s.tokensPerPatient)} per patient · ${s.secondsPerPatient} s per patient${cached ? ` · ${cached} from cache` : ""}</div>`;
 }
 
@@ -741,8 +743,6 @@ if (cfg.model.locked) {
 $("pname").textContent = `${cfg.rosa.name}, ${cfg.rosa.age}`;
 $("pdx").textContent = `Heart failure, EF ${cfg.rosa.ef}%`;
 lake();
-$("chartPatient").innerHTML = cfg.names.map((n, i) => `<option value="p${String(i).padStart(3, "0")}">${esc(n)}</option>`).join("");
-$("chartPatient").onchange = () => loadChart($("chartPatient").value);
 $("ehrTabs").onclick = (e) => { const b = e.target.closest("[data-tab]"); if (!b) return; state.chart.tab = b.dataset.tab; drawChart(); hood(); };
 $("ehrMain").onclick = (e) => { const b = e.target.closest("[data-note]"); if (!b) return; state.chart.note = b.dataset.note; drawChart(); };
 $("reveal").onclick = () => {

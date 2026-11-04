@@ -31,7 +31,10 @@ export default (fields: string[], structured: boolean, options: string[]) => {
     label: "Submit the answer",
     description: "Hand in your answer: one answer per question you were asked, in order. Call it once, when you have decided.",
     parameters: Type.Object(schema),
-    async execute(_id, params) {
+    async execute(_id, params: Record<string, unknown>) {
+      // with fixed options, an answer in words needs its option too: refused, so the model hands it in again
+      if (structured) for (const [a, o] of [["answer_1", "option_1"], ["answer_2", "option_2"]])
+        if (params[a] !== undefined && params[o] === undefined) throw new Error(`${o} is missing: pick the option that matches ${a}, then call submit_answer again.`);
       return { ...text("Answer recorded."), details: { answer: params }, terminate: true };
     },
   });

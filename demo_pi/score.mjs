@@ -12,7 +12,7 @@ import { fullText } from "./ehr/render.mjs";
 
 const squash = (s) => String(s || "").toLowerCase().replace(/[“”"'.,;:]/g, "").replace(/\s+/g, " ").trim();
 const yn = (b) => (b ? "yes" : "no");
-const whyOf = (label) => Object.keys(WHY).find((k) => WHY[k] === label) ?? null;
+const whyOf = (label) => Object.keys(WHY).find((k) => WHY[k] === String(label ?? "").trim().toLowerCase().replace(/\.$/, "")) ?? null;
 
 /** The agent's answers as text: its answers in words, in order, else its last message. */
 export function answerText(result) {
@@ -29,8 +29,10 @@ export function score(result, build) {
   // is a care gap only if it was asked about one); free text was read by agent/grade.mjs, with the question
   const structured = !!a && b.tools.includes("structured");
   const asked = { gap: /\bgap\b/i.test(b.prompt), why: /\bwhy\b|\breason/i.test(b.prompt) };
-  const said = structured ? (asked.gap ? a.option_1 ?? null : null) : r.careGap ?? null;
-  const why = structured ? (asked.why ? whyOf(a.option_2) : null) : r.why ?? null;
+  // an option left out, with its answer in words exactly one of the options, counts as that option
+  const yesNo = (v) => String(v ?? "").trim().toLowerCase().match(/^(yes|no)\.?$/)?.[1] ?? null;
+  const said = structured ? (asked.gap ? a.option_1 ?? yesNo(a.answer_1) : null) : r.careGap ?? null;
+  const why = structured ? (asked.why ? whyOf(a.option_2) ?? whyOf(a.answer_2) : null) : r.why ?? null;
   const gap = said ?? (why === "on_beta_blocker" ? "no" : null);
   const questions = {
     gap: { agent: gap, gold: yn(g.gap), right: gap ? gap === yn(g.gap) : null, implied: !said && !!gap },
@@ -88,5 +90,8 @@ export function summarize(rows) {
     tokens: sum(tokens), tokensPerPatient: n ? Math.round(sum(tokens) / n) : 0,
     secondsPerPatient: n ? Math.round((sum((r) => r.seconds || 0) / n) * 10) / 10 : 0,
     errors: rows.filter((r) => r.status !== "ok").length,
+    // the failures, by their raw message, commonest first (a rate limit, a killed process, a timeout)
+    errorTop: Object.entries(rows.filter((r) => r.status !== "ok").reduce((m, r) => { const k = `${r.status}: ${String(r.error || "").slice(0, 160)}`; m[k] = (m[k] || 0) + 1; return m; }, {}))
+      .sort((a, b) => b[1] - a[1]).slice(0, 3).map(([message, n]) => ({ message, n })),
   };
 }

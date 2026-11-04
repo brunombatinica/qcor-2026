@@ -56,7 +56,7 @@ export default function (pi: ExtensionAPI) {
   // text is told once to use submit_answer.
   let calls = 0, submitted = false, nudged = false;
   pi.on("tool_result", (event) => {
-    if (event.toolName === "submit_answer") { submitted = true; return; }
+    if (event.toolName === "submit_answer") { if (!event.isError) submitted = true; return; }
     calls += 1;
     if (calls >= TOOL_BUDGET)
       return { content: [...event.content, { type: "text" as const, text: `\n[${calls} tool calls: decide now and give your answer]` }] };
