@@ -46,7 +46,7 @@ export function recorded(kind, build, patientId) {
 }
 
 /** What the page needs to list them: the planned builds, in the order they were planned. */
-export const catalog = () => [...recordings.values()].sort((a, b) => a.order - b.order).map(({ id, kind, label, build, criteria }) => ({ id, kind, label, build, criteria }));
+export const catalog = () => [...recordings.values()].sort((a, b) => a.order - b.order).map(({ id, kind, label, build, criteria, rules }) => ({ id, kind, label, build, criteria, rules }));
 
 const sleep = (ms, signal) => new Promise((resolve) => {
   if (ms <= 0 || signal?.aborted) return resolve();

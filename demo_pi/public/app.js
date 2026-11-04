@@ -574,7 +574,8 @@ function loadRecorded(rec) {
   else {
     state.testPrompt = rec.build.prompt; $("testPrompt").value = state.testPrompt; state.criteria.clear(); rec.criteria.forEach((id) => state.criteria.add(id));
     const fits = (r) => rec.criteria.every((id) => cfg.criteria.find((c) => c.id === id)?.rules.includes(r));
-    if (!fits(state.rules)) state.rules = Object.keys(cfg.rules).find(fits) || state.rules;
+    if (cfg.rules[rec.rules]) state.rules = rec.rules;                     // a recording says what it was checked against
+    else if (!fits(state.rules)) state.rules = Object.keys(cfg.rules).find(fits) || state.rules;
     rulebook(); criteria();
   }
   cards($("dataCards"), cfg.data, state.sources, "data");

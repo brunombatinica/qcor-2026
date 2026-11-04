@@ -43,7 +43,8 @@ under 50 or a systolic pressure under 90 only cautions, so those 11 charts becom
 that counts): 31. Nebivolol counts under ESC. A patient who declined counts under both; the guideline doesn't say (our
 choice). The rulebook changes the scores, not the run: cached and recorded runs are scored again under either. Replayed
 on the recordings: *Care gap? Why?* 85 (CMS144) and 80 (ESC); with every CMS144 sentence, 98 and 87. A test given the
-ESC sentences has a prompt of its own, so it needs the live model (it isn't recorded).
+ESC sentences has a prompt of its own, so it needs the live model: it is planned (`cohort-gap-esc` in `record.mjs`,
+marked `live` until it is recorded, which `npm test` allows) and recorded with `just demo-record cohort-gap-esc`.
 
 ## The story it tells
 

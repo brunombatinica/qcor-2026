@@ -26,13 +26,15 @@ async function events(path, body) {
 // every planned build is recorded, on the current cohort and instructions
 assert.deepEqual(stale, [], "stale recordings: npm run record");
 const recs = [...recordings.values()];
-assert.deepEqual(PLAN.map((p) => p.id).filter((id) => !recs.some((r) => r.id === id)), [], "planned builds not recorded: npm run record <id>");
+const missing = PLAN.filter((p) => !recs.some((r) => r.id === p.id));
+assert.deepEqual(missing.filter((p) => !p.live).map((p) => p.id), [], "planned builds not recorded: npm run record <id>");
+for (const p of missing) console.log(`replay: ${p.id} not recorded yet (needs the live model: just demo-record ${p.id})`);
 
 // the page is told it is a replay, and which builds it can load
 {
   const cfg = await (await fetch(`${base}/api/config`)).json();
   assert.ok(cfg.replay && cfg.replay.models.length && cfg.replay.recorded);
-  assert.deepEqual(cfg.recorded.map((r) => r.id), PLAN.map((p) => p.id), "in the planned order");
+  assert.deepEqual(cfg.recorded.map((r) => r.id), PLAN.filter((p) => !missing.includes(p)).map((p) => p.id), "in the planned order");
 }
 
 // Rosa: the wiring, the trace as it streamed, then the answer, scored now

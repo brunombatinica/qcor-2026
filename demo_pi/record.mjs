@@ -6,6 +6,8 @@
 //
 // The plan follows the story in README.md: Rosa on each data and tool step with each example prompt, then the test's
 // prompts on all 100 patients. A recording holds the model's answers on the synthetic cohort, never anything real.
+// `rules` is the rulebook it is checked against (agent/catalog.mjs RULES); `live: true` marks a build not recorded yet,
+// which npm test allows to be missing: record it with `just demo-record <id>` on the live model.
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -18,12 +20,13 @@ const READ = ["read_records", "search_notes", "read_note"];
 const TEST = { sources: ["medications", "diagnoses", "vitals", "notes", "allergies"], tools: READ };     // what the answer needs, and no more
 const CHECKS = ["structured", "check_quote", "confidence"];
 const RISKY = { sources: [...TEST.sources, "demographics"], tools: [...READ, "web_search", "place_order", "message_patient"] };
-const ALL = CRITERIA.map((c) => c.id);
+const ALL = CRITERIA.filter((c) => c.rules.includes("cms144")).map((c) => c.id);           // every CMS144 sentence, as recorded
+const ESC = CRITERIA.filter((c) => c.rules.includes("esc")).map((c) => c.id);
 const [GIVEN, GAP, NEXT] = EXAMPLES.map((x) => x.text);
 const withCriteria = (prompt, ids) => [prompt, criteriaPrompt(ids)].join("\n\n");     // as the page's "Use for the test"
 
 const rosa = (id, label, build, prompt) => ({ id: `rosa-${id}`, kind: "rosa", label: `Rosa · ${label}`, build: { ...build, prompt } });
-const cohort = (id, label, build, prompt, criteria = []) => ({ id: `cohort-${id}`, kind: "cohort", label: `100 patients · ${label}`, build: { ...build, prompt }, criteria });
+const cohort = (id, label, build, prompt, criteria = [], more = {}) => ({ id: `cohort-${id}`, kind: "cohort", label: `100 patients · ${label}`, build: { ...build, prompt }, criteria, ...more });
 export const PLAN = [
   rosa("nothing-given", "nothing switched on · On a beta blocker?", { sources: [], tools: [] }, GIVEN),
   rosa("meds-given", "medications · On a beta blocker?", { sources: ["medications"], tools: ["read_records"] }, GIVEN),
@@ -38,6 +41,7 @@ export const PLAN = [
   cohort("gap-criteria", "Care gap? Why? + every criterion", TEST, withCriteria(GAP, ALL), ALL),
   cohort("gap-criteria-checks", "structured answer and checks · Care gap? Why? + every criterion", { ...TEST, tools: [...READ, ...CHECKS] }, withCriteria(GAP, ALL), ALL),
   cohort("fix", "demographics and the risky tools · Fix it", RISKY, ACT_EXAMPLE.text),
+  cohort("gap-esc", "ESC 2021 · Care gap? Why? + every criterion", TEST, withCriteria(GAP, ESC), ESC, { rules: "esc", live: true }),
 ];
 
 // one POST to the server, its server-sent events with the time each arrived (ms after the request)
@@ -66,7 +70,7 @@ const keep = ({ score, cached, ...row }, start, done) => ({ start: Math.max(0, M
 
 async function record(base, plan, order) {
   const build = normalize(plan.build);
-  const { messages, seconds } = await stream(base, plan.kind === "rosa" ? "/api/run" : "/api/cohort", plan.kind === "rosa" ? { build, patient: "p000" } : { build, fresh: true });
+  const { messages, seconds } = await stream(base, plan.kind === "rosa" ? "/api/run" : "/api/cohort", plan.kind === "rosa" ? { build, patient: "p000", rules: plan.rules } : { build, fresh: true, rules: plan.rules });
   let rows;
   if (plan.kind === "rosa") {
     const [done, { kind, ...row }] = messages.find(([, m]) => m.kind === "result");
@@ -80,7 +84,7 @@ async function record(base, plan, order) {
     rows.sort((a, b) => a.patientId.localeCompare(b.patientId));
   }
   const failed = rows.filter((r) => r.status !== "ok").length;
-  const rec = { id: plan.id, order, kind: plan.kind, label: plan.label, build, criteria: plan.criteria || [], model: MODEL.id, recorded: new Date().toISOString(), seconds, ...fingerprint(build), rows };
+  const rec = { id: plan.id, order, kind: plan.kind, label: plan.label, build, criteria: plan.criteria || [], rules: plan.rules || "cms144", model: MODEL.id, recorded: new Date().toISOString(), seconds, ...fingerprint(build), rows };
   const { rows: _, ...head } = rec;
   writeFileSync(join(RECORDED, `${plan.id}.json`), JSON.stringify(head, null, 2).replace(/\n}$/, `,\n  "rows": [\n${rows.map((r) => `    ${JSON.stringify(r)}`).join(",\n")}\n  ]\n}\n`));
   const summary = messages.find(([, m]) => m.kind === "summary")?.[1].summary;

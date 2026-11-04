@@ -15,8 +15,8 @@ data" to show how criteria change the result.
 
 Done: a rulebook switch on Criteria (CMS144 · ESC 2021) that is the answer key, apart from the sentences the agent is
 told (`RULES`, `goldFor` in `agent/catalog.mjs`; README "Rulebooks"). 20 vs 31 care gaps; the CMS144 sentences are
-unchanged, so the recordings still match. Not done: no recording of a test given the ESC sentences (needs the live
-model: add it to `PLAN` in `record.mjs`, then `just demo-record <id>`). CMS144's arrhythmia exception isn't on the
+unchanged, so the recordings still match. Not done: the test given the ESC sentences is planned but not recorded
+(`cohort-gap-esc`, marked `live`; needs the live model: `just demo-record cohort-gap-esc`). CMS144's arrhythmia exception isn't on the
 slide; no chart has one.
 
 ## Demo, second pass (2026-11-04, afternoon; branch demo-simplify)
