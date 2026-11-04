@@ -1,0 +1,14 @@
+# What the Dockerfile doesn't need: it copies only demo_pi/ and shared/, and installs node_modules itself
+**/node_modules
+**/.cache
+**/.pi-agent
+.git
+.env
+.devcontainer
+.claude
+pptx
+demos
+docs
+tools
+*.docx
+**/.DS_Store

@@ -64,32 +64,16 @@ multiplies the token cost by 100, takes minutes per person, and doesn't work wel
 
 ## Before the day, whichever host
 
-1. **Commit and push the demo.** A host builds what is in GitHub. Right now the current code and the new
-   `demo_pi/recorded/*.json` files are only on this machine (the old recordings are staged as deleted, the new ones are
-   untracked), so a deploy today would serve the old demo with no matching recordings.
+1. **Push the demo.** A host builds what is in GitHub, not what is on your machine: push before you deploy, and
+   check that the recordings in `demo_pi/recorded/` match the code (`just test`).
 2. **The OpenAI key.** A separate OpenAI project for the workshop, with a budget cap, and its key only in the host's
    environment variables. Check the project's tokens-per-minute limit for `gpt-6-luna` against the numbers above.
    Revoke the key afterwards.
 3. **Settings for a shared room:** `DEMO_CONCURRENCY` sized to the server (32 for 8 vCPU), `DEMO_MAX_TOKENS=400`,
    and `DEMO_TESTS_AT_ONCE=1` (the default). Rosa runs going first and one test at a time are in `server.mjs`.
-4. **A deploy image.** The dev container's image (`.devcontainer/Dockerfile`) has sshd and tools a deploy doesn't need.
-   A small one, used for the measurements above:
-
-   ```dockerfile
-   # Dockerfile (repo root): the demo, for Railway, EC2 or Spinup
-   FROM node:22-bookworm-slim
-   WORKDIR /app
-   COPY demo_pi/package.json demo_pi/package-lock.json demo_pi/
-   RUN cd demo_pi && npm ci --omit=dev --no-audit --no-fund
-   COPY shared shared
-   COPY demo_pi demo_pi
-   ENV HOST=0.0.0.0 PORT=8771
-   EXPOSE 8771
-   CMD ["node", "demo_pi/server.mjs"]
-   ```
-
-   and `.dockerignore`: `**/node_modules`, `**/.cache`, `**/.pi-agent`, `.git`, `.env`, `pptx`. The server needs
-   `shared/` next to `demo_pi/` (Rosa's portrait, the logos), so the build runs from the repo root.
+4. **The deploy image** is `Dockerfile` and `.dockerignore` at the repo root: Node 22, pi, `demo_pi/` and `shared/`,
+   and nothing else (the dev container's image has sshd and tools a deploy doesn't need). The measurements above ran on
+   the same build steps. `just docker-demo` builds and runs it on your machine, with the model settings from `.env`.
 5. **Load-test the deployed server** with the stand-in model (start command
    `node demo_pi/test/with-stand-in.mjs --port $PORT`), then with the real model and 10 people clicking at once.
 6. **Warm the cache** on the deployed server: run each planned build once (the builds in `record.mjs`), so the room's
@@ -101,12 +85,17 @@ builds (other builds are refused with a message). The presenter's laptop can als
 
 ## Railway
 
-1. Add the `Dockerfile` and `.dockerignore` above at the repo root; commit and push.
-2. Sign in at [railway.com](https://railway.com) with GitHub. Choose Hobby ($5 a month, $5 of use included) or Pro
-   ($20, $20 included); Hobby's limits (48 vCPU / 48 GB per service) are enough.
-3. **New Project → Deploy from GitHub repo →** `brunombatinica/qcor-2026`, branch `main`. Railway finds the
-   `Dockerfile` and builds it.
-4. **Variables** (the service's Variables tab):
+Railway builds the `Dockerfile` at the repo root (it always does when there is one), runs it, and routes an HTTPS
+address to the port the server listens on. Everything else is set once in the dashboard. Railway's `railway.json` can't
+be used: it is deprecated, new services can't opt into it, and it stops being read on 2026-12-01. Its replacement,
+Infrastructure as Code (`.railway/railway.ts`, applied with the Railway CLI), is more than one service needs.
+
+1. **Push** `main` to GitHub.
+2. Sign in at [railway.com](https://railway.com) with GitHub, on Hobby ($5 a month, $5 of use included; at most 48 vCPU
+   and 48 GB per service). Let Railway's GitHub app see `brunombatinica/qcor-2026` (all repositories, or only this one).
+3. **New Project → Deploy from GitHub repo →** `brunombatinica/qcor-2026`. It builds and starts at once. With no
+   variables yet, the server can't reach a model, so it replays the recordings: a working page before any key is set.
+4. **Variables** (the service's Variables tab, Raw Editor):
 
    ```
    DEMO_BASE_URL=https://api.openai.com/v1
@@ -116,13 +105,25 @@ builds (other builds are refused with a message). The presenter's laptop can als
    DEMO_MAX_TOKENS=400
    ```
 
-   Railway sets `PORT`, and the server reads it.
-5. **Settings:** region US East; one replica (each replica has its own queue and cache, so more replicas make the
-   cache less useful); no sleeping. Under **Networking → Generate Domain**: `https://<name>.up.railway.app`.
-6. Open the URL. The header should name `gpt-6-luna`, not **▶ replay**. Run Rosa.
-7. Load test: add a second service from the same repo with the stand-in start command (step 5 of the list above),
-   test it, then delete it.
-8. After the workshop, delete `DEMO_API_KEY` (the server redeploys and replays) or the whole project.
+   Then **Deploy** the staged changes. Don't set `PORT`: Railway sets it, and the server listens on it.
+5. **Settings**, on the service:
+   - **Networking → Public Networking → Generate Domain.** Railway finds the port the server listens on; the address is
+     `https://<name>.up.railway.app`.
+   - **Deploy → Healthcheck Path:** `/api/config`. A new deploy gets traffic only once this answers, so a build that
+     doesn't start leaves the old one up.
+   - **Deploy → Region:** US East. **Replicas:** 1 (each replica has its own queue and cache). **Serverless:** off,
+     so the first person in the room doesn't wait for it to wake.
+   - **Deploy → Resource Limits:** 8 vCPU and 8 GB, a ceiling on the bill; the room needs no more (the measurements).
+   - **Build → Watch Paths:** `/demo_pi/**`, `/shared/**`, `/Dockerfile`, `/.dockerignore`. Railway redeploys on every
+     push to `main`; with these, a push that only changes the slides or notes doesn't.
+6. **A volume for the cache.** Right-click the canvas (or ⌘K) → **Volume** → attach it to the service, mount path
+   `/app/demo_pi/.cache`. A deploy otherwise starts with an empty cache, so the builds warmed before the talk would run
+   again. With a volume the service can't have replicas, and each redeploy has a few seconds of downtime: don't push to
+   `main` or change a variable during the session.
+7. Open the URL. The header should name `gpt-6-luna`, not **▶ replay**. Run Rosa, then one 100-patient test.
+8. Load test: add a second service from the same repo, custom start command `node demo_pi/test/with-stand-in.mjs`
+   (it listens on Railway's `PORT`), with its own domain; test it, then delete it.
+9. After the workshop, delete `DEMO_API_KEY` (the server redeploys and replays) or the whole project, and revoke the key.
 
 Cost: about $0.22 for 8 vCPU busy for an hour and $0.06 for 4 GB for an hour, at Railway's $20 per vCPU-month and
 $10 per GB-month, so the plan's included use covers the workshop.

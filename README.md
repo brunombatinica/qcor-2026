@@ -59,8 +59,10 @@ Working on a remote machine: forward the ports, e.g. `ssh -L 8771:localhost:8771
 | `demos/` | ten single-page interactive demos and their spec (`demos/SPEC.md`, `just demos`) |
 | `shared/` | Rosa (`rosa.svg` + `portraits/`), `icons.js`, logos (model makers from lobehub/icons, CarDS Lab, HL7 FHIR), published charts (METR, OWID) |
 | `docs/pi-notes.md` | notes on the pi agent harness the demo runs on |
+| `docs/hosting.md` | serving the demo to the room: Railway (what we use), Yale Spinup, EC2 and Colab, with measured load |
 | `tools/` | `install-libreoffice.sh` (for rendering the PowerPoint) |
 | `.devcontainer/` | the dev container: image, post-create (`npm ci`), and the demo's autostart (`start-demo.sh`) |
+| `Dockerfile` | the deploy image: the demo alone, what Railway builds from `main` (`just docker-demo` runs it here) |
 | `.env.example` | the settings `.env` can hold: the model endpoint and key, concurrency, autostart |
 | `NOTES.md` | working notes and open questions |
 

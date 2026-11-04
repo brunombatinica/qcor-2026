@@ -241,6 +241,10 @@ export const server = createServer(async (req, res) => {
   }
 });
 
+// A host stopping the container (Railway, on each deploy) sends SIGTERM. As the container's first process, node would
+// ignore it and wait to be killed, which lengthens the gap between the old deploy and the new one.
+process.once("SIGTERM", () => process.exit(0));
+
 export const ready = new Promise((resolve) => server.listen(PORT, HOST, async () => {
   const port = server.address().port;
   FHIR.base = `http://127.0.0.1:${port}/fhir`;

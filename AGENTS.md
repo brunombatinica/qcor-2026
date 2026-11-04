@@ -33,5 +33,7 @@ Start with [README.md](README.md) (layout, `just` recipes) and [NOTES.md](NOTES.
 ## Running things
 
 - `just demo-pi` serves on port 8771. On a remote machine, forward it over SSH.
+- The hosted demo (Railway, [docs/hosting.md](docs/hosting.md)) redeploys from `main` on every push that touches
+  `demo_pi/`, `shared/` or the `Dockerfile`, with a few seconds of downtime. Push nothing there while it is in use.
 - The demo runs on any OpenAI-compatible endpoint: `DEMO_BASE_URL`, `DEMO_API_KEY`, `DEMO_MODEL`
   ([demo_pi/README.md](demo_pi/README.md)). Keys go in your environment, never in the repo.
