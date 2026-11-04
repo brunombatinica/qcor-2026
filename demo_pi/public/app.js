@@ -9,7 +9,7 @@ const clock = (ms) => { const s = Math.max(0, ms) / 1000; return `${String(Math.
 const num = (n) => Number(n || 0).toLocaleString("en-US");
 const VIEWS = [...document.querySelectorAll(".view")].map((v) => v.dataset.view);
 const EARLY = ["overview", "intro", "chart"];          // before anything is built
-const OWN = ["prompt", "test"];                         // views that give the panel's space to the agents
+const OWN = ["test"];                                   // views that give the panel's space to the agents
 
 const KEY = "qcor-demo-v3";
 const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
@@ -710,6 +710,11 @@ async function hood() {
     ]));
     return show(groups);
   }
+  if (v === "prompt") return show([
+    setup("setup", [block("prompt", "prompt", state.prompt.trim() || "(none)")]),
+    example(`example · ${cfg.rosa.id}`, [block("first", "user message", w.prompt), block("given", "tools", w.tools.join("\n") || "(none)"),
+      block("system", "system prompt", w.system, "text", "", { collapsed: true }), block("cmd", "pi command", fmtCmd(w.command), "sh", "", { collapsed: true })]),
+  ]);
   if (v === "criteria") return show([
     setup("setup", [block("crit", "prompt += criteria", (await criteriaText()) || "(none)")]),
     example(`example · ${cfg.rosa.id}`, [block("first", "user message", w.prompt), block("system", "system prompt", w.system, "text", "", { collapsed: true })]),
