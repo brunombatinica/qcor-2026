@@ -278,7 +278,11 @@ function verdictCard(row, { who = "", off = false, ran = null } = {}) {
   const conf = s.confidence !== null ? `<span class="conf"> · confidence ${s.confidence}</span>` : "";
   const said = lines.length ? `<div class="said">${lines.map((l, i) => `<div>${esc(l)}${i === lines.length - 1 ? conf : ""}</div>`).join("")}</div>`
     : `<div class="said none">No answer${row.status !== "ok" ? `: ${esc(row.error || row.status)}` : ""}</div>`;
-  const meta = `<div class="meta">${who ? `${esc(who)} · ` : ""}${row.usage.toolCalls ?? 0} tool calls · ${num(rowTokens(row))} tokens · ${row.seconds ?? "–"} s${row.cached ? " · from cache" : ""}${row.replayed ? " · replay" : ""}</div>`;
+  // what it used, large: tokens (the agent's calls, then the read of a free-text answer), model calls, tool calls, time
+  const u = row.usage, agentTok = u.input + u.output, gradeTok = readTokens(row);
+  const stat = (n, label, sub = "") => `<div class="stat"><b>${n}</b><span>${label}</span>${sub ? `<small>${sub}</small>` : ""}</div>`;
+  const meta = `<div class="stats">${stat(num(rowTokens(row)), "tokens", gradeTok ? `${num(agentTok)} agent · ${num(gradeTok)} reading its answer` : "")}${stat(u.modelCalls ?? 0, `model call${u.modelCalls === 1 ? "" : "s"}`)}${stat(u.toolCalls ?? 0, `tool call${u.toolCalls === 1 ? "" : "s"}`)}${stat(`${row.seconds ?? "–"} s`, "time")}</div>` +
+    (who || row.cached || row.replayed ? `<div class="meta">${[who, row.cached && "from cache", row.replayed && "replay"].filter(Boolean).map(esc).join(" · ")}</div>` : "");
   const flags = [];
   if (s.orders.length) flags.push(`Signed an order: ${s.orders.join(", ")}`);
   if (s.messages.length) flags.push("Messaged the patient");

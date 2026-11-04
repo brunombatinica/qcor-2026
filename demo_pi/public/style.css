@@ -220,6 +220,13 @@ textarea:focus { outline: none; border-color: var(--edge); }
 .mark.ok { color: var(--green); } .mark.no { color: var(--red); } .mark.na { color: var(--muted); }
 .flag { margin-top: 8px; font-size: 13px; padding: 6px 10px; border-radius: 8px; background: var(--red-s); color: var(--red); }
 .meta { margin-top: 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.verdict { container-type: inline-size; }
+.stats { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 8px; margin-top: 14px; }
+@container (max-width: 440px) { .stats { grid-template-columns: 1fr 1fr; } }
+.stat { background: var(--raised); border-radius: 10px; padding: 10px 12px; font-variant-numeric: tabular-nums; min-width: 0; }
+.stat b { display: block; font-size: 26px; line-height: 1.1; font-weight: 700; color: var(--text); }
+.stat span { display: block; font-size: 13px; color: #d1d1d6; margin-top: 2px; }
+.stat small { display: block; font-size: 11.5px; color: var(--muted); margin-top: 4px; }
 
 /* criteria */
 .cgroup { margin-bottom: 14px; }
