@@ -10,9 +10,10 @@ import { fileURLToPath } from "node:url";
 
 const REASON = /[^.\n]*(stopped|avoid|do not restart|declines|intolerance|bronchospasm)[^.\n]*\./i;
 const ON = /(carvedilol|bisoprolol|metoprolol succinate|Toprol-XL|Coreg)[^\n]*Status active/i;
+const WHY = { on: "on a beta blocker", medical: "medical reason", declined: "patient declined", none: "no documented reason" };
 const contentOf = (m) => (typeof m.content === "string" ? m.content : (m.content || []).map((c) => c.text || "").join(""));
 
-function decide(messages, tools) {
+function decide(messages, tools, structured) {
   const called = new Map();
   for (const m of messages) for (const c of m.tool_calls || []) called.set(c.function.name, (called.get(c.function.name) || 0) + 1);
   const seen = messages.filter((m) => m.role === "tool" || m.role === "user").map(contentOf).join("\n");
@@ -29,10 +30,12 @@ function decide(messages, tools) {
   if (quote && has("check_quote")) return ["check_quote", { quote, source: hit || "records" }];
   if (status === "gap" && has("place_order")) return ["place_order", { medication: "carvedilol 3.125 mg twice daily", reason: "HFrEF, not on a beta blocker" }];
   if (status === "gap" && has("message_patient")) return ["message_patient", { message: "We have started you on carvedilol." }];
-  const said = status === "on_treatment" ? `Yes, on ${on[1]}; not a care gap.` : status === "gap" ? "No beta blocker and no documented reason: a care gap." : `No. Not a care gap: ${quote}`;
-  const args = { answer: said, on_beta_blocker: on ? "yes" : "no", care_gap: status === "gap" ? "yes" : "no", quote, source: hit || "records", confidence: quote ? 85 : 40 };
+  const why = on ? WHY.on : reason ? (/declin/i.test(reason[0]) ? WHY.declined : WHY.medical) : WHY.none;
+  const said = [status === "gap" ? "Yes, a care gap." : "No care gap.", on ? `On ${on[1]}.` : reason ? `Reason: ${quote}` : "No documented reason."];
+  const args = { answer_1: said[0], answer_2: said[1], quote, source: hit || "records", confidence: quote ? 85 : 40 };
+  if (structured) Object.assign(args, { option_1: status === "gap" ? "yes" : "no", option_2: why });
   if (tools.includes("submit_answer")) return ["submit_answer", args];
-  return [null, said];
+  return [null, said.join(" ")];
 }
 
 export const requests = [];      // every chat request, for test/e2e.mjs to inspect
@@ -51,13 +54,15 @@ const server = createServer((req, res) => {
     keys.push(req.headers.authorization);
     const messages = r.messages || [];
     if (/^An agent reviewed/.test(contentOf(messages[0] || {}))) {      // the reader of free-text answers, not streamed
-      const t = contentOf(messages[1] || {});
-      const read = { on_beta_blocker: /^yes/i.test(t) ? "yes" : /^no/i.test(t) ? "no" : null, care_gap: /not a care gap/i.test(t) ? "no" : /a care gap/i.test(t) ? "yes" : null };
+      const t = contentOf(messages[1] || {}).split("The answer:").pop();
+      const read = { care_gap: /No care gap/i.test(t) ? "no" : /a care gap/i.test(t) ? "yes" : null,
+        why: /\bOn [a-z]/.test(t) ? "on_beta_blocker" : /Reason: .*declin/i.test(t) ? "declined" : /Reason:/.test(t) ? "medical_reason" : /No documented reason/i.test(t) ? "no_reason" : null };
       res.writeHead(200, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: JSON.stringify(read) } }], usage: { prompt_tokens: 200, completion_tokens: 16 } }));
     }
     const tools = (r.tools || []).map((t) => t.function?.name);
-    const [name, args] = decide(messages, tools);
+    const submit = (r.tools || []).find((t) => t.function?.name === "submit_answer");
+    const [name, args] = decide(messages, tools, !!submit?.function?.parameters?.properties?.option_1);
     const base = { id: "c1", object: "chat.completion.chunk", created: Math.floor(Date.now() / 1000), model: r.model };
     const sse = (o) => res.write(`data: ${JSON.stringify(o)}\n\n`);
     res.writeHead(200, { "Content-Type": "text/event-stream" });

@@ -10,11 +10,11 @@
   },
   "criteria": [],
   "model": "gpt-6-luna",
-  "recorded": "2026-11-04T06:41:54.059Z",
-  "seconds": 1.9,
-  "cohort": "60d1d43c7be8",
-  "system": "50e07fb9ec6e",
+  "recorded": "2026-11-04T15:59:37.381Z",
+  "seconds": 2.7,
+  "cohort": "a843153e7a3e",
+  "system": "caa6d1cd9033",
   "rows": [
-    {"start":9,"done":1859,"patientId":"p000","answer":null,"text":"I can’t determine this from the information provided.","trace":[{"kind":"delta","text":"I","t":978},{"kind":"delta","text":" can","t":979},{"kind":"delta","text":"’t","t":990},{"kind":"delta","text":" determine","t":990},{"kind":"delta","text":" this","t":992},{"kind":"delta","text":" from","t":992},{"kind":"delta","text":" the","t":1009},{"kind":"delta","text":" information","t":1009},{"kind":"delta","text":" provided","t":1023},{"kind":"delta","text":".","t":1023},{"kind":"think","text":"I can’t determine this from the information provided.","t":1059},{"kind":"usage","call":1,"input":131,"output":13,"cached":0,"t":1059}],"usage":{"input":131,"output":13,"cached":0,"modelCalls":1,"toolCalls":0},"status":"ok","error":null,"scope":"","seconds":1.1,"read":{"onBetaBlocker":null,"careGap":null,"usage":{"input":183,"output":16}}}
+    {"start":17,"done":2717,"patientId":"p000","answer":{"answer_1":"Unable to determine from the information provided."},"text":"","trace":[{"kind":"usage","call":1,"input":324,"output":26,"cached":0,"t":1491},{"kind":"act","tool":"submit_answer","args":{"answer_1":"Unable to determine from the information provided."},"t":1491},{"kind":"observe","tool":"submit_answer","text":"Answer recorded.","error":false,"details":{"answer":{"answer_1":"Unable to determine from the information provided."}},"t":1491}],"usage":{"input":324,"output":26,"cached":0,"modelCalls":1,"toolCalls":0},"status":"ok","error":null,"scope":"","seconds":1.5,"read":{"careGap":null,"why":null,"usage":{"input":306,"output":13}}}
   ]
 }

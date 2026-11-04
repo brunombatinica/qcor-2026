@@ -8,6 +8,7 @@
  *   DEMO_FHIR_BASE, DEMO_FHIR_TOKEN                                  the FHIR server and this run's scoped token
  *   DEMO_PATIENT                                                     the patient's FHIR id
  *   DEMO_ANSWER_FIELDS                                               extra answer fields, e.g. quote,confidence
+ *   DEMO_STRUCTURED, DEMO_ANSWER_OPTIONS                             1: fixed options for the answers (a JSON list for the second)
  *
  * Every tool in tools/ is registered; pi's --tools flag decides which ones the model is given, so a card turned on in
  * the page is a tool switched on here. What the tools can read is decided by the token, on the FHIR server.
@@ -48,11 +49,11 @@ export default function (pi: ExtensionAPI) {
   });
 
   for (const make of [readRecords, searchNotes, readNote, checkQuote, webSearch, placeOrder, messagePatient]) pi.registerTool(make());
-  pi.registerTool(submitAnswer((process.env.DEMO_ANSWER_FIELDS || "").split(",").filter(Boolean)));
   const structured = (process.env.DEMO_STRUCTURED || "") === "1";
+  pi.registerTool(submitAnswer((process.env.DEMO_ANSWER_FIELDS || "").split(",").filter(Boolean), structured, JSON.parse(process.env.DEMO_ANSWER_OPTIONS || "[]")));
 
-  // Two nudges, so a session ends: past the budget every result asks for the answer, and with a structured answer a
-  // turn that ends in plain text is told once to use submit_answer.
+  // Two nudges, so a session ends: past the budget every result asks for the answer, and a turn that ends in plain
+  // text is told once to use submit_answer.
   let calls = 0, submitted = false, nudged = false;
   pi.on("tool_result", (event) => {
     if (event.toolName === "submit_answer") { submitted = true; return; }
@@ -62,8 +63,8 @@ export default function (pi: ExtensionAPI) {
   });
   pi.on("turn_end", (event) => {
     const message = event.message as { role?: string };
-    if (!structured || submitted || nudged || message.role !== "assistant" || event.toolResults.length) return;
+    if (submitted || nudged || message.role !== "assistant" || event.toolResults.length) return;
     nudged = true;
-    pi.sendUserMessage("Call submit_answer with your decision now. Do not answer in plain text.", { deliverAs: "followUp" });
+    pi.sendUserMessage("Call submit_answer with your answer now.", { deliverAs: "followUp" });
   });
 }

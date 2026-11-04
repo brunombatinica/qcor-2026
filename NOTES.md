@@ -3,6 +3,23 @@
 Handoff notes for picking the brainstorm back up in a new session. To restart, tell Claude:
 "read NOTES.md and let's continue the QCOR brainstorm."
 
+## Demo, second pass (2026-11-04, afternoon; branch demo-simplify)
+
+The user, after trying it: two opening slides (the plan, with no subtext; then the task and the data as pictures,
+no CMS144 there); the panel closed at first, with an arrow to it after Start; a mock EHR to find Rosa's answer by
+hand before the agent does; the FHIR logo by the heading, not a callout; in the panel, what you set up apart from
+what it does; dark scrollbars; footer icons that appear as cards are picked and take them away when clicked; a plain
+answer card (no chart reason, quote, confidence or how it was read); the hand-in in a colour of its own; red for
+wrong; a Stop button; no "what it got wrong" list. The naive prompt got Rosa right because the structured answer's
+fields asked both questions: `submit_answer` is now general (free-text answer_1, answer_2, …), and the structured
+card adds constrained options. The two answers are now "care gap?" and "why?" (four categories). Then: no
+explanatory text anywhere; the guided views minimal, the panel and logs raw output.
+
+Done. The reader of free text now sees the question ("No." to "on a beta blocker?" says nothing about a gap); a
+structured answer only counts for questions the prompt asked; its words come before its option. Live on
+gpt-6-luna, the test build: care gap and why without criteria 83/100, with every criterion 100/100 (free text) and
+97/100 (structured). The cache key includes the tools' code. Recordings redone on the branch.
+
 ## The talk is the PowerPoint now (2026-11-04)
 
 The user: clean up the old talk and the style book; they only want the PowerPoint, and the demo. Removed `talk/`

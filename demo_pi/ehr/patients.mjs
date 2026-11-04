@@ -4,11 +4,12 @@
 // is the scenario.
 //
 //   PATIENTS[i]  { id, name, sex, age, ..., conditions, meds, vitals, labs, allergies, notes, next, coverage, immunizations,
-//                  gold: {status, given, gap, why, scenario, where, needs} }   (coverage and immunizations play no part in the answer)
+//                  gold: {status, given, gap, category, why, scenario, where} }   (coverage and immunizations play no part in the answer)
 //
-// The two answers the measure asks for: is the patient on a beta blocker that counts (carvedilol, bisoprolol or
-// metoprolol succinate), and if not, is it a care gap (no documented reason)? ehr/fhir.mjs turns a patient into FHIR
-// R4 resources; nothing else reads these fields directly.
+// The two answers the room's agent is checked on: is it a care gap, and why (one of the WHY categories)? A patient on
+// a beta blocker that counts (carvedilol, bisoprolol or metoprolol succinate) has no gap; one who isn't has none if a
+// valid reason is documented. `why` is the chart's reason in words. ehr/fhir.mjs turns a patient into FHIR R4
+// resources; nothing else reads these fields directly.
 
 export const TODAY = "2026-11-02";
 
@@ -16,6 +17,16 @@ export const STATUSES = {
   on_treatment: "On a beta blocker",
   gap: "Care gap",
   documented_reason: "Documented reason",
+};
+
+// Why it is, or isn't, a care gap: the second answer, from a few categories (the structured answer's options). A
+// patient on a beta blocker that doesn't count (metoprolol tartrate, atenolol) has no documented reason not to be on
+// one that does.
+export const WHY = {
+  on_beta_blocker: "on a beta blocker",
+  medical_reason: "medical reason",
+  declined: "patient declined",
+  no_reason: "no documented reason",
 };
 
 // Where the deciding evidence lives.
@@ -151,10 +162,7 @@ function hfNote(p, bb, { extra = "" } = {}) {
 const nurseNote = (p) => ({ date: p.visits[1], type: "nursing", author: pick(AUTHORS.rn), title: "Nurse visit: weight and vitals",
   text: `Weight ${int(58, 112)} kg, stable. Taking ${she(p).p} medications as prescribed.` });
 
-// ---- scenarios: [key, count, gold status, where the deciding evidence is, why (the chart's answer), needs, build] ----
-//
-// `needs` is what the agent must have to get it right: the data cards that hold the evidence, and the criterion that
-// decides it (agent/catalog.mjs CRITERIA). The test view uses it to say what a wrong answer was missing.
+// ---- scenarios: [key, count, gold status, where the deciding evidence is, why (the chart's reason), build] ----
 
 function bbOn(p, key, opts = {}) {
   const [dose, freq] = opts.sig || pick(SIG[key]);
@@ -166,75 +174,74 @@ const stoppedBb = (p, key, dose, freq, end) => p.meds.splice(1, 0, med(key, dose
 
 const ON = "on_treatment", GAP = "gap", REASON = "documented_reason";
 const COUNTS = ["carvedilol", "metoprolol_succinate", "bisoprolol"];       // what CMS144 counts as treatment
-const need = (sources, criterion = null) => ({ sources, criterion });
 
 const SCENARIOS = [
-  ["on_carvedilol", 18, ON, "meds", "On carvedilol.", need(["medications"]), (p) => { const m = bbOn(p, "carvedilol"); p.notes.push(hfNote(p, `Continue carvedilol ${m.sig.split(" by")[0]} twice daily.`)); }],
-  ["on_metoprolol_succinate", 14, ON, "meds", "On metoprolol succinate.", need(["medications"]), (p) => { const m = bbOn(p, "metoprolol_succinate"); p.notes.push(hfNote(p, `Continue metoprolol succinate ${m.sig.split(" by")[0]} daily.`)); }],
-  ["on_bisoprolol", 10, ON, "meds", "On bisoprolol.", need(["medications"]), (p) => { bbOn(p, "bisoprolol"); p.notes.push(hfNote(p, "Continue bisoprolol.")); }],
-  ["on_brand_name", 8, ON, "meds", "On Toprol-XL or Coreg: brand names for metoprolol succinate and carvedilol.", need(["medications"]), (p) => {
+  ["on_carvedilol", 18, ON, "meds", "On carvedilol.", (p) => { const m = bbOn(p, "carvedilol"); p.notes.push(hfNote(p, `Continue carvedilol ${m.sig.split(" by")[0]} twice daily.`)); }],
+  ["on_metoprolol_succinate", 14, ON, "meds", "On metoprolol succinate.", (p) => { const m = bbOn(p, "metoprolol_succinate"); p.notes.push(hfNote(p, `Continue metoprolol succinate ${m.sig.split(" by")[0]} daily.`)); }],
+  ["on_bisoprolol", 10, ON, "meds", "On bisoprolol.", (p) => { bbOn(p, "bisoprolol"); p.notes.push(hfNote(p, "Continue bisoprolol.")); }],
+  ["on_brand_name", 8, ON, "meds", "On Toprol-XL or Coreg: brand names for metoprolol succinate and carvedilol.", (p) => {
     const brand = pick(["Toprol-XL", "Coreg"]);
     bbOn(p, brand === "Coreg" ? "carvedilol" : "metoprolol_succinate", { brand });
     p.notes.push(hfNote(p, `Continue ${brand}.`));
   }],
 
-  ["reason_av_block_in_note", 6, REASON, "note", "Carvedilol stopped for second-degree AV block; cardiology says do not restart. Only the notes say so.", need(["notes"], "av_block"), (p) => avBlockNote(p)],
-  ["reason_av_block_coded", 3, REASON, "diagnoses", "Second-degree AV block on the diagnosis list, no pacemaker.", need(["diagnoses"], "av_block"), (p) => {
+  ["reason_av_block_in_note", 6, REASON, "note", "Carvedilol stopped for second-degree AV block; cardiology says do not restart. Only the notes say so.", (p) => avBlockNote(p)],
+  ["reason_av_block_coded", 3, REASON, "diagnoses", "Second-degree AV block on the diagnosis list, no pacemaker.", (p) => {
     p.conditions.push(cond("mobitz2", ago(int(60, 400))));
     p.notes.push(hfNote(p, null));
   }],
-  ["reason_bradycardia_vitals", 3, REASON, "vitals", "Heart rate under 50 at the last two visits.", need(["vitals"], "bradycardia"), (p) => {
+  ["reason_bradycardia_vitals", 3, REASON, "vitals", "Heart rate under 50 at the last two visits.", (p) => {
     p.vitals[0].hr = int(42, 48); p.vitals[1].hr = int(43, 49);
     p.notes.push(hfNote(p, null));
   }],
-  ["reason_bradycardia_in_note", 2, REASON, "note", "Bisoprolol stopped for a slow heart rate; only a telephone note says so.", need(["notes"], "bradycardia"), (p) => {
+  ["reason_bradycardia_in_note", 2, REASON, "note", "Bisoprolol stopped for a slow heart rate; only a telephone note says so.", (p) => {
     const w = she(p), stop = ago(int(90, 200));
     stoppedBb(p, "bisoprolol", "5 mg", "once daily", stop);
     p.notes.push({ date: stop, type: "telephone", author: pick(AUTHORS.hf), title: "Telephone encounter", text: `${w.S} called: dizzy, home pulse 38 to 45. Bisoprolol stopped for symptomatic bradycardia. Do not restart a beta blocker.` });
     p.notes.push(hfNote(p, null));
   }],
-  ["reason_hypotension_in_note", 4, REASON, "note", "Carvedilol stopped for low blood pressure at home; only a telephone note says so.", need(["notes"], "hypotension"), (p) => {
+  ["reason_hypotension_in_note", 4, REASON, "note", "Carvedilol stopped for low blood pressure at home; only a telephone note says so.", (p) => {
     const w = she(p), stop = ago(int(80, 260));
     stoppedBb(p, "carvedilol", "6.25 mg", "twice daily", stop);
     p.notes.push({ date: stop, type: "telephone", author: pick(AUTHORS.hf), title: "Telephone encounter", text: `${w.S} reports lightheadedness and home BP in the low 80s systolic. Carvedilol stopped for symptomatic hypotension. Do not restart.` });
     p.notes.push(hfNote(p, null));
   }],
-  ["reason_hypotension_coded", 2, REASON, "diagnoses", "Hypotension on the diagnosis list, systolic pressures in the 80s.", need(["diagnoses"], "hypotension"), (p) => {
+  ["reason_hypotension_coded", 2, REASON, "diagnoses", "Hypotension on the diagnosis list, systolic pressures in the 80s.", (p) => {
     p.conditions.push(cond("hypotension", ago(int(60, 300))));
     p.vitals[0].sbp = int(82, 88); p.vitals[0].dbp = int(48, 56); p.vitals[1].sbp = int(84, 89);
     p.notes.push(hfNote(p, null));
   }],
-  ["reason_asthma", 3, REASON, "diagnoses", "Severe persistent asthma on the diagnosis list.", need(["diagnoses"], "asthma"), (p) => {
+  ["reason_asthma", 3, REASON, "diagnoses", "Severe persistent asthma on the diagnosis list.", (p) => {
     p.conditions.push(cond("asthma_severe", ago(int(3000, 12000))));
     p.meds.push(med("fluticasone_salmeterol", "250/50 mcg", "twice daily", { start: ago(int(400, 2000)), form: "inhalation powder" }), med("albuterol", "90 mcg", "every 4 hours as needed", { start: ago(int(400, 2000)), form: "metered-dose inhaler" }));
     p.notes.push(hfNote(p, null));
   }],
-  ["reason_intolerance_allergy_list", 3, REASON, "allergies", "Beta-blocker intolerance on the allergy list.", need(["allergies"], "allergy"), (p) => {
+  ["reason_intolerance_allergy_list", 3, REASON, "allergies", "Beta-blocker intolerance on the allergy list.", (p) => {
     p.allergies.push({ substance: "beta-adrenergic blocking agent", snomed: "373254001", type: "intolerance", reaction: pick(["severe fatigue and bradycardia", "bronchospasm", "dizziness and syncope"]), date: ago(int(300, 1500)) });
     p.notes.push(hfNote(p, null));
   }],
-  ["reason_declined", 4, REASON, "note", "The patient declined a beta blocker.", need(["notes"], "declined"), (p) => {
+  ["reason_declined", 4, REASON, "note", "The patient declined a beta blocker.", (p) => {
     const w = she(p);
     p.notes.push(hfNote(p, `Offered a beta blocker; ${w.s} declines.`));
   }],
 
-  ["gap_no_reason", 4, GAP, "meds", "Not on a beta blocker, and nothing in the chart says why.", need([]), (p) => { p.notes.push(hfNote(p, null)); }],
-  ["gap_consider_starting", 3, GAP, "note", "Not on one; \"consider starting\" is a plan, not a reason.", need([]), (p) => { p.notes.push(hfNote(p, `Consider starting ${pick(["carvedilol", "metoprolol succinate", "bisoprolol"])} at the next visit.`)); }],
-  ["gap_heart_block_paced", 3, GAP, "diagnoses", "Carvedilol was stopped for complete heart block, but a pacemaker has since been placed, so the reason no longer applies.", need(["diagnoses"], "av_block"), (p) => {
+  ["gap_no_reason", 4, GAP, "meds", "Not on a beta blocker, and nothing in the chart says why.", (p) => { p.notes.push(hfNote(p, null)); }],
+  ["gap_consider_starting", 3, GAP, "note", "Not on one; \"consider starting\" is a plan, not a reason.", (p) => { p.notes.push(hfNote(p, `Consider starting ${pick(["carvedilol", "metoprolol succinate", "bisoprolol"])} at the next visit.`)); }],
+  ["gap_heart_block_paced", 3, GAP, "diagnoses", "Carvedilol was stopped for complete heart block, but a pacemaker has since been placed, so the reason no longer applies.", (p) => {
     const blockDate = ago(int(500, 800)), pmDate = day(blockDate, int(5, 20));
     stoppedBb(p, "carvedilol", "12.5 mg", "twice daily", blockDate);
     p.conditions.push(cond("chb", blockDate, { status: "resolved" }), cond("pacer", pmDate));
     p.notes.push({ date: pmDate, type: "procedure", author: pick(AUTHORS.ep), title: "Pacemaker implant", text: `Complete heart block; carvedilol held. Dual-chamber pacemaker implanted. A beta blocker can be restarted.` });
     p.notes.push(hfNote(p, null, { extra: "Pacemaker check normal." }));
   }],
-  ["gap_metoprolol_tartrate", 3, GAP, "meds", "On metoprolol tartrate, which doesn't count for the measure.", need(["medications"], "agents"), (p) => { bbOn(p, "metoprolol_tartrate"); p.notes.push(hfNote(p, "Continue metoprolol.")); }],
-  ["gap_atenolol", 2, GAP, "meds", "On atenolol, which doesn't count for the measure.", need(["medications"], "agents"), (p) => { bbOn(p, "atenolol"); p.notes.push(hfNote(p, "Continue atenolol.")); }],
-  ["gap_lapsed", 2, GAP, "note", "Carvedilol lapsed when the patient ran out; that is not a medical reason.", need([]), (p) => {
+  ["gap_metoprolol_tartrate", 3, GAP, "meds", "On metoprolol tartrate, which doesn't count for the measure.", (p) => { bbOn(p, "metoprolol_tartrate"); p.notes.push(hfNote(p, "Continue metoprolol.")); }],
+  ["gap_atenolol", 2, GAP, "meds", "On atenolol, which doesn't count for the measure.", (p) => { bbOn(p, "atenolol"); p.notes.push(hfNote(p, "Continue atenolol.")); }],
+  ["gap_lapsed", 2, GAP, "note", "Carvedilol lapsed when the patient ran out; that is not a medical reason.", (p) => {
     const w = she(p);
     stoppedBb(p, "carvedilol", "12.5 mg", "twice daily", ago(int(60, 120)));
     p.notes.push(hfNote(p, `Ran out of carvedilol and has not refilled; ${w.s} is willing to restart.`));
   }],
-  ["gap_childhood_asthma", 3, GAP, "diagnoses", "The asthma on the diagnosis list is childhood asthma, resolved: not a current reason.", need(["diagnoses"], "asthma"), (p) => {
+  ["gap_childhood_asthma", 3, GAP, "diagnoses", "The asthma on the diagnosis list is childhood asthma, resolved: not a current reason.", (p) => {
     p.conditions.push(cond("asthma_child", ago(int(18000, 24000)), { status: "resolved" }));
     p.notes.push(hfNote(p, null));
   }],
@@ -288,7 +295,7 @@ function rosa() {
   avBlockNote(p, true);
   p.coverage = { code: "11", type: "Medicare managed care", payer: "Aetna Medicare", plan: "Medicare Advantage PPO", member: "A482913376", since: "2021-01-01" };
   p.immunizations = [{ cvx: "141", text: "Influenza, seasonal, injectable", date: "2026-10-20" }, { cvx: "300", text: "COVID-19, mRNA, 2024-2025 formula", date: "2025-10-02" }];
-  p.gold = { status: REASON, scenario: "reason_av_block_in_note", where: "note", needs: need(["notes"], "av_block"),
+  p.gold = { status: REASON, scenario: "reason_av_block_in_note", where: "note",
     why: "Carvedilol was stopped in May for Mobitz II heart block; cardiology says do not restart a beta blocker. Only the notes say so." };
   return p;
 }
@@ -297,9 +304,9 @@ function build() {
   const out = [rosa()];
   rng = mulberry32(2026);
   const plan = [];
-  for (const [scenario, count, status, where, why, needs, make] of SCENARIOS) {
+  for (const [scenario, count, status, where, why, make] of SCENARIOS) {
     const n = scenario === "reason_av_block_in_note" ? count - 1 : count;      // Rosa is one of them
-    for (let k = 0; k < n; k++) plan.push({ scenario, status, where, why, needs, make });
+    for (let k = 0; k < n; k++) plan.push({ scenario, status, where, why, make });
   }
   shuffle(plan);
   const used = new Set(["Rosa Delgado"]);
@@ -309,15 +316,16 @@ function build() {
     used.add(p.name);
     s.make(p);
     p.notes.push(nurseNote(p));
-    p.gold = { status: s.status, scenario: s.scenario, where: s.where, why: s.why, needs: s.needs };
+    p.gold = { status: s.status, scenario: s.scenario, where: s.where, why: s.why };
     out.push(p);
   });
   rng = mulberry32(7);
   for (const p of out) {
     extras(p);
-    // the two answers: on a beta blocker that counts, and a care gap
+    // on a beta blocker that counts; a care gap; and why
     p.gold.given = p.meds.some((m) => m.status === "active" && COUNTS.includes(m.key));
     p.gold.gap = p.gold.status === GAP;
+    p.gold.category = p.gold.status === ON ? "on_beta_blocker" : p.gold.status === REASON ? (p.gold.scenario === "reason_declined" ? "declined" : "medical_reason") : "no_reason";
     p.notes.sort((a, b) => b.date.localeCompare(a.date));
     p.notes.forEach((n, k) => (n.id = `N${k + 1}`));
   }

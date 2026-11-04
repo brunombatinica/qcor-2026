@@ -17,52 +17,71 @@
       <button id="hoodBtn" class="hoodBtn" title="Under the hood (U)">&lt;/&gt;</button>
     </div>
   </header>
+  <div id="hoodHint" class="hoodHint" hidden>
+    <svg viewBox="0 0 120 90" aria-hidden="true"><path d="M8 84 C 30 80, 86 70, 104 14" /><path d="M93 22 L104 12 L110 26" /></svg>
+    <span>Open me</span>
+  </div>
 
   <div class="shell">
     <main>
-      <!-- 1: the task -->
-      <section class="view" data-view="brief" data-title="Task" data-icon="bullseye">
-        <h1 class="lead">Build an agent for a quality measure</h1>
-        <div class="briefGrid">
-          <div class="panel">
-            <div class="panelHead"><i class="ic" style="--i:url(icons/database.svg)"></i>The data</div>
-            <p>Patient data lives in a data lake or the EHR. An agent connects to it through an API, like any other app.</p>
-            <div class="dots" id="dots"></div>
-            <p class="muted small">100 synthetic patients with heart failure (reduced ejection fraction)</p>
-          </div>
-          <div class="panel">
-            <div class="panelHead"><i class="ic" style="--i:url(icons/bullseye.svg)"></i>The task</div>
-            <p>For each patient, the two answers the quality measure needs:</p>
-            <div class="qs">
-              <div class="q"><b>1</b>Is the patient on a beta blocker?</div>
-              <div class="q"><b>2</b>If not, is there a documented reason, or is it a care gap?</div>
-            </div>
-            <p class="muted small">CMS144: heart failure, beta-blocker therapy</p>
-          </div>
-        </div>
-        <div class="plan">
-          <div class="planStep"><i class="ic" style="--i:url(icons/screwdriver-wrench.svg)"></i><div><b>Build the agent</b><span>what it sees, what it does, what you ask</span></div></div>
+      <!-- 1: the plan -->
+      <section class="view" data-view="overview" data-title="Overview" data-icon="house">
+        <div class="overview">
+          <div class="ovStep"><span class="ovTile"><i data-icon="screwdriver-wrench"></i></span><b>Build an agent</b></div>
           <span class="arrow"></span>
-          <div class="planStep"><img src="/shared/rosa.svg" alt=""><div><b>Try it on Rosa</b><span id="rosaLine">Rosa Delgado, 71</span></div></div>
+          <div class="ovStep"><span class="ovTile"><img src="/shared/rosa.svg" alt=""></span><b>Try it on Rosa</b></div>
           <span class="arrow"></span>
-          <div class="planStep"><i class="ic" style="--i:url(icons/users.svg)"></i><div><b>Run it on all 100</b><span>and see what it gets right</span></div></div>
+          <div class="ovStep"><span class="ovTile"><i data-icon="users"></i></span><b>Run it on 100 patients</b></div>
         </div>
       </section>
 
-      <!-- 2 -->
+      <!-- 2: the task and the data -->
+      <section class="view" data-view="intro" data-title="Task" data-icon="bullseye">
+        <div class="introGrid">
+          <div class="panel">
+            <div class="panelHead"><i data-icon="database"></i>The data</div>
+            <p class="muted">Data lake or EHR → API → agent</p>
+            <div class="lake" id="lake"></div>
+            <div class="hundred"><i data-icon="users"></i><b>100</b><span>synthetic patients with heart failure</span></div>
+          </div>
+          <div class="panel">
+            <div class="panelHead"><i data-icon="bullseye"></i>The task</div>
+            <p class="muted">Care gap? Why?</p>
+            <div class="flow">
+              <div class="fq">On a beta blocker that counts?</div><div class="fy"></div><div class="fa">No care gap</div>
+              <div class="fn"></div><div></div><div></div>
+              <div class="fq">A documented reason not to be on one?</div><div class="fy"></div><div class="fa">No care gap</div>
+              <div class="fn"></div><div></div><div></div>
+              <div class="fa gap">Care gap</div><div></div><div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3: find it by hand -->
+      <section class="view" data-view="chart" data-title="Chart" data-icon="file-medical">
+        <h2>Find it yourself</h2>
+        <p class="ask">Is there a beta-blocker care gap for <select id="chartPatient" class="who-pick"></select>? Why?</p>
+        <div class="ehr">
+          <div class="ehrSide"><div class="ehrWho" id="ehrWho"></div><div class="ehrTabs" id="ehrTabs"></div></div>
+          <div class="ehrMain" id="ehrMain"></div>
+        </div>
+        <div class="row"><button id="reveal" class="ghost">Show the answer</button><span id="revealed" class="revealed"></span></div>
+      </section>
+
+      <!-- 4 -->
       <section class="view" data-view="data" data-title="Data" data-icon="database">
-        <div class="viewHead"><h2>Pick what the agent can see</h2><span class="meter" id="irbMeter"></span></div>
-        <div class="fhir"><img src="/shared/logos/hl7-fhir.png" alt="HL7 FHIR"><span>The agent reads the chart through the EHR's <b>FHIR API</b>. Each card you pick is a permission on its access token.</span></div>
+        <div class="viewHead"><h2>Pick what the agent can see <img src="/shared/logos/hl7-fhir.png" alt="HL7 FHIR" class="fhirLogo"></h2><span class="meter" id="irbMeter"></span></div>
         <div class="cards" id="dataCards"></div>
       </section>
 
-      <!-- 3 -->
+      <!-- 5 -->
       <section class="view" data-view="tools" data-title="Tools" data-icon="screwdriver-wrench">
         <div class="viewHead"><h2>Pick what the agent can do</h2><span class="meter" id="itMeter"></span></div>
         <div class="cards" id="toolCards"></div>
       </section>
 
-      <!-- 4 -->
+      <!-- 6 -->
       <section class="view" data-view="prompt" data-title="Prompt" data-icon="file-pen">
         <div class="split runSplit">
           <div class="col">
@@ -77,7 +96,7 @@
         </div>
       </section>
 
-      <!-- 5 -->
+      <!-- 7 -->
       <section class="view" data-view="criteria" data-title="Criteria" data-icon="list-check">
         <div class="split">
           <div class="col">
@@ -92,7 +111,7 @@
         </div>
       </section>
 
-      <!-- 6 -->
+      <!-- 8 -->
       <section class="view" data-view="test" data-title="Test" data-icon="users">
         <div class="split runSplit">
           <div class="col">
@@ -105,7 +124,7 @@
           <div class="col">
             <div class="tally" id="tally"></div>
             <div class="grid" id="grid"></div>
-            <div class="legend"><span><i class="sq right"></i>both answers right</span><span><i class="sq wrong"></i>wrong or not answered</span><span><i class="sq run"></i>running</span><span class="muted">hover for the answers, click for everything the agent did</span></div>
+            <div class="legend"><span><i class="sq right"></i>right</span><span><i class="sq wrong"></i>wrong</span><span><i class="sq run"></i>running</span></div>
             <div class="label" id="agentsLabel">Agents</div>
             <div class="wins" id="agents"></div>
           </div>

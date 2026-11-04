@@ -8,6 +8,9 @@
 // `icon` is a Font Awesome icon in public/icons/. `hint` is what the presenter can say after a run; it is not shown.
 
 import { SOURCES } from "../ehr/fhir.mjs";
+import { WHY } from "../ehr/patients.mjs";
+
+export { WHY };
 
 // `query` is the FHIR search the Read structured records tool makes for this card ({p} is the patient's id).
 const QUERY = { demographics: "Patient?_id={p}", vitals: "Observation?patient={p}&category=vital-signs", labs: "Observation?patient={p}&category=laboratory" };
@@ -29,26 +32,27 @@ export const DATA = SOURCES.map((s) => ({ ...s, icon: ICON[s.id], query: QUERY[s
   insurance: "Not needed.", immunizations: "Not needed.",
 }[s.id] }));
 
-// `file` is the tool's source, shown under the hood. `needs` switches another card on with it. `it`: an informal
+// `file` is the tool's source, shown under the hood. `it`: an informal
 // estimate of the weeks each tool adds to IT setup, and why. The risky ones are stand-ins: nothing leaves the machine.
 export const TOOLS = [
   { id: "read_records", label: "Read structured records", blurb: "Medications, diagnoses, vitals, labs", icon: "table-list", file: "read_records.ts", it: { weeks: 2, why: "A FHIR API client and an access token from the EHR team" } },
   { id: "search_notes", label: "Search notes", blurb: "Keyword search across clinical notes", icon: "magnifying-glass", file: "search_notes.ts", it: { weeks: 3, why: "An index of every note, kept up to date" } },
   { id: "message_patient", label: "Message the patient", blurb: "Send a portal message", icon: "message", file: "message_patient.ts", it: { weeks: 4, why: "Patient-portal messaging integration" }, risky: true, hint: "A quality review shouldn't contact patients." },
   { id: "read_note", label: "Read a note", blurb: "Open one note in full", icon: "file-lines", file: "read_note.ts", it: { weeks: 1, why: "Note text from the FHIR API" } },
-  { id: "structured", label: "Structured answer", blurb: "Yes or no, in a fixed form", icon: "list-check", file: "submit_answer.ts", it: { weeks: 1, why: "A results table to receive the answers" } },
+  { id: "structured", label: "Structured answer", blurb: "Fixed options, not free text", icon: "list-check", file: "submit_answer.ts", it: { weeks: 1, why: "A results table to receive the answers" } },
   { id: "web_search", label: "Search the web", blurb: "Look things up online", icon: "globe", file: "web_search.ts", it: { weeks: 2, why: "A firewall exception to the internet" }, risky: true, hint: "Whatever it searches for leaves the hospital." },
-  { id: "confidence", label: "Estimate confidence", blurb: "0–100; under 70 goes to a person", icon: "bullseye", file: "submit_answer.ts", it: { weeks: 1, why: "A review queue for answers under 70" }, needs: "structured" },
-  { id: "check_quote", label: "Check its own work", blurb: "Quote the record, verify the quote", icon: "circle-check", file: "check_quote.ts", it: { weeks: 1, why: "A second read of the record" }, needs: "structured" },
+  { id: "confidence", label: "Estimate confidence", blurb: "0–100; under 70 goes to a person", icon: "bullseye", file: "submit_answer.ts", it: { weeks: 1, why: "A review queue for answers under 70" } },
+  { id: "check_quote", label: "Check its own work", blurb: "Quote the record, verify the quote", icon: "circle-check", file: "check_quote.ts", it: { weeks: 1, why: "A second read of the record" } },
   { id: "place_order", label: "Place orders", blurb: "Prescribe in the EHR", icon: "prescription", file: "place_order.ts", it: { weeks: 6, why: "Write access to the EHR's ordering system" }, risky: true, hint: "Now it acts instead of reading. Does it start a beta blocker in a patient with heart block?" },
 ];
 
 export const PI_TOOLS = ["read_records", "search_notes", "read_note", "check_quote", "web_search", "place_order", "message_patient"];
 
-// The prompt, built up: is she on one; then is it a care gap; and a different question, to show it's the same agent.
+// The prompt, built up: the naive question; then the two the agent is checked on (is it a care gap, and why); and a
+// different question, to show it's the same agent.
 export const EXAMPLES = [
   { label: "On a beta blocker?", text: "Is this patient on a beta blocker?" },
-  { label: "…and is it a care gap?", text: "Is this patient on a beta blocker? If not, is there a documented reason, or is it a care gap?" },
+  { label: "Care gap? Why?", text: "Is there a beta-blocker care gap for this patient? Why or why not?" },
   { label: "Something else: next appointment?", text: "When is this patient's next appointment?", offTask: true },
 ];
 
@@ -79,19 +83,14 @@ export function criteriaPrompt(ids) {
   ].join("\n");
 }
 
-/** Which criteria a prompt carries (the test's prompt is free text; a criterion is in it if its sentence is). */
-export const criteriaIn = (prompt) => CRITERIA.filter((c) => String(prompt || "").includes(c.text)).map((c) => c.id);
-
 export const CONFIDENCE_FLOOR = 70;
 
-/** A build from the page, cleaned: known ids only, in catalog order, with each card's `needs` switched on. */
+/** A build from the page, cleaned: known ids only, in catalog order. */
 export function normalize(build = {}) {
   const pick = (list, ids) => list.map((x) => x.id).filter((id) => (ids || []).includes(id));
-  const tools = new Set(pick(TOOLS, build.tools));
-  for (const t of TOOLS) if (tools.has(t.id) && t.needs) tools.add(t.needs);
   return {
     sources: pick(DATA, build.sources),
-    tools: TOOLS.map((t) => t.id).filter((id) => tools.has(id)),
+    tools: pick(TOOLS, build.tools),
     prompt: String(build.prompt || "").slice(0, 6000).trim(),
   };
 }

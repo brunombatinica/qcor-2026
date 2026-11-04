@@ -25,7 +25,7 @@ async function run(build, patient = "p000") {
   const ev = await events("/api/run", { build, patient });
   return { ev, row: ev.find((e) => e.kind === "result"), first: requests[0] };
 }
-const PROMPT = "Is this patient on a beta blocker? If not, find out why.";
+const PROMPT = "Is there a beta-blocker care gap for this patient? Why or why not?";
 
 // FHIR: a token carries exactly its scopes; Observation is scoped by category
 {
@@ -53,14 +53,26 @@ const PROMPT = "Is this patient on a beta blocker? If not, find out why.";
   }
 }
 
-// nothing chosen: a bare model, no tools, the prompt and the FHIR id only; it answers in prose, graded by a second call
+// nothing chosen: a bare model with only submit_answer, the prompt and the FHIR id; its free text is read by a second call
 {
   const { row, first } = await run({ prompt: PROMPT });
   assert.equal(row.status, "ok");
-  assert.deepEqual(offered(first), []);
+  assert.deepEqual(offered(first), ["submit_answer"]);
   assert.doesNotMatch(JSON.stringify(first.messages), /Rosa|Mobitz/);
-  assert.ok(row.text && row.score.fromProse && row.score.questions.given.agent, "prose answer read");
+  const submit = first.tools[0].function.parameters;
+  assert.deepEqual(Object.keys(submit.properties), ["answer_1", "answer_2", "answer_3"], "free text, nothing about the task");
+  assert.ok(row.answer && row.score.fromProse && row.score.questions.gap.agent, "free text read");
   assert.ok(row.read.usage.input > 0, "the read's tokens are counted");
+}
+
+// the structured answer: each answer in words and as a fixed option; only the questions asked are scored
+{
+  const { row, first } = await run({ tools: ["read_records", "structured"], sources: ["medications"], prompt: "Is this patient on a beta blocker?" });
+  const props = first.tools.find((t) => t.function.name === "submit_answer").function.parameters.properties;
+  assert.deepEqual(props.option_1.enum, ["yes", "no"]);
+  assert.ok(props.option_2.enum.includes("medical reason"));
+  assert.ok(row.answer.option_1 && !row.read, "no second call");
+  assert.deepEqual(Object.values(row.score.questions).map((q) => q.right), [null, null], "a care gap and why were not asked");
 }
 
 // a tool card is a tool the model is given; a data card is a scope its tools are refused without
@@ -89,7 +101,7 @@ const PROMPT = "Is this patient on a beta blocker? If not, find out why.";
   assert.match(first.messages[0].content, /check_quote/);
   assert.ok(row.trace.some((t) => t.tool === "check_quote" && t.kind === "observe"));
   assert.equal(row.score.correct, true);
-  assert.deepEqual(Object.values(row.score.questions).map((q) => q.right), [true, true], "on a beta blocker, and care gap");
+  assert.deepEqual(Object.values(row.score.questions).map((q) => q.right), [true, true], "care gap, and why");
   assert.equal(row.score.quote.found, true);
 }
 
@@ -110,7 +122,7 @@ const PROMPT = "Is this patient on a beta blocker? If not, find out why.";
     const sum = ev.find((e) => e.kind === "summary").summary;
     assert.equal(sum.n, 4);
     assert.equal(sum.errors, 0);
-    assert.equal(sum.questions.given.answered, 4);
+    assert.equal(sum.questions.gap.answered, 4);
     assert.equal(ev.filter((e) => e.kind === "patient").length, 4);
     if (pass === 1) assert.ok(ev.some((e) => e.kind === "event"), "live events stream");
     else assert.ok(ev.filter((e) => e.kind === "patient").every((e) => e.row.cached));

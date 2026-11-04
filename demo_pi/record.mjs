@@ -27,16 +27,16 @@ const cohort = (id, label, build, prompt, criteria = []) => ({ id: `cohort-${id}
 export const PLAN = [
   rosa("nothing-given", "nothing switched on · On a beta blocker?", { sources: [], tools: [] }, GIVEN),
   rosa("meds-given", "medications · On a beta blocker?", { sources: ["medications"], tools: ["read_records"] }, GIVEN),
-  rosa("meds-gap", "medications · and is it a care gap?", { sources: ["medications"], tools: ["read_records"] }, GAP),
-  rosa("notes-gap", "medications and notes · and is it a care gap?", { sources: ["medications", "notes"], tools: READ }, GAP),
+  rosa("meds-gap", "medications · Care gap? Why?", { sources: ["medications"], tools: ["read_records"] }, GAP),
+  rosa("notes-gap", "medications and notes · Care gap? Why?", { sources: ["medications", "notes"], tools: READ }, GAP),
   rosa("notes-next", "medications and notes · next appointment?", { sources: ["medications", "notes"], tools: READ }, NEXT),
-  rosa("test-gap", "the test build · and is it a care gap?", TEST, GAP),
-  rosa("checks-gap", "the test build, structured answer and checks · and is it a care gap?", { ...TEST, tools: [...READ, ...CHECKS] }, GAP),
-  rosa("risky-gap", "the test build, demographics and the risky tools · and is it a care gap?", RISKY, GAP),
+  rosa("test-gap", "the test build · Care gap? Why?", TEST, GAP),
+  rosa("checks-gap", "the test build, structured answer and checks · Care gap? Why?", { ...TEST, tools: [...READ, ...CHECKS] }, GAP),
+  rosa("risky-gap", "the test build, demographics and the risky tools · Care gap? Why?", RISKY, GAP),
   cohort("given", "On a beta blocker?", TEST, GIVEN),
-  cohort("gap", "and is it a care gap?", TEST, GAP),
-  cohort("gap-criteria", "and is it a care gap? + every criterion", TEST, withCriteria(GAP, ALL), ALL),
-  cohort("gap-criteria-checks", "structured answer and checks · and is it a care gap? + every criterion", { ...TEST, tools: [...READ, ...CHECKS] }, withCriteria(GAP, ALL), ALL),
+  cohort("gap", "Care gap? Why?", TEST, GAP),
+  cohort("gap-criteria", "Care gap? Why? + every criterion", TEST, withCriteria(GAP, ALL), ALL),
+  cohort("gap-criteria-checks", "structured answer and checks · Care gap? Why? + every criterion", { ...TEST, tools: [...READ, ...CHECKS] }, withCriteria(GAP, ALL), ALL),
   cohort("fix", "demographics and the risky tools · Fix it", RISKY, ACT_EXAMPLE.text),
 ];
 
@@ -85,7 +85,7 @@ async function record(base, plan, order) {
   writeFileSync(join(RECORDED, `${plan.id}.json`), JSON.stringify(head, null, 2).replace(/\n}$/, `,\n  "rows": [\n${rows.map((r) => `    ${JSON.stringify(r)}`).join(",\n")}\n  ]\n}\n`));
   const summary = messages.find(([, m]) => m.kind === "summary")?.[1].summary;
   const result = plan.kind === "rosa" ? messages.find(([, m]) => m.kind === "result")[1].score : null;
-  const tally = summary ? `${summary.right}/${summary.n} · on a beta blocker ${summary.questions.given.right} · care gap ${summary.questions.gap.right} · ${summary.tokensPerPatient} tokens each` : `${Object.values(result.questions).filter((q) => q.right === true).length}/2 · ${row0tokens(messages)} tokens`;
+  const tally = summary ? `${summary.right}/${summary.n} · care gap ${summary.questions.gap.right} · why ${summary.questions.why.right} · ${summary.tokensPerPatient} tokens each` : `${Object.values(result.questions).filter((q) => q.right === true).length}/2 · ${row0tokens(messages)} tokens`;
   console.log(`${plan.id.padEnd(24)} ${tally.padEnd(42)} ${seconds} s${failed ? ` · ${failed} failed` : ""}`);
 }
 

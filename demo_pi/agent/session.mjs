@@ -15,7 +15,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { issueToken } from "../ehr/fhir.mjs";
 import { PATIENTS, TODAY } from "../ehr/patients.mjs";
-import { PI_TOOLS, normalize } from "./catalog.mjs";
+import { PI_TOOLS, WHY, normalize } from "./catalog.mjs";
 import { MODEL, reasoningOff } from "./model.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -37,7 +37,7 @@ export const byPatientId = (id) => PATIENTS.find((p) => p.id === id) || PATIENTS
 
 export function systemPrompt(build) {
   const { tools } = normalize(build);
-  const parts = [instruction("harness"), instruction(tools.includes("structured") ? "answer-structured" : "answer-text")];
+  const parts = [instruction("harness"), instruction("answer")];
   if (tools.includes("check_quote")) parts.push(instruction("check-quote"));
   if (tools.includes("confidence")) parts.push(instruction("check-confidence"));
   return parts.join("\n\n");
@@ -53,10 +53,10 @@ export function userPrompt(patient, build) {
   return `Patient: ${header(patient, build)}\n\n${normalize(build).prompt || "(no prompt)"}`;
 }
 
-/** The tools pi activates: the page's tool cards that are pi tools, plus submit_answer for a structured answer. */
+/** The tools pi activates: the page's tool cards that are pi tools, and submit_answer, how every agent hands in its answer. */
 export function piTools(build) {
   const { tools } = normalize(build);
-  return [...tools.filter((t) => PI_TOOLS.includes(t)), ...(tools.includes("structured") ? ["submit_answer"] : [])];
+  return [...tools.filter((t) => PI_TOOLS.includes(t)), "submit_answer"];
 }
 
 export function command(patient, build) {
@@ -90,7 +90,7 @@ export function runSession({ patientId, build, onEvent = () => {}, signal, strea
     DEMO_BASE_URL: MODEL.baseUrl, DEMO_API_KEY: MODEL.apiKey, DEMO_MODEL: MODEL.id,
     DEMO_CONTEXT_WINDOW: String(MODEL.agentWindow), DEMO_MAX_TOKENS: String(MODEL.maxTokens), DEMO_REASONING_OFF: reasoningOff(),
     DEMO_FHIR_BASE: FHIR.base, DEMO_FHIR_TOKEN: grant.access_token, DEMO_PATIENT: patient.id,
-    DEMO_STRUCTURED: b.tools.includes("structured") ? "1" : "0", DEMO_ANSWER_FIELDS: answerFields(b).join(","),
+    DEMO_STRUCTURED: b.tools.includes("structured") ? "1" : "0", DEMO_ANSWER_OPTIONS: JSON.stringify(Object.values(WHY)), DEMO_ANSWER_FIELDS: answerFields(b).join(","),
     PI_CODING_AGENT_DIR: SETTINGS,
   };
   const t0 = Date.now();
