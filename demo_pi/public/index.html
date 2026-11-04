@@ -104,11 +104,8 @@
       <section class="view" data-view="test" data-title="Test" data-icon="users">
         <div class="split runSplit">
           <div class="col">
-            <div class="goalHead">
-              <div class="label">Goal</div>
-              <h2>Screen your health system for <span style="white-space: nowrap">beta-blocker care gaps</span> <span class="nPill">n = 100</span></h2>
-              <p class="howto">Every patient here has heart failure with reduced ejection fraction. Write one prompt: <b data-model>the model</b> runs it on each chart, one agent per patient, and says who has a care gap. You score by how many of the true care gaps it finds, without flagging patients who don't have one. Add what counts from the suggestions under the box, pick the definition you're checked against, then run it.</p>
-            </div>
+            <h2 class="testHead">Screen the health system for <span style="white-space: nowrap">beta-blocker care gaps</span></h2>
+            <p class="howto">Write one prompt. <b data-model>The model</b> reads each patient's chart and says who has a care gap. Find every true care gap without false alarms.</p>
             <div class="rulebook" id="rulebook" role="radiogroup" aria-label="Definition"></div>
             <div class="keyNote" id="keyNote"></div>
             <textarea id="testPrompt" rows="7" placeholder="Your prompt for every patient…"></textarea>
@@ -119,9 +116,8 @@
             <div id="results"></div>
             <div class="tally" id="tally"></div>
             <div class="grid" id="grid"></div>
-            <div class="legend"><span><i class="sq right"></i>right</span><span><i class="sq wrong"></i>wrong</span><span><i class="sq run"></i>running</span><span><i class="sq key"></i>a care gap in the answer key</span></div>
-            <div class="label" id="agentsLabel">Agents</div>
-            <div class="wins" id="agents"></div>
+            <div class="legend"><span><i class="sq right"></i>care gap? right</span><span><i class="sq wrong"></i>wrong</span><span><i class="sq key"></i>has a care gap (answer key)</span></div>
+            <details class="agentsBox" id="agentsBox"><summary class="label" id="agentsLabel">Agents</summary><div class="wins" id="agents"></div></details>
           </div>
         </div>
         <table id="runs"></table>

@@ -20,6 +20,12 @@ where it exists (README "The v2 answer key"). Not done: the labels themselves ne
 npm run label`, 200 calls); review the patients it prints as differing from the charts before committing the file.
 Tested on a stand-in API only.
 
+Then, cleaner: "Screen the health system for beta-blocker care gaps", no Goal label or n = 100, one line of
+instructions; no *On a beta blocker?* or *Fix it* on Test (the test's question is the care-gap one; an old saved
+prompt with either gets it); squares coloured by the care-gap answer, so the red ones are the missed care gaps and
+false alarms the headline counts (before, red meant either answer wrong: 30/31 found showed 9 red); the tally only
+while it runs; the agents' windows folded away after.
+
 ## Demo, rulebooks and the page (2026-11-04, evening; Ryan)
 
 Ryan, going through the hosted demo: the Task slide as the goal (an agent that reads the EHR and finds care gaps, as

@@ -234,24 +234,24 @@ textarea:focus { outline: none; border-color: var(--edge); }
 .stat small { display: block; font-size: 11.5px; color: var(--muted); margin-top: 4px; }
 
 /* Test: the goal, the definition (the answer key) and the suggestions under the prompt */
-.goalHead .label { margin-top: 0; color: var(--blue); font-weight: 700; }
-.goalHead h2 { margin: 0 0 8px; font-size: 26px; }
+.testHead { margin: 0 0 6px; font-size: 26px; }
 .runRow { margin: 0 0 16px; }
-.nPill { display: inline-block; vertical-align: middle; font-size: 14px; font-weight: 600; color: var(--muted); border: 1px solid var(--dim); border-radius: 999px; padding: 2px 10px; margin-left: 6px; white-space: nowrap; }
-.howto { margin: 0 0 16px; font-size: 13.5px; line-height: 1.5; color: var(--muted); max-width: 64ch; } .howto b { color: #d1d1d6; font-weight: 600; }
+.howto { margin: 0 0 18px; font-size: 14px; line-height: 1.5; color: var(--muted); max-width: 60ch; } .howto b { color: #d1d1d6; font-weight: 600; }
 .rulebook { display: flex; align-items: stretch; gap: 8px; margin: 0 0 6px; flex-wrap: wrap; }
 .rulebook button { background: var(--card); border: 2px solid transparent; border-radius: 12px; padding: 7px 14px; text-align: left; cursor: pointer; color: var(--muted); }
 .rulebook button b { display: block; font-size: 15px; color: #c7c7cc; } .rulebook button span { font-size: 12px; }
 .rulebook button[aria-checked="true"] { border-color: var(--text); background: var(--raised); } .rulebook button[aria-checked="true"] b { color: var(--text); }
 .keyNote { font-size: 13px; color: var(--muted); margin: 0 0 12px; } .keyNote b { color: var(--text); }
-.suggest { margin: 4px 0 6px; }
-.sgroup { margin-top: 8px; } .sgroup .label { margin: 10px 0 6px; }
+.suggest { margin: 14px 0 6px; }
+.sugHead { display: flex; align-items: baseline; justify-content: space-between; } .sugHead .label { margin: 0 0 4px; }
+.linkBtn { background: none; border: 0; padding: 0; color: var(--blue); font-size: 13px; cursor: pointer; } .linkBtn:hover { text-decoration: underline; }
+.sgroup { margin-top: 10px; } .sgTitle { font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
 .sgroup .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.sug { background: none; border: 1px dashed var(--edge); border-radius: 10px; padding: 5px 11px; font-size: 13px; line-height: 1.35; cursor: pointer; color: #c7c7cc; text-align: left; }
-.sug:hover { border-color: var(--text); color: var(--text); }
-.sug.on { border-style: solid; border-color: var(--blue); background: var(--blue-s); color: var(--text); }
-.sug .tick { display: inline-block; width: 1.1em; font-weight: 700; color: var(--muted); } .sug.on .tick { color: var(--blue); }
-.ghost.small { font-size: 13px; padding: 5px 12px; }
+.sug { background: var(--card); border: 1px solid transparent; border-radius: 8px; padding: 5px 10px; font-size: 13px; line-height: 1.35; cursor: pointer; color: var(--muted); text-align: left; }
+.sug:hover { color: var(--text); }
+.sug.on { border-color: var(--blue); background: var(--blue-s); color: var(--text); }
+.agentsBox summary { cursor: pointer; list-style: none; } .agentsBox summary::-webkit-details-marker { display: none; }
+.agentsBox summary::before { content: "▸ "; } .agentsBox[open] summary::before { content: "▾ "; }
 .subScore { display: flex; gap: 18px; flex-wrap: wrap; margin: 6px 0 4px; font-size: 14px; color: var(--muted); } .subScore b { color: var(--text); font-size: 17px; }
 .subScore .warnTxt b { color: var(--red); }
 .sq.key { box-shadow: inset 0 0 0 3px #fff; }
