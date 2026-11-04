@@ -7,7 +7,7 @@ import { line, noteText } from "../../ehr/render.mjs";
 import { PATIENT, get, search, text } from "./fhir.ts";
 
 const squash = (s: string) => s.toLowerCase().replace(/[“”"'.,;:]/g, "").replace(/\s+/g, " ").trim();
-const TYPES = ["Patient", "Coverage", "Condition", "MedicationRequest", "Observation", "AllergyIntolerance", "Immunization", "FamilyMemberHistory", "Appointment"];
+const TYPES = ["Patient", "Coverage", "Condition", "MedicationRequest", "Observation", "AllergyIntolerance", "Immunization"];
 
 export default () => defineTool({
   name: "check_quote",

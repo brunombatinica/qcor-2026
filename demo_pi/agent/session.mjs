@@ -94,7 +94,7 @@ export function runSession({ patientId, build, onEvent = () => {}, signal, strea
     PI_CODING_AGENT_DIR: SETTINGS,
   };
   const t0 = Date.now();
-  const result = { patientId: patient.id, answer: null, text: "", trace: [], usage: { input: 0, output: 0, modelCalls: 0, toolCalls: 0 }, status: "ok", error: null, scope: grant.scope };
+  const result = { patientId: patient.id, answer: null, text: "", trace: [], usage: { input: 0, output: 0, cached: 0, modelCalls: 0, toolCalls: 0 }, status: "ok", error: null, scope: grant.scope };
   const emit = (item) => { item.t = Date.now() - t0; result.trace.push(item); onEvent(item); };
 
   return new Promise((resolve) => {
@@ -117,12 +117,16 @@ export function runSession({ patientId, build, onEvent = () => {}, signal, strea
           onEvent({ kind: "delta", text: e.assistantMessageEvent.delta, t: Date.now() - t0 });
         } else if (e.type === "message_end" && e.message?.role === "assistant") {
           const m = e.message;
+          // every prompt token counts, cached or not (pi reports cached ones apart, as cacheRead)
+          const u = m.usage || {}, input = (u.input || 0) + (u.cacheRead || 0) + (u.cacheWrite || 0), output = u.output || 0;
           result.usage.modelCalls += 1;
-          result.usage.input += m.usage?.input || 0;
-          result.usage.output += m.usage?.output || 0;
+          result.usage.input += input;
+          result.usage.output += output;
+          result.usage.cached += u.cacheRead || 0;
           if (m.stopReason === "error") result.error = m.errorMessage || "model call failed";
           const said = textOf(m.content);
           if (said) { result.text = said; emit({ kind: "think", text: said }); }
+          emit({ kind: "usage", call: result.usage.modelCalls, input, output, cached: u.cacheRead || 0 });
         } else if (e.type === "tool_execution_start") {
           if (e.toolName !== "submit_answer") result.usage.toolCalls += 1;
           emit({ kind: "act", tool: e.toolName, args: e.args });

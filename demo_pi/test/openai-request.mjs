@@ -45,7 +45,7 @@ let { agent, grader } = await run();
 assert.ok(agent.every((r) => r.reasoning_effort === undefined));
 assert.equal(grader.reasoning_effort, undefined);
 assert.equal(grader.temperature, 0);
-assert.equal(grader.max_tokens, 200);
+assert.equal(grader.max_tokens, 120);
 
 // a reasoning model
 process.env.DEMO_REASONING_OFF = "none";
@@ -55,7 +55,7 @@ assert.ok(agent.every((r) => r.max_tokens === undefined && r.max_completion_toke
 assert.equal(grader.reasoning_effort, "none");
 assert.equal(grader.temperature, undefined);
 assert.equal(grader.max_tokens, undefined);
-assert.equal(grader.max_completion_tokens, 400);
+assert.equal(grader.max_completion_tokens, 300);
 
 server.close();
 model.close();

@@ -7,7 +7,7 @@
 //   GET  /fhir/<Type>/<id>                                                                              → one resource
 //
 // A search for a type the token has no scope for is a 403 OperationOutcome; Observation scopes are granular by
-// category (vital-signs, laboratory, social-history). There is no client authentication: the data is synthetic.
+// category (vital-signs, laboratory). There is no client authentication: the data is synthetic.
 
 import { randomBytes } from "node:crypto";
 import { PATIENTS, TODAY } from "./patients.mjs";
@@ -24,12 +24,9 @@ export const SOURCES = [
   { id: "medications", type: "MedicationRequest", label: "Medications", blurb: "Prescriptions, active and stopped" },
   { id: "vitals", type: "Observation", category: "vital-signs", label: "Vital signs", blurb: "Heart rate, blood pressure" },
   { id: "labs", type: "Observation", category: "laboratory", label: "Lab results", blurb: "Potassium, creatinine, NT-proBNP" },
-  { id: "notes", type: "DocumentReference", label: "Clinical notes", blurb: "Clinic, telephone, consult notes" },
+  { id: "notes", type: "DocumentReference", label: "Clinical notes", blurb: "Clinic, telephone and consult notes" },
   { id: "allergies", type: "AllergyIntolerance", label: "Allergies", blurb: "Allergies and intolerances" },
   { id: "immunizations", type: "Immunization", label: "Immunizations", blurb: "Vaccines given" },
-  { id: "family", type: "FamilyMemberHistory", label: "Family history", blurb: "Conditions in relatives" },
-  { id: "social", type: "Observation", category: "social-history", label: "Social history", blurb: "Smoking, alcohol, living situation" },
-  { id: "appointments", type: "Appointment", label: "Appointments", blurb: "Upcoming visits" },
 ];
 export const scopeOf = (s) => `system/${s.type}.rs${s.category ? `?category=${OBS_CAT}|${s.category}` : ""}`;
 const byId = Object.fromEntries(SOURCES.map((s) => [s.id, s]));
@@ -97,20 +94,11 @@ function resources(p) {
     period: { start: p.coverage.since }, payor: [{ display: p.coverage.payer }], class: [{ type: cc("http://terminology.hl7.org/CodeSystem/coverage-class", "plan", "Plan"), value: p.coverage.plan }] });
   p.immunizations.forEach((v, i) => out.push({ resourceType: "Immunization", id: `${p.id}-imm-${i + 1}`, status: "completed",
     vaccineCode: cc("http://hl7.org/fhir/sid/cvx", v.cvx, v.text), patient: ref, occurrenceDateTime: v.date }));
-  p.family.forEach((f, i) => out.push({ resourceType: "FamilyMemberHistory", id: `${p.id}-fmh-${i + 1}`, status: "completed", patient: ref,
-    relationship: cc("http://terminology.hl7.org/CodeSystem/v3-RoleCode", f.rel, f.relText),
-    condition: [{ code: cc(SNOMED, f.snomed, f.text), ...(f.age ? { onsetAge: { value: f.age, unit: "a", system: "http://unitsofmeasure.org", code: "a" } } : {}) }] }));
-  p.social.forEach((o, i) => out.push({ resourceType: "Observation", id: `${p.id}-soc-${i + 1}`, status: "final", category: [cc(OBS_CAT, "social-history", "Social History")],
-    code: cc(LOINC, o.loinc, o.name), subject: ref, effectiveDateTime: o.date,
-    ...(o.snomed ? { valueCodeableConcept: cc(SNOMED, o.snomed, o.value) } : { valueString: o.value }) }));
-  p.appointments.forEach((a, i) => out.push({ resourceType: "Appointment", id: `${p.id}-appt-${i + 1}`, status: "booked",
-    serviceType: [{ text: a.service }], description: a.service, start: `${a.date}T${a.time}:00-05:00`, minutesDuration: 30,
-    participant: [{ actor: { reference: `Patient/${p.id}`, display: p.name }, status: "accepted" }, { actor: { display: a.with }, status: "accepted" }] }));
   return out;
 }
 
 const STORE = new Map(PATIENTS.map((p) => [p.id, resources(p)]));
-const patientOf = (r) => (r.subject || r.patient || r.beneficiary || r.participant?.[0]?.actor || { reference: `Patient/${r.id}` }).reference.slice(8);
+const patientOf = (r) => (r.subject || r.patient || r.beneficiary || { reference: `Patient/${r.id}` }).reference.slice(8);
 
 // Which card a resource belongs to.
 export function sourceOf(r) {

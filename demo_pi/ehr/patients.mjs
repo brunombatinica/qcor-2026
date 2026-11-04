@@ -1,11 +1,14 @@
 // The synthetic cohort: Rosa plus 99 look-alikes, built from a fixed seed so there is no data file to commit. Every
-// patient has HFrEF; half are on an evidence-based beta blocker and half are not, for a reason the chart documents
-// (or doesn't). Each patient's gold label comes from how the chart was written, so the annotation is the scenario.
+// patient has HFrEF; half are on a beta blocker that counts for the measure (CMS144) and half are not, for a reason
+// the chart documents (or doesn't). Each patient's gold label comes from how the chart was written, so the annotation
+// is the scenario.
 //
-//   PATIENTS[i]  { id, name, sex, age, ..., conditions, meds, vitals, labs, allergies, notes, gold: {status, given, gap, why},
-//                  coverage, immunizations, family, social, appointments }   (the last five play no part in the answer)
+//   PATIENTS[i]  { id, name, sex, age, ..., conditions, meds, vitals, labs, allergies, notes, next, coverage, immunizations,
+//                  gold: {status, given, gap, why, scenario, where, needs} }   (coverage and immunizations play no part in the answer)
 //
-// ehr/fhir.mjs turns a patient into FHIR R4 resources; nothing else reads these fields directly.
+// The two answers the measure asks for: is the patient on a beta blocker that counts (carvedilol, bisoprolol or
+// metoprolol succinate), and if not, is it a care gap (no documented reason)? ehr/fhir.mjs turns a patient into FHIR
+// R4 resources; nothing else reads these fields directly.
 
 export const TODAY = "2026-11-02";
 
@@ -15,7 +18,7 @@ export const STATUSES = {
   documented_reason: "Documented reason",
 };
 
-// Where the deciding evidence lives, for the cohort breakdown.
+// Where the deciding evidence lives.
 export const WHERE = { meds: "medications", note: "a note", diagnoses: "diagnoses", vitals: "vital signs", allergies: "allergies" };
 
 // ---- seeded randomness ----
@@ -36,6 +39,7 @@ function shuffle(xs) { for (let i = xs.length - 1; i > 0; i--) { const j = Math.
 
 const day = (iso, delta) => { const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + delta); return d.toISOString().slice(0, 10); };
 const ago = (days) => day(TODAY, -days);
+const longDate = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
 // ---- vocabulary (RxNorm ingredient codes, SNOMED CT and ICD-10-CM for diagnoses) ----
 
@@ -55,7 +59,6 @@ const DRUG = {
   torsemide: { rxnorm: "38413", name: "torsemide" },
   atorvastatin: { rxnorm: "83367", name: "atorvastatin" },
   metformin: { rxnorm: "6809", name: "metformin" },
-  apixaban: { rxnorm: "1364430", name: "apixaban" },
   albuterol: { rxnorm: "435", name: "albuterol" },
   fluticasone_salmeterol: { rxnorm: "284635", name: "fluticasone / salmeterol" },
 };
@@ -114,6 +117,7 @@ function basePatient(i) {
   p.hfSince = ago(int(400, 2500));
   const lastVisit = int(7, 40);
   p.visits = [lastVisit, lastVisit + int(80, 110), lastVisit + int(170, 220)].map(ago);   // newest first
+  p.next = { date: day(TODAY, int(20, 90)), with: pick(AUTHORS.hf) };                       // the next heart-failure clinic visit
   p.conditions = [cond("hfref", p.hfSince), ...shuffle(["htn", "t2dm", "ckd3a", "hld", "osa", "obesity", "cad"]).slice(0, int(2, 4)).map((k) => cond(k, ago(int(800, 5000))))];
   const ras = pick([["sacubitril_valsartan", "49/51 mg", "twice daily"], ["sacubitril_valsartan", "97/103 mg", "twice daily"], ["lisinopril", "10 mg", "once daily"], ["losartan", "50 mg", "once daily"]]);
   p.meds = [med(...ras, { start: ago(int(200, 900)) })];
@@ -132,28 +136,25 @@ function basePatient(i) {
   return p;
 }
 
-// The latest heart-failure clinic note; `bb` is its beta blocker sentence (or none).
+// The latest heart-failure clinic note: short, with the beta-blocker sentence `bb` (or none) and the next visit.
 function hfNote(p, bb, { extra = "" } = {}) {
   const w = she(p), v = p.vitals[0];
   const others = p.meds.filter((m) => ["sacubitril_valsartan", "lisinopril", "losartan", "spironolactone", "dapagliflozin", "empagliflozin"].includes(m.key) && m.status === "active").map((m) => DRUG[m.key].name);
   return {
     date: p.visits[0], type: "progress", author: pick(AUTHORS.hf), title: "Heart failure clinic follow-up",
-    text: `${p.age}-year-old ${w.man} with HFrEF (LVEF ${p.ef}%), NYHA class ${pick(["I", "II", "II"])}. ${w.S} feels ${pick(["well", "about the same", "a little more tired than usual"])}; no orthopnea, PND or leg swelling.${extra ? ` ${extra}` : ""}\n` +
-      `Exam: BP ${v.sbp}/${v.dbp}, HR ${v.hr}. JVP not raised, lungs clear, no edema.\n` +
-      `Assessment and plan: HFrEF, euvolemic. Continue ${others.join(", ") || "current therapy"}.${bb ? ` ${bb}` : ""} Labs today. Follow up in ${pick(["3", "3", "4", "6"])} months.`,
+    text: `${p.age}-year-old ${w.man} with heart failure, ejection fraction ${p.ef}%. ${w.S} feels ${pick(["well", "about the same", "a little more tired than usual"])}; no swelling or breathlessness.${extra ? ` ${extra}` : ""}\n` +
+      `BP ${v.sbp}/${v.dbp}, HR ${v.hr}.\n` +
+      `Plan: continue ${others.join(", ") || "current therapy"}.${bb ? ` ${bb}` : ""} Next appointment: heart failure clinic, ${longDate(p.next.date)}.`,
   };
 }
 
-function fillerNotes(p) {
-  const w = she(p), out = [];
-  out.push({ date: p.visits[1], type: "nursing", author: pick(AUTHORS.rn), title: "Nurse visit: weight and vitals",
-    text: `Weight ${int(58, 112)} kg, stable from last visit. ${w.S} reports taking ${w.p} medications as prescribed. Reviewed low-sodium diet and daily weights.` });
-  if (chance(0.6)) out.push({ date: p.visits[2], type: "progress", author: pick(AUTHORS.pcp), title: "Primary care visit",
-    text: `Seen for ${pick(["annual wellness visit", "knee pain", "diabetes follow-up", "a cough after a cold", "blood pressure check"])}. ${pick(["Up to date on vaccines.", "Flu vaccine given.", "Referred to physical therapy.", "No changes made today."])} Heart failure followed by cardiology.` });
-  return out;
-}
+const nurseNote = (p) => ({ date: p.visits[1], type: "nursing", author: pick(AUTHORS.rn), title: "Nurse visit: weight and vitals",
+  text: `Weight ${int(58, 112)} kg, stable. Taking ${she(p).p} medications as prescribed.` });
 
-// ---- scenarios: [key, count, gold status, where the deciding evidence is, why (the gold rationale), build] ----
+// ---- scenarios: [key, count, gold status, where the deciding evidence is, why (the chart's answer), needs, build] ----
+//
+// `needs` is what the agent must have to get it right: the data cards that hold the evidence, and the criterion that
+// decides it (agent/catalog.mjs CRITERIA). The test view uses it to say what a wrong answer was missing.
 
 function bbOn(p, key, opts = {}) {
   const [dose, freq] = opts.sig || pick(SIG[key]);
@@ -161,109 +162,96 @@ function bbOn(p, key, opts = {}) {
   p.meds.splice(1, 0, m);
   return m;
 }
+const stoppedBb = (p, key, dose, freq, end) => p.meds.splice(1, 0, med(key, dose, freq, { status: "stopped", start: day(end, -int(200, 500)), end }));
 
 const ON = "on_treatment", GAP = "gap", REASON = "documented_reason";
-const BETA_BLOCKERS = ["carvedilol", "metoprolol_succinate", "bisoprolol", "metoprolol_tartrate", "atenolol"];
+const COUNTS = ["carvedilol", "metoprolol_succinate", "bisoprolol"];       // what CMS144 counts as treatment
+const need = (sources, criterion = null) => ({ sources, criterion });
 
 const SCENARIOS = [
-  ["on_carvedilol", 15, ON, "meds", "Active carvedilol, an evidence-based beta blocker.", (p) => { const m = bbOn(p, "carvedilol"); p.notes.push(hfNote(p, `Continue carvedilol ${m.sig.split(" by")[0]} twice daily.`)); }],
-  ["on_metoprolol_succinate", 12, ON, "meds", "Active metoprolol succinate, an evidence-based beta blocker.", (p) => { const m = bbOn(p, "metoprolol_succinate"); p.notes.push(hfNote(p, `Continue metoprolol succinate ${m.sig.split(" by")[0]} daily.`)); }],
-  ["on_bisoprolol", 8, ON, "meds", "Active bisoprolol, an evidence-based beta blocker.", (p) => { bbOn(p, "bisoprolol"); p.notes.push(hfNote(p, "Continue bisoprolol.")); }],
-  ["on_brand_name", 5, ON, "meds", "On Toprol-XL or Coreg: brand names for metoprolol succinate and carvedilol.", (p) => {
+  ["on_carvedilol", 18, ON, "meds", "On carvedilol.", need(["medications"]), (p) => { const m = bbOn(p, "carvedilol"); p.notes.push(hfNote(p, `Continue carvedilol ${m.sig.split(" by")[0]} twice daily.`)); }],
+  ["on_metoprolol_succinate", 14, ON, "meds", "On metoprolol succinate.", need(["medications"]), (p) => { const m = bbOn(p, "metoprolol_succinate"); p.notes.push(hfNote(p, `Continue metoprolol succinate ${m.sig.split(" by")[0]} daily.`)); }],
+  ["on_bisoprolol", 10, ON, "meds", "On bisoprolol.", need(["medications"]), (p) => { bbOn(p, "bisoprolol"); p.notes.push(hfNote(p, "Continue bisoprolol.")); }],
+  ["on_brand_name", 8, ON, "meds", "On Toprol-XL or Coreg: brand names for metoprolol succinate and carvedilol.", need(["medications"]), (p) => {
     const brand = pick(["Toprol-XL", "Coreg"]);
     bbOn(p, brand === "Coreg" ? "carvedilol" : "metoprolol_succinate", { brand });
     p.notes.push(hfNote(p, `Continue ${brand}.`));
   }],
-  ["on_restarted", 5, ON, "meds", "Carvedilol was held for low blood pressure during an admission, then restarted; it is active now.", (p) => {
-    const w = she(p);
-    bbOn(p, "carvedilol", { sig: ["3.125 mg", "twice daily"] });
-    const adm = ago(int(200, 330));
-    p.notes.push({ date: adm, type: "discharge", author: pick(AUTHORS.hf), title: "Discharge summary", text: `Admitted with decompensated heart failure. Diuresed 4 kg. Carvedilol held on admission for hypotension (SBP 84) and not restarted before discharge. Recheck BP in clinic.` });
-    p.notes.push(hfNote(p, "Carvedilol restarted at 3.125 mg twice daily; tolerating it.", { extra: `BP has recovered since ${w.p} admission.` }));
-  }],
-  ["on_first_degree_block", 5, ON, "meds", "On carvedilol; the note mentions first-degree AV block, which is not a reason to stop it.", (p) => {
-    bbOn(p, "carvedilol");
-    p.notes.push(hfNote(p, "Continue carvedilol. First-degree AV block on ECG, stable; no change."));
-  }],
 
-  ["reason_av_block_in_note", 5, REASON, "note", "Carvedilol was stopped for second-degree AV block on an ambulatory monitor; cardiology documented not to restart it. Only the notes say so.", (p) => avBlockNote(p)],
-  ["reason_av_block_coded", 3, REASON, "diagnoses", "Active Mobitz II second-degree AV block on the diagnosis list, no pacemaker.", (p) => {
+  ["reason_av_block_in_note", 6, REASON, "note", "Carvedilol stopped for second-degree AV block; cardiology says do not restart. Only the notes say so.", need(["notes"], "av_block"), (p) => avBlockNote(p)],
+  ["reason_av_block_coded", 3, REASON, "diagnoses", "Second-degree AV block on the diagnosis list, no pacemaker.", need(["diagnoses"], "av_block"), (p) => {
     p.conditions.push(cond("mobitz2", ago(int(60, 400))));
-    p.notes.push(hfNote(p, "No beta blocker given second-degree AV block; EP following."));
+    p.notes.push(hfNote(p, null));
   }],
-  ["reason_bradycardia_vitals", 3, REASON, "vitals", "Two consecutive heart rates under 50 in the vital signs.", (p) => {
+  ["reason_bradycardia_vitals", 3, REASON, "vitals", "Heart rate under 50 at the last two visits.", need(["vitals"], "bradycardia"), (p) => {
     p.vitals[0].hr = int(42, 48); p.vitals[1].hr = int(43, 49);
     p.notes.push(hfNote(p, null));
   }],
-  ["reason_bradycardia_in_note", 2, REASON, "note", "Bisoprolol was stopped for symptomatic bradycardia seen on home readings; only a telephone note records it.", (p) => {
+  ["reason_bradycardia_in_note", 2, REASON, "note", "Bisoprolol stopped for a slow heart rate; only a telephone note says so.", need(["notes"], "bradycardia"), (p) => {
     const w = she(p), stop = ago(int(90, 200));
-    p.meds.splice(1, 0, med("bisoprolol", "5 mg", "once daily", { status: "stopped", start: ago(int(400, 700)), end: stop }));
-    p.notes.push({ date: stop, type: "telephone", author: pick(AUTHORS.hf), title: "Telephone encounter", text: `${w.S} called: dizzy for a week, home pulse readings 38 to 45. Bisoprolol stopped for symptomatic bradycardia. Do not restart a beta blocker.` });
-    p.notes.push(hfNote(p, "Not on a beta blocker."));
-  }],
-  ["reason_hypotension_in_note", 4, REASON, "note", "Carvedilol was stopped for symptomatic low blood pressure at home; clinic readings are normal and only a note records it.", (p) => {
-    const w = she(p), stop = ago(int(80, 260));
-    p.meds.splice(1, 0, med("carvedilol", "6.25 mg", "twice daily", { status: "stopped", start: ago(int(300, 700)), end: stop }));
-    p.notes.push({ date: stop, type: "telephone", author: pick(AUTHORS.hf), title: "Telephone encounter", text: `${w.S} reports lightheadedness on standing and home BP readings in the low 80s systolic since carvedilol was increased. Carvedilol stopped for symptomatic hypotension; not a candidate to rechallenge.` });
-    p.notes.push(hfNote(p, "Not on a beta blocker."));
-  }],
-  ["reason_hypotension_coded", 2, REASON, "diagnoses", "Active hypotension on the diagnosis list, with systolic pressures in the 80s.", (p) => {
-    p.conditions.push(cond("hypotension", ago(int(60, 300))));
-    p.vitals[0].sbp = int(82, 88); p.vitals[0].dbp = int(48, 56); p.vitals[1].sbp = int(84, 89);
-    p.notes.push(hfNote(p, "Blood pressure remains low; no room for a beta blocker."));
-  }],
-  ["reason_asthma", 3, REASON, "diagnoses", "Active severe persistent asthma on the diagnosis list; bronchospasm on a beta blocker in the past.", (p) => {
-    p.conditions.push(cond("asthma_severe", ago(int(3000, 12000))));
-    p.meds.push(med("fluticasone_salmeterol", "250/50 mcg", "twice daily", { start: ago(int(400, 2000)), form: "inhalation powder" }), med("albuterol", "90 mcg", "every 4 hours as needed", { start: ago(int(400, 2000)), form: "metered-dose inhaler" }));
-    p.notes.push({ date: ago(int(300, 700)), type: "consult", author: pick(AUTHORS.pulm), title: "Pulmonology consult", text: `Severe persistent asthma, two exacerbations this year. Wheezing and bronchospasm after metoprolol was started in hospital. Avoid beta blockers.` });
+    stoppedBb(p, "bisoprolol", "5 mg", "once daily", stop);
+    p.notes.push({ date: stop, type: "telephone", author: pick(AUTHORS.hf), title: "Telephone encounter", text: `${w.S} called: dizzy, home pulse 38 to 45. Bisoprolol stopped for symptomatic bradycardia. Do not restart a beta blocker.` });
     p.notes.push(hfNote(p, null));
   }],
-  ["reason_intolerance_allergy_list", 3, REASON, "allergies", "A beta blocker intolerance is recorded in the allergy list only.", (p) => {
+  ["reason_hypotension_in_note", 4, REASON, "note", "Carvedilol stopped for low blood pressure at home; only a telephone note says so.", need(["notes"], "hypotension"), (p) => {
+    const w = she(p), stop = ago(int(80, 260));
+    stoppedBb(p, "carvedilol", "6.25 mg", "twice daily", stop);
+    p.notes.push({ date: stop, type: "telephone", author: pick(AUTHORS.hf), title: "Telephone encounter", text: `${w.S} reports lightheadedness and home BP in the low 80s systolic. Carvedilol stopped for symptomatic hypotension. Do not restart.` });
+    p.notes.push(hfNote(p, null));
+  }],
+  ["reason_hypotension_coded", 2, REASON, "diagnoses", "Hypotension on the diagnosis list, systolic pressures in the 80s.", need(["diagnoses"], "hypotension"), (p) => {
+    p.conditions.push(cond("hypotension", ago(int(60, 300))));
+    p.vitals[0].sbp = int(82, 88); p.vitals[0].dbp = int(48, 56); p.vitals[1].sbp = int(84, 89);
+    p.notes.push(hfNote(p, null));
+  }],
+  ["reason_asthma", 3, REASON, "diagnoses", "Severe persistent asthma on the diagnosis list.", need(["diagnoses"], "asthma"), (p) => {
+    p.conditions.push(cond("asthma_severe", ago(int(3000, 12000))));
+    p.meds.push(med("fluticasone_salmeterol", "250/50 mcg", "twice daily", { start: ago(int(400, 2000)), form: "inhalation powder" }), med("albuterol", "90 mcg", "every 4 hours as needed", { start: ago(int(400, 2000)), form: "metered-dose inhaler" }));
+    p.notes.push(hfNote(p, null));
+  }],
+  ["reason_intolerance_allergy_list", 3, REASON, "allergies", "Beta-blocker intolerance on the allergy list.", need(["allergies"], "allergy"), (p) => {
     p.allergies.push({ substance: "beta-adrenergic blocking agent", snomed: "373254001", type: "intolerance", reaction: pick(["severe fatigue and bradycardia", "bronchospasm", "dizziness and syncope"]), date: ago(int(300, 1500)) });
     p.notes.push(hfNote(p, null));
   }],
-  ["reason_declined", 5, REASON, "note", "The patient declined a beta blocker after discussion.", (p) => {
+  ["reason_declined", 4, REASON, "note", "The patient declined a beta blocker.", need(["notes"], "declined"), (p) => {
     const w = she(p);
-    p.notes.push(hfNote(p, `Discussed starting a beta blocker and its benefits; ${w.s} declines and does not want to add another medication. Will revisit.`));
+    p.notes.push(hfNote(p, `Offered a beta blocker; ${w.s} declines.`));
   }],
 
-  ["gap_no_reason", 5, GAP, "meds", "Not on a beta blocker, and nothing in the chart says why.", (p) => { p.notes.push(hfNote(p, null)); }],
-  ["gap_consider_starting", 3, GAP, "note", "Not on one; \"consider starting\" is a plan, not a reason.", (p) => { p.notes.push(hfNote(p, `Not on a beta blocker. Consider starting ${pick(["carvedilol", "metoprolol succinate", "bisoprolol"])} at the next visit.`)); }],
-  ["gap_heart_block_paced", 3, GAP, "diagnoses", "The beta blocker was stopped for complete heart block, but a pacemaker has since been placed, so the reason no longer applies.", (p) => {
+  ["gap_no_reason", 4, GAP, "meds", "Not on a beta blocker, and nothing in the chart says why.", need([]), (p) => { p.notes.push(hfNote(p, null)); }],
+  ["gap_consider_starting", 3, GAP, "note", "Not on one; \"consider starting\" is a plan, not a reason.", need([]), (p) => { p.notes.push(hfNote(p, `Consider starting ${pick(["carvedilol", "metoprolol succinate", "bisoprolol"])} at the next visit.`)); }],
+  ["gap_heart_block_paced", 3, GAP, "diagnoses", "Carvedilol was stopped for complete heart block, but a pacemaker has since been placed, so the reason no longer applies.", need(["diagnoses"], "av_block"), (p) => {
     const blockDate = ago(int(500, 800)), pmDate = day(blockDate, int(5, 20));
-    p.meds.splice(1, 0, med("carvedilol", "12.5 mg", "twice daily", { status: "stopped", start: ago(int(900, 1400)), end: blockDate }));
+    stoppedBb(p, "carvedilol", "12.5 mg", "twice daily", blockDate);
     p.conditions.push(cond("chb", blockDate, { status: "resolved" }), cond("pacer", pmDate));
-    p.notes.push({ date: blockDate, type: "consult", author: pick(AUTHORS.ep), title: "Electrophysiology consult", text: `Complete heart block. Carvedilol held. Dual-chamber pacemaker planned.` });
-    p.notes.push({ date: pmDate, type: "procedure", author: pick(AUTHORS.ep), title: "Pacemaker implant", text: `Dual-chamber pacemaker implanted without complication. Beta blockers can be restarted from a conduction standpoint.` });
+    p.notes.push({ date: pmDate, type: "procedure", author: pick(AUTHORS.ep), title: "Pacemaker implant", text: `Complete heart block; carvedilol held. Dual-chamber pacemaker implanted. A beta blocker can be restarted.` });
     p.notes.push(hfNote(p, null, { extra: "Pacemaker check normal." }));
   }],
-  ["gap_metoprolol_tartrate", 3, GAP, "meds", "On metoprolol tartrate, which is not an evidence-based beta blocker for HFrEF.", (p) => { bbOn(p, "metoprolol_tartrate"); p.notes.push(hfNote(p, "Continue metoprolol.")); }],
-  ["gap_atenolol", 2, GAP, "meds", "On atenolol, which is not an evidence-based beta blocker for HFrEF.", (p) => { bbOn(p, "atenolol"); p.notes.push(hfNote(p, "Continue atenolol.")); }],
-  ["gap_lapsed", 2, GAP, "meds", "Carvedilol lapsed when the patient ran out; that is not a medical reason.", (p) => {
-    const w = she(p), stop = ago(int(60, 120));
-    p.meds.splice(1, 0, med("carvedilol", "12.5 mg", "twice daily", { status: "stopped", start: ago(int(500, 900)), end: stop }));
-    p.notes.push(hfNote(p, `Ran out of carvedilol ${int(2, 4)} months ago and has not refilled. ${w.S} is willing to restart.`));
+  ["gap_metoprolol_tartrate", 3, GAP, "meds", "On metoprolol tartrate, which doesn't count for the measure.", need(["medications"], "agents"), (p) => { bbOn(p, "metoprolol_tartrate"); p.notes.push(hfNote(p, "Continue metoprolol.")); }],
+  ["gap_atenolol", 2, GAP, "meds", "On atenolol, which doesn't count for the measure.", need(["medications"], "agents"), (p) => { bbOn(p, "atenolol"); p.notes.push(hfNote(p, "Continue atenolol.")); }],
+  ["gap_lapsed", 2, GAP, "note", "Carvedilol lapsed when the patient ran out; that is not a medical reason.", need([]), (p) => {
+    const w = she(p);
+    stoppedBb(p, "carvedilol", "12.5 mg", "twice daily", ago(int(60, 120)));
+    p.notes.push(hfNote(p, `Ran out of carvedilol and has not refilled; ${w.s} is willing to restart.`));
   }],
-  ["gap_childhood_asthma", 2, GAP, "diagnoses", "Asthma on the diagnosis list is childhood asthma, resolved; it is not a current reason.", (p) => {
+  ["gap_childhood_asthma", 3, GAP, "diagnoses", "The asthma on the diagnosis list is childhood asthma, resolved: not a current reason.", need(["diagnoses"], "asthma"), (p) => {
     p.conditions.push(cond("asthma_child", ago(int(18000, 24000)), { status: "resolved" }));
     p.notes.push(hfNote(p, null));
   }],
 ];
 
-// The first patient: Rosa Delgado from the talk. Carvedilol was stopped in May for Mobitz II heart block found on a
-// monitor she wore for dizzy spells at home; her clinic vital signs and problem list look normal. Only the notes say why.
+// The first patient: Rosa Delgado. Carvedilol was stopped in May for Mobitz II heart block found on a monitor she wore
+// for dizzy spells at home; her clinic vital signs and problem list look normal. Only the notes say why.
 function avBlockNote(p, rosa = false) {
   const w = she(p);
   const stop = rosa ? "2026-05-14" : ago(int(120, 260));
   const ep = day(stop, rosa ? 47 : int(30, 60));
-  p.meds.splice(1, 0, med("carvedilol", "12.5 mg", "twice daily", { status: "stopped", start: day(stop, -int(200, 500)), end: stop }));
+  stoppedBb(p, "carvedilol", "12.5 mg", "twice daily", stop);
   p.notes.push({ date: stop, type: "telephone", author: rosa ? "Dr. A. Patel, Cardiology" : pick(AUTHORS.hf), title: "Telephone encounter",
-    text: `${w.S} called with three episodes of lightheadedness at home this week; ${w.p} watch flagged pauses. 14-day event monitor shows intermittent Mobitz II second-degree AV block with 2:1 conduction while on carvedilol 12.5 mg twice daily. Carvedilol stopped today. Do not restart a beta blocker. Urgent electrophysiology referral.` });
+    text: `Dizzy spells at home. Event monitor: Mobitz II second-degree AV block on carvedilol 12.5 mg twice daily. Carvedilol stopped today. Do not restart a beta blocker.` });
   p.notes.push({ date: ep, type: "consult", author: pick(AUTHORS.ep), title: "Electrophysiology consult",
-    text: `Mobitz II block on carvedilol. Off it for ${Math.round((Date.parse(ep) - Date.parse(stop)) / 864e5)} days, symptoms resolved and repeat monitor shows only first-degree AV block. No pacemaker at present. Avoid beta blockers and other AV nodal blocking drugs; revisit if a device is ever implanted.` });
-  if (rosa) p.notes.push({ date: p.visits[0], type: "progress", author: "Dr. L. Rivera, Internal Medicine", title: "Primary care visit",
-    text: `Seen for diabetes and blood pressure. A1c 7.1%. BP ${p.vitals[0].sbp}/${p.vitals[0].dbp}, HR ${p.vitals[0].hr}. Heart failure followed by cardiology; not on a beta blocker, will leave that to them. Flu vaccine given.` });
-  else p.notes.push(hfNote(p, "Not on a beta blocker."));
+    text: `Mobitz II block on carvedilol; resolved after stopping it. No pacemaker. Avoid beta blockers.` });
+  if (!rosa) p.notes.push(hfNote(p, null));
 }
 
 // ---- what an EHR also holds, and the answer doesn't need ----
@@ -271,9 +259,6 @@ function avBlockNote(p, rosa = false) {
 // payer types from the Source of Payment Typology (PHDSC)
 const PAYERS = [["11", "Medicare managed care", "Aetna Medicare", "Medicare Advantage PPO"], ["1", "Medicare", "Medicare Part A and B", "Original Medicare"],
   ["5", "Private health insurance", "Anthem Blue Cross", "Anthem PPO"], ["2", "Medicaid", "HUSKY Health", "HUSKY D"]];
-const RELATIVES = [["FTH", "father"], ["MTH", "mother"], ["BRO", "brother"], ["SIS", "sister"]];
-const FAMILY_DX = [["22298006", "Myocardial infarction"], ["44054006", "Type 2 diabetes mellitus"], ["254837009", "Breast cancer"], ["230690007", "Stroke"], ["26929004", "Alzheimer's disease"], ["38341003", "Hypertension"]];
-const SMOKING = [["266919005", "Never smoked tobacco"], ["8517006", "Ex-smoker"], ["8517006", "Ex-smoker"], ["77176002", "Smoker"]];
 
 function extras(p) {
   if (!p.coverage) {
@@ -282,14 +267,6 @@ function extras(p) {
   }
   p.immunizations ||= [{ cvx: "141", text: "Influenza, seasonal, injectable", date: ago(int(10, 60)) }, { cvx: "300", text: "COVID-19, mRNA, 2024-2025 formula", date: ago(int(200, 400)) },
     ...(chance(0.7) ? [{ cvx: "33", text: "Pneumococcal polysaccharide PPV23", date: ago(int(800, 3000)) }] : [])];
-  p.family ||= shuffle([...RELATIVES]).slice(0, int(1, 3)).map(([rel, relText]) => { const [snomed, text] = pick(FAMILY_DX); return { rel, relText, snomed, text, age: int(48, 82) }; });
-  if (!p.social) {
-    const [snomed, value] = pick(SMOKING);
-    p.social = [{ date: p.visits[0], loinc: "72166-2", name: "Tobacco smoking status", snomed, value },
-      { date: p.visits[0], loinc: "74013-4", name: "Alcoholic drinks per day", value: pick(["none", "none", "1", "2", "less than 1"]) },
-      { date: p.visits[0], loinc: "71802-3", name: "Housing status", value: pick(["Lives with spouse", "Lives alone", "Lives with family", "Lives alone", "Assisted living"]) }];
-  }
-  p.appointments ||= [{ date: day(TODAY, int(20, 90)), time: pick(["09:00", "10:30", "13:15", "15:45"]), service: "Heart failure clinic follow-up", with: pick(AUTHORS.hf) }];
 }
 
 function rosa() {
@@ -297,6 +274,7 @@ function rosa() {
   const p = basePatient(0);
   Object.assign(p, { name: "Rosa Delgado", sex: "female", age: 71, dob: "1955-03-08", mrn: "40118342", address: "214 Orange St, New Haven, CT 06511", phone: "203-555-0174", ef: 30, hfSince: "2023-02-10" });
   p.visits = ["2026-10-20", "2026-07-22", "2026-04-30"];
+  p.next = { date: "2026-12-08", with: "Dr. A. Patel, Cardiology" };
   p.conditions = [cond("hfref", "2023-02-10"), cond("htn", "2009-06-01"), cond("t2dm", "2014-09-15"), cond("ckd3a", "2021-11-03")];
   p.meds = [med("sacubitril_valsartan", "49/51 mg", "twice daily", { start: "2023-08-14" }), med("spironolactone", "25 mg", "once daily", { start: "2023-11-02" }),
     med("dapagliflozin", "10 mg", "once daily", { start: "2024-03-20" }), med("furosemide", "40 mg", "once daily", { start: "2023-02-12" }),
@@ -305,17 +283,13 @@ function rosa() {
   p.labs = [{ date: "2026-10-20", loinc: "2823-3", name: "Potassium", value: "4.6", unit: "mmol/L" }, { date: "2026-10-20", loinc: "2160-0", name: "Creatinine", value: "1.24", unit: "mg/dL" },
     { date: "2026-10-20", loinc: "33762-6", name: "NT-proBNP", value: "1180", unit: "pg/mL" }];
   p.allergies = [];
-  p.notes = [{ date: "2026-03-18", type: "progress", author: "Dr. A. Patel, Cardiology", title: "Heart failure clinic follow-up",
-    text: "71-year-old woman with HFrEF (LVEF 30%), NYHA class II. Feels well; no orthopnea or leg swelling.\nExam: BP 124/76, HR 78. Euvolemic.\nAssessment and plan: Continue sacubitril/valsartan, spironolactone and dapagliflozin. Carvedilol increased to 12.5 mg twice daily. Labs in two weeks." }];
+  p.notes = [{ date: "2026-10-20", type: "progress", author: "Dr. L. Rivera, Internal Medicine", title: "Primary care visit",
+    text: `Seen for diabetes and blood pressure. A1c 7.1%. BP 122/74, HR 72. Heart failure is managed by cardiology. Next appointment: heart failure clinic, ${longDate(p.next.date)}, with Dr. A. Patel.` }];
   avBlockNote(p, true);
   p.coverage = { code: "11", type: "Medicare managed care", payer: "Aetna Medicare", plan: "Medicare Advantage PPO", member: "A482913376", since: "2021-01-01" };
   p.immunizations = [{ cvx: "141", text: "Influenza, seasonal, injectable", date: "2026-10-20" }, { cvx: "300", text: "COVID-19, mRNA, 2024-2025 formula", date: "2025-10-02" }];
-  p.family = [{ rel: "FTH", relText: "father", snomed: "22298006", text: "Myocardial infarction", age: 62 }, { rel: "SIS", relText: "sister", snomed: "44054006", text: "Type 2 diabetes mellitus", age: 50 }];
-  p.social = [{ date: "2026-10-20", loinc: "72166-2", name: "Tobacco smoking status", snomed: "8517006", value: "Ex-smoker" },
-    { date: "2026-10-20", loinc: "74013-4", name: "Alcoholic drinks per day", value: "none" }, { date: "2026-10-20", loinc: "71802-3", name: "Housing status", value: "Lives with daughter" }];
-  p.appointments = [{ date: "2026-12-08", time: "10:30", service: "Heart failure clinic follow-up", with: "Dr. A. Patel, Cardiology" }];
-  p.notes.push({ date: "2026-07-22", type: "nursing", author: "K. Murphy, RN", title: "Nurse visit: weight and vitals", text: "Weight 74 kg, stable. Reports taking her medications as prescribed. Reviewed low-sodium diet and daily weights." });
-  p.gold = { status: REASON, scenario: "reason_av_block_in_note", where: "note", why: "Carvedilol was stopped in May for Mobitz II heart block found on a home event monitor; cardiology and EP say not to restart a beta blocker. Her vital signs and problem list look normal: only the notes say why." };
+  p.gold = { status: REASON, scenario: "reason_av_block_in_note", where: "note", needs: need(["notes"], "av_block"),
+    why: "Carvedilol was stopped in May for Mobitz II heart block; cardiology says do not restart a beta blocker. Only the notes say so." };
   return p;
 }
 
@@ -323,9 +297,9 @@ function build() {
   const out = [rosa()];
   rng = mulberry32(2026);
   const plan = [];
-  for (const [scenario, count, status, where, why, make] of SCENARIOS) {
+  for (const [scenario, count, status, where, why, needs, make] of SCENARIOS) {
     const n = scenario === "reason_av_block_in_note" ? count - 1 : count;      // Rosa is one of them
-    for (let k = 0; k < n; k++) plan.push({ scenario, status, where, why, make });
+    for (let k = 0; k < n; k++) plan.push({ scenario, status, where, why, needs, make });
   }
   shuffle(plan);
   const used = new Set(["Rosa Delgado"]);
@@ -334,15 +308,15 @@ function build() {
     do { p = basePatient(k + 1); } while (used.has(p.name));
     used.add(p.name);
     s.make(p);
-    p.notes.push(...fillerNotes(p));
-    p.gold = { status: s.status, scenario: s.scenario, where: s.where, why: s.why };
+    p.notes.push(nurseNote(p));
+    p.gold = { status: s.status, scenario: s.scenario, where: s.where, why: s.why, needs: s.needs };
     out.push(p);
   });
   rng = mulberry32(7);
   for (const p of out) {
     extras(p);
-    // the three questions: is a beta blocker given (any, even one that doesn't count), why or why not, is it a gap
-    p.gold.given = p.meds.some((m) => m.status === "active" && BETA_BLOCKERS.includes(m.key));
+    // the two answers: on a beta blocker that counts, and a care gap
+    p.gold.given = p.meds.some((m) => m.status === "active" && COUNTS.includes(m.key));
     p.gold.gap = p.gold.status === GAP;
     p.notes.sort((a, b) => b.date.localeCompare(a.date));
     p.notes.forEach((n, k) => (n.id = `N${k + 1}`));

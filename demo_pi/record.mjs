@@ -14,30 +14,30 @@ import { ACT_EXAMPLE, CRITERIA, EXAMPLES, criteriaPrompt, normalize } from "./ag
 import { MODEL } from "./agent/model.mjs";
 import { RECORDED, REPLAY, fingerprint } from "./replay.mjs";
 
-const TEST = { sources: ["medications", "diagnoses", "vitals", "notes", "allergies"], tools: ["read_records", "search_notes", "read_note"] };
+const READ = ["read_records", "search_notes", "read_note"];
+const TEST = { sources: ["medications", "diagnoses", "vitals", "notes", "allergies"], tools: READ };     // what the answer needs, and no more
 const CHECKS = ["structured", "check_quote", "confidence"];
-const RISKY = { sources: [...TEST.sources, "demographics"], tools: [...TEST.tools, "web_search", "place_order", "message_patient"] };
-const CMS = CRITERIA.filter((c) => c.cms).map((c) => c.id), ALL = CRITERIA.map((c) => c.id);
-const [GIVEN, WHY, GAP] = EXAMPLES.map((x) => x.text);
+const RISKY = { sources: [...TEST.sources, "demographics"], tools: [...READ, "web_search", "place_order", "message_patient"] };
+const ALL = CRITERIA.map((c) => c.id);
+const [GIVEN, GAP, NEXT] = EXAMPLES.map((x) => x.text);
 const withCriteria = (prompt, ids) => [prompt, criteriaPrompt(ids)].join("\n\n");     // as the page's "Use for the test"
 
-const STEPS = [
-  ["nothing", "nothing", { sources: [], tools: [] }],
-  ["meds", "medications", { sources: ["medications"], tools: ["read_records"] }],
-  ["notes", "medications and notes", { sources: ["medications", "notes"], tools: ["read_records", "search_notes", "read_note"] }],
-  ["test", "the test build", TEST],
-];
+const rosa = (id, label, build, prompt) => ({ id: `rosa-${id}`, kind: "rosa", label: `Rosa · ${label}`, build: { ...build, prompt } });
+const cohort = (id, label, build, prompt, criteria = []) => ({ id: `cohort-${id}`, kind: "cohort", label: `100 patients · ${label}`, build: { ...build, prompt }, criteria });
 export const PLAN = [
-  ...STEPS.flatMap(([id, what, b]) => EXAMPLES.map((x, i) => ({ id: `rosa-${id}-${["given", "why", "gap"][i]}`, kind: "rosa", label: `Rosa · ${what} · ${x.label}`, build: { ...b, prompt: x.text } }))),
-  { id: "rosa-checks-gap", kind: "rosa", label: "Rosa · the test build, structured answer and checks · Is it a gap?", build: { ...TEST, tools: [...TEST.tools, ...CHECKS], prompt: GAP } },
-  { id: "rosa-risky-gap", kind: "rosa", label: "Rosa · the test build, demographics and the risky tools · Is it a gap?", build: { ...RISKY, prompt: GAP } },
-  { id: "cohort-given", kind: "cohort", label: "100 patients · Is it given?", build: { ...TEST, prompt: GIVEN } },
-  { id: "cohort-why", kind: "cohort", label: "100 patients · Why or why not?", build: { ...TEST, prompt: WHY } },
-  { id: "cohort-gap", kind: "cohort", label: "100 patients · Is it a gap?", build: { ...TEST, prompt: GAP } },
-  { id: "cohort-gap-cms", kind: "cohort", label: "100 patients · Is it a gap? + every CMS144 criterion", build: { ...TEST, prompt: withCriteria(GAP, CMS) }, criteria: CMS },
-  { id: "cohort-gap-all", kind: "cohort", label: "100 patients · Is it a gap? + CMS144 and the three distractors", build: { ...TEST, prompt: withCriteria(GAP, ALL) }, criteria: ALL },
-  { id: "cohort-gap-cms-checks", kind: "cohort", label: "100 patients · structured answer and checks · Is it a gap? + every CMS144 criterion", build: { ...TEST, tools: [...TEST.tools, ...CHECKS], prompt: withCriteria(GAP, CMS) }, criteria: CMS },
-  { id: "cohort-fix", kind: "cohort", label: "100 patients · demographics and the risky tools · Fix it", build: { ...RISKY, prompt: ACT_EXAMPLE.text } },
+  rosa("nothing-given", "nothing switched on · On a beta blocker?", { sources: [], tools: [] }, GIVEN),
+  rosa("meds-given", "medications · On a beta blocker?", { sources: ["medications"], tools: ["read_records"] }, GIVEN),
+  rosa("meds-gap", "medications · and is it a care gap?", { sources: ["medications"], tools: ["read_records"] }, GAP),
+  rosa("notes-gap", "medications and notes · and is it a care gap?", { sources: ["medications", "notes"], tools: READ }, GAP),
+  rosa("notes-next", "medications and notes · next appointment?", { sources: ["medications", "notes"], tools: READ }, NEXT),
+  rosa("test-gap", "the test build · and is it a care gap?", TEST, GAP),
+  rosa("checks-gap", "the test build, structured answer and checks · and is it a care gap?", { ...TEST, tools: [...READ, ...CHECKS] }, GAP),
+  rosa("risky-gap", "the test build, demographics and the risky tools · and is it a care gap?", RISKY, GAP),
+  cohort("given", "On a beta blocker?", TEST, GIVEN),
+  cohort("gap", "and is it a care gap?", TEST, GAP),
+  cohort("gap-criteria", "and is it a care gap? + every criterion", TEST, withCriteria(GAP, ALL), ALL),
+  cohort("gap-criteria-checks", "structured answer and checks · and is it a care gap? + every criterion", { ...TEST, tools: [...READ, ...CHECKS] }, withCriteria(GAP, ALL), ALL),
+  cohort("fix", "demographics and the risky tools · Fix it", RISKY, ACT_EXAMPLE.text),
 ];
 
 // one POST to the server, its server-sent events with the time each arrived (ms after the request)
@@ -58,6 +58,8 @@ async function stream(base, path, body) {
   }
   return { messages: out, seconds: Math.round((Date.now() - t0) / 100) / 10 };
 }
+
+const row0tokens = (messages) => { const r = messages.find(([, m]) => m.kind === "result")[1]; return r.usage.input + r.usage.output; };
 
 // a row as it is kept: no score (the replay scores it again) and no cache flag; when it started and finished in the run
 const keep = ({ score, cached, ...row }, start, done) => ({ start: Math.max(0, Math.round(start)), done, ...row });
@@ -83,7 +85,7 @@ async function record(base, plan, order) {
   writeFileSync(join(RECORDED, `${plan.id}.json`), JSON.stringify(head, null, 2).replace(/\n}$/, `,\n  "rows": [\n${rows.map((r) => `    ${JSON.stringify(r)}`).join(",\n")}\n  ]\n}\n`));
   const summary = messages.find(([, m]) => m.kind === "summary")?.[1].summary;
   const result = plan.kind === "rosa" ? messages.find(([, m]) => m.kind === "result")[1].score : null;
-  const tally = summary ? `${summary.right}/${summary.n} · given ${summary.questions.given.right} · why ${summary.questions.why.right} · gap ${summary.questions.gap.right}` : `${Object.values(result.questions).filter((q) => q.right === true).length}/3`;
+  const tally = summary ? `${summary.right}/${summary.n} · on a beta blocker ${summary.questions.given.right} · care gap ${summary.questions.gap.right} · ${summary.tokensPerPatient} tokens each` : `${Object.values(result.questions).filter((q) => q.right === true).length}/2 · ${row0tokens(messages)} tokens`;
   console.log(`${plan.id.padEnd(24)} ${tally.padEnd(42)} ${seconds} s${failed ? ` · ${failed} failed` : ""}`);
 }
 

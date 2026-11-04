@@ -1,7 +1,7 @@
 // A stand-in OpenAI-compatible server for testing the plumbing without a GPU: a few regular expressions, not a model.
 // It calls whatever tools pi offers it in a fixed order (web search, records, note search, read the best hit, check
 // its quote, order and message if it thinks there's a gap), then answers: with submit_answer if offered, else in
-// prose. It also answers the judge (agent/grade.mjs). Never use it on stage.
+// prose. It also answers the reader of free-text answers (agent/grade.mjs). Never use it on stage.
 //
 //   node test/fake-llm.mjs [port]      then DEMO_BASE_URL=http://127.0.0.1:<port>/v1 npm start
 
@@ -29,9 +29,10 @@ function decide(messages, tools) {
   if (quote && has("check_quote")) return ["check_quote", { quote, source: hit || "records" }];
   if (status === "gap" && has("place_order")) return ["place_order", { medication: "carvedilol 3.125 mg twice daily", reason: "HFrEF, not on a beta blocker" }];
   if (status === "gap" && has("message_patient")) return ["message_patient", { message: "We have started you on carvedilol." }];
-  const args = { given: on ? "yes" : "no", medication: on ? on[1] : "none", why: `Stand-in decision from: ${quote || "nothing seen"}`, gap: status === "gap" ? "yes" : "no", quote, source: hit || "records", confidence: quote ? 85 : 40 };
+  const said = status === "on_treatment" ? `Yes, on ${on[1]}; not a care gap.` : status === "gap" ? "No beta blocker and no documented reason: a care gap." : `No. Not a care gap: ${quote}`;
+  const args = { answer: said, on_beta_blocker: on ? "yes" : "no", care_gap: status === "gap" ? "yes" : "no", quote, source: hit || "records", confidence: quote ? 85 : 40 };
   if (tools.includes("submit_answer")) return ["submit_answer", args];
-  return [null, status === "on_treatment" ? "Yes, on a beta blocker." : status === "gap" ? "No." : `No. Reason: ${quote}`];
+  return [null, said];
 }
 
 export const requests = [];      // every chat request, for test/e2e.mjs to inspect
@@ -49,13 +50,11 @@ const server = createServer((req, res) => {
     requests.push(r);
     keys.push(req.headers.authorization);
     const messages = r.messages || [];
-    if (/^An agent reviewed/.test(contentOf(messages[0] || {}))) {      // the prose grader, not streamed
+    if (/^An agent reviewed/.test(contentOf(messages[0] || {}))) {      // the reader of free-text answers, not streamed
       const t = contentOf(messages[1] || {});
-      const why = (t.match(/Reason: (.*)|"why":"([^"]*)"/) || []).slice(1).find(Boolean) || null;
-      const gap = (t.match(/"gap":"(yes|no)"/) || [])[1];
-      const verdict = { given: /^yes|"given":"yes"/i.test(t) ? "on" : /^no|"given":"no"/i.test(t) ? "not_on" : null, why, why_matches: why ? true : null, gap: gap ? { yes: "gap", no: "no_gap" }[gap] : null };
+      const read = { on_beta_blocker: /^yes/i.test(t) ? "yes" : /^no/i.test(t) ? "no" : null, care_gap: /not a care gap/i.test(t) ? "no" : /a care gap/i.test(t) ? "yes" : null };
       res.writeHead(200, { "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: JSON.stringify(verdict) } }] }));
+      return res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: JSON.stringify(read) } }], usage: { prompt_tokens: 200, completion_tokens: 16 } }));
     }
     const tools = (r.tools || []).map((t) => t.function?.name);
     const [name, args] = decide(messages, tools);

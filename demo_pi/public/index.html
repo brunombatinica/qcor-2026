@@ -3,15 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Build an agent · QCOR 2026</title>
+  <title>QCOR 2026 agent demo</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
-    <b class="brand">Build an agent</b>
+    <div class="brand"><img src="/shared/logos/cards-lab-yale-white.png" alt="CarDS Lab, Yale School of Medicine" class="lablogo"><b>QCOR 2026 agent demo</b></div>
     <nav id="steps"></nav>
     <div class="tools">
       <span id="model" class="model">connecting…</span>
+      <span id="tokens" class="tokens" title="Tokens this page has used: every model call, and the reads of free-text answers"></span>
       <form id="unlock" class="unlock" hidden onsubmit="return false"><input id="unlockCode" placeholder="Workshop code" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Workshop code"><button>Unlock</button><span id="unlockMsg" class="small"></span></form>
       <button id="hoodBtn" class="hoodBtn" title="Under the hood (U)">&lt;/&gt;</button>
     </div>
@@ -19,39 +20,55 @@
 
   <div class="shell">
     <main>
-      <!-- 1 -->
-      <section class="view" data-view="brief" data-title="Brief">
-        <div class="brief">
-          <img src="/shared/rosa.svg" alt="">
-          <div>
-            <div class="pname" id="pname">Rosa Delgado, 71</div>
-            <div class="muted" id="pdx">Heart failure, ejection fraction 30%</div>
+      <!-- 1: the task -->
+      <section class="view" data-view="brief" data-title="Task" data-icon="bullseye">
+        <h1 class="lead">Build an agent for a quality measure</h1>
+        <div class="briefGrid">
+          <div class="panel">
+            <div class="panelHead"><i class="ic" style="--i:url(icons/database.svg)"></i>The data</div>
+            <p>Patient data lives in a data lake or the EHR. An agent connects to it through an API, like any other app.</p>
+            <div class="dots" id="dots"></div>
+            <p class="muted small">100 synthetic patients with heart failure (reduced ejection fraction)</p>
           </div>
-          <h1>Is she on a beta blocker?<br><span class="muted">If not, is there a good reason?</span></h1>
-          <div class="outcomes"><span class="pill on">On a beta blocker</span><span class="pill gap">Care gap</span><span class="pill reason">Documented reason</span></div>
-          <p class="muted small">Build an agent to answer this for her, then for 100 patients.</p>
+          <div class="panel">
+            <div class="panelHead"><i class="ic" style="--i:url(icons/bullseye.svg)"></i>The task</div>
+            <p>For each patient, the two answers the quality measure needs:</p>
+            <div class="qs">
+              <div class="q"><b>1</b>Is the patient on a beta blocker?</div>
+              <div class="q"><b>2</b>If not, is there a documented reason, or is it a care gap?</div>
+            </div>
+            <p class="muted small">CMS144: heart failure, beta-blocker therapy</p>
+          </div>
+        </div>
+        <div class="plan">
+          <div class="planStep"><i class="ic" style="--i:url(icons/screwdriver-wrench.svg)"></i><div><b>Build the agent</b><span>what it sees, what it does, what you ask</span></div></div>
+          <span class="arrow"></span>
+          <div class="planStep"><img src="/shared/rosa.svg" alt=""><div><b>Try it on Rosa</b><span id="rosaLine">Rosa Delgado, 71</span></div></div>
+          <span class="arrow"></span>
+          <div class="planStep"><i class="ic" style="--i:url(icons/users.svg)"></i><div><b>Run it on all 100</b><span>and see what it gets right</span></div></div>
         </div>
       </section>
 
       <!-- 2 -->
-      <section class="view" data-view="data" data-title="Data">
-        <div class="viewHead"><h2>What can it see?</h2><span class="meter" id="irbMeter"></span></div>
+      <section class="view" data-view="data" data-title="Data" data-icon="database">
+        <div class="viewHead"><h2>Pick what the agent can see</h2><span class="meter" id="irbMeter"></span></div>
+        <div class="fhir"><img src="/shared/logos/hl7-fhir.png" alt="HL7 FHIR"><span>The agent reads the chart through the EHR's <b>FHIR API</b>. Each card you pick is a permission on its access token.</span></div>
         <div class="cards" id="dataCards"></div>
       </section>
 
       <!-- 3 -->
-      <section class="view" data-view="tools" data-title="Tools">
-        <div class="viewHead"><h2>What can it do?</h2><span class="meter" id="itMeter"></span></div>
+      <section class="view" data-view="tools" data-title="Tools" data-icon="screwdriver-wrench">
+        <div class="viewHead"><h2>Pick what the agent can do</h2><span class="meter" id="itMeter"></span></div>
         <div class="cards" id="toolCards"></div>
       </section>
 
       <!-- 4 -->
-      <section class="view" data-view="prompt" data-title="Prompt">
+      <section class="view" data-view="prompt" data-title="Prompt" data-icon="file-pen">
         <div class="split runSplit">
           <div class="col">
-            <div class="agentSum" id="agentSum"></div>
-            <h2>What should it do?</h2>
-            <textarea id="prompt" rows="4" placeholder="Write the agent's instructions…"></textarea>
+            <div class="who"><img src="/shared/rosa.svg" alt=""><div><b id="pname">Rosa Delgado, 71</b><span id="pdx">Heart failure, ejection fraction 30%</span></div></div>
+            <h2>How would you prompt it?</h2>
+            <textarea id="prompt" rows="3" placeholder="Ask the agent something about Rosa…"></textarea>
             <div class="examples" id="examples"></div>
             <div class="row"><button id="runRosa" class="primary">Run on Rosa</button><select id="recRosa" class="rec" hidden></select></div>
             <div id="answer"></div>
@@ -61,38 +78,36 @@
       </section>
 
       <!-- 5 -->
-      <section class="view" data-view="criteria" data-title="Criteria">
+      <section class="view" data-view="criteria" data-title="Criteria" data-icon="list-check">
         <div class="split">
           <div class="col">
-            <h2>What counts as a good reason?</h2>
-            <p class="muted small">Clinicians decide this, not the agent. It will follow whatever you tick.</p>
+            <h2>What counts?</h2>
             <div id="criteria"></div>
-            <div class="row"><button id="cmsBtn" class="ghost">Compare with CMS144</button></div>
+            <div class="row"><button id="tickAll" class="ghost">Tick all</button><button id="useCriteria" class="primary">Use for the test →</button></div>
           </div>
           <div class="col">
             <div class="label">Added to the prompt</div>
             <pre class="code" id="criteriaText"></pre>
-            <div class="row"><button id="useCriteria" class="primary">Use for the test →</button></div>
           </div>
         </div>
       </section>
 
       <!-- 6 -->
-      <section class="view" data-view="test" data-title="Test">
+      <section class="view" data-view="test" data-title="Test" data-icon="users">
         <div class="split runSplit">
           <div class="col">
-            <div class="agentSum" id="agentSumTest"></div>
-            <h2>Test on 100 patients</h2>
-            <textarea id="testPrompt" rows="8" placeholder="The prompt for every patient…"></textarea>
+            <h2>Run it on all 100 patients</h2>
+            <textarea id="testPrompt" rows="9" placeholder="The prompt for every patient…"></textarea>
             <div class="examples"><button class="chipBtn" id="actExample"></button></div>
-            <div class="row"><button id="runCohort" class="primary">Run</button><label class="muted small" id="freshLabel"><input type="checkbox" id="fresh"> ignore cache</label><select id="recCohort" class="rec" hidden></select></div>
+            <div class="row"><button id="runCohort" class="primary">Run on 100 patients</button><label class="muted small" id="freshLabel"><input type="checkbox" id="fresh"> ignore cache</label><select id="recCohort" class="rec" hidden></select></div>
             <div id="results"></div>
           </div>
           <div class="col">
             <div class="tally" id="tally"></div>
             <div class="grid" id="grid"></div>
-            <div class="legend"><span><i class="sq right"></i>all three right</span><span><i class="sq wrong">✗</i>wrong</span><span><i class="sq wrong human">✗</i>flagged for a person</span><span class="muted">hover for the answers, click for the trace</span></div>
-            <div class="term short" id="termCohort"></div>
+            <div class="legend"><span><i class="sq right"></i>both answers right</span><span><i class="sq wrong"></i>wrong or not answered</span><span><i class="sq run"></i>running</span><span class="muted">hover for the answers, click for everything the agent did</span></div>
+            <div class="label" id="agentsLabel">Agents</div>
+            <div class="wins" id="agents"></div>
           </div>
         </div>
         <table id="runs"></table>
@@ -107,7 +122,7 @@
 
   <footer>
     <button id="back" class="ghost">← Back</button>
-    <span id="buildSummary" class="muted small"></span>
+    <div id="buildBar" class="buildBar"></div>
     <button id="next" class="primary">Next →</button>
   </footer>
 

@@ -20,12 +20,18 @@ Start with [README.md](README.md) (layout, `just` recipes) and [NOTES.md](NOTES.
 - Text on a slide is either an exact quote, in “curly quotes” with its source, or our own summary. Our choices and
   interpretations are set in a different colour from quoted material. Use full measure names; no footnote-style subtext.
 - Every citation links to the exact page or text anchor (a PDF page, `#:~:text=`), never a landing page.
-- `talk/talk.pdf` is a snapshot. Don't regenerate it after editing the talk; only when someone asks (`just talk-pdf`).
 - The PowerPoint is generated: edit `pptx/build.mjs`, then `just pptx`. Check it with `just pptx-render`; look for
   overlapping text and boxes that sit too close together.
+- In the PowerPoint each colour means one thing: blue is the model and what it writes (and its context, on the map),
+  green is right (it matches the chart), orange is made up. Everything else is white or grey. Keep the words on a slide
+  few; the talk is in the notes. Slides have no titles until the setup, where the title is the step. The model sits on
+  the left and what it is given on the right; chats are iMessage bubbles, yours grey, the model's blue.
+- PowerPoint's Morph also pairs unnamed shapes of the same kind, which gives strange moves. Use it only where something
+  should move (objects named `!!id` on both slides), and let every other object on a Morph slide enter by animation.
+  Otherwise fade.
 
 ## Running things
 
-- `just view` serves on port 8770 and `just demo-pi` on 8771. On a remote machine, forward those ports over SSH.
+- `just demo-pi` serves on port 8771. On a remote machine, forward it over SSH.
 - The demo runs on any OpenAI-compatible endpoint: `DEMO_BASE_URL`, `DEMO_API_KEY`, `DEMO_MODEL`
   ([demo_pi/README.md](demo_pi/README.md)). Keys go in your environment, never in the repo.

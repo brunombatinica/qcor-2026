@@ -59,7 +59,8 @@ const PROMPT = "Is this patient on a beta blocker? If not, find out why.";
   assert.equal(row.status, "ok");
   assert.deepEqual(offered(first), []);
   assert.doesNotMatch(JSON.stringify(first.messages), /Rosa|Mobitz/);
-  assert.ok(row.text && row.score.fromProse && row.score.questions.given.agent, "prose answer judged");
+  assert.ok(row.text && row.score.fromProse && row.score.questions.given.agent, "prose answer read");
+  assert.ok(row.read.usage.input > 0, "the read's tokens are counted");
 }
 
 // a tool card is a tool the model is given; a data card is a scope its tools are refused without
@@ -88,7 +89,7 @@ const PROMPT = "Is this patient on a beta blocker? If not, find out why.";
   assert.match(first.messages[0].content, /check_quote/);
   assert.ok(row.trace.some((t) => t.tool === "check_quote" && t.kind === "observe"));
   assert.equal(row.score.correct, true);
-  assert.deepEqual(Object.values(row.score.questions).map((q) => q.right), [true, true, true], "given, why and gap");
+  assert.deepEqual(Object.values(row.score.questions).map((q) => q.right), [true, true], "on a beta blocker, and care gap");
   assert.equal(row.score.quote.found, true);
 }
 
@@ -114,6 +115,17 @@ const PROMPT = "Is this patient on a beta blocker? If not, find out why.";
     if (pass === 1) assert.ok(ev.some((e) => e.kind === "event"), "live events stream");
     else assert.ok(ev.filter((e) => e.kind === "patient").every((e) => e.row.cached));
   }
+}
+
+// one test at a time: a second, different test waits in line, is told how many are ahead, then runs
+{
+  const a = { tools: ["read_records"], sources: ["medications"], prompt: `${PROMPT} (a)` };
+  const b = { ...a, prompt: `${PROMPT} (b)` };
+  const later = new Promise((r) => setTimeout(r, 100)).then(() => events("/api/cohort", { build: b, n: 3, fresh: true }));
+  const [ea, eb] = await Promise.all([events("/api/cohort", { build: a, n: 3, fresh: true }), later]);
+  assert.ok(!ea.some((e) => e.kind === "line"), "the first test doesn't wait");
+  assert.deepEqual(eb.filter((e) => e.kind === "line").map((e) => e.ahead), [1, 0], "the second waits behind one, then runs");
+  for (const ev of [ea, eb]) assert.equal(ev.find((e) => e.kind === "summary").summary.n, 3);
 }
 
 server.close();

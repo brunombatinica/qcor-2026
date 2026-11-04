@@ -3,6 +3,133 @@
 Handoff notes for picking the brainstorm back up in a new session. To restart, tell Claude:
 "read NOTES.md and let's continue the QCOR brainstorm."
 
+## The talk is the PowerPoint now (2026-11-04)
+
+The user: clean up the old talk and the style book; they only want the PowerPoint, and the demo. Removed `talk/`
+(reveal.js deck and `talk.pdf`), `stylebook/`, `gallery.html`, `sketches/`, `serve.py`, `tools/talk_pdf.py`, the
+`just view` and `just talk-pdf` recipes and port 8770. All of it is in git history before this change. `shared/`
+stays: `pptx/build.mjs` and `demo_pi/` use it. Older notes below still mention the removed files.
+
+## Demo, simplified (2026-11-04)
+
+The user, going through the demo: frame it as data (a lake or the EHR, connected to) plus a task (the beta-blocker
+measure), then Rosa, then 100; the talk's colours and minimalism; "QCOR 2026 agent demo" with the CarDS Lab logo;
+nine data cards (family history, social history and appointments gone) with a FHIR callout and logo; no IT/IRB
+repeats; clearer what the model does and how an answer is checked; the measure's two answers (on a beta blocker?
+care gap?) instead of "why"; criteria as what counts and valid exceptions, no CMS144 comparison; one window per
+running agent; a token counter. Tick everything and it should get them all right.
+
+Done (`demo_pi/`): all of that. Notes are a line or two; the harness no longer says "stop at the first evidence"
+(the agent skipped the allergy list and diagnoses). "On a beta blocker" implies "not a care gap". Criteria say
+where to look where the model hesitated (allergy list, a pacemaker on the diagnoses, heart rate alone is enough).
+Live on gpt-6-luna, all nine data cards and the three read tools with every criterion: 99/100 free text, 100/100
+structured; without criteria 82/100 (tartrate, atenolol, and reasons only in structured data). Each wrong group
+says what it lacked. All nine tools checked; "Fix it" on a gap signs an order and messages the patient. The
+recordings were redone on gpt-6-luna. The "next appointment" example is answered from the latest note.
+
+## pptx (2026-11-04): third pass, from the user's review
+
+The user: much better; likes the goofy model box. Point by point, done in `pptx/build.mjs` (still 23 slides):
+
+- Training: the output comes straight out of the model's middle, the label under it as an outline (it comes from
+  outside the model). The medical example is now "Started on furosemide for heart" → burn, then failure; the writing
+  slide finishes "…heart failure to relieve congestion."
+- Hallucination and context: the model on the left, the text on the right, the verdict under it ("Hallucination";
+  "Correct, with the right context"). From the map, the model and the blue sheet morph across, the sheet into the
+  chart's header. Copy and paste is mirrored to match (chat left, her chart right) and the chats are iMessage bubbles
+  with tails, yours grey, the model's blue, its answer a word at a time. The pasted note is now her primary care note
+  ("Heart failure is managed by cardiology."): the telephone note we pasted before gives the reason, so "the note
+  doesn't say why" wasn't true of it.
+- Text is a universal interface: chat on the left, the model, her chart as a small notes window with a search box on
+  the right. The request is one solid blue chip on its arc; both carvedilol notes light up; the result quotes the 14 May
+  note ("…Mobitz II second-degree AV block on carvedilol… Carvedilol stopped today.").
+- Agent: the tool links are curves, into the model from the left and out of it to the right, clear of the pills (the
+  build checks).
+- A drawn laptop; Rules is Prompt everywhere; Task: the six tasks on light blue, "Find care gaps" turns solid, curves
+  from it to the five steps.
+- Model: student white, consultant blue, a plain line; the open models, then "Open weights", then the closed ones,
+  drawn at an estimated one trillion ("not published; likely over 1T", our estimate, not a published number).
+- Data: tabs and grey bars instead of text, no MRN, lab results needed (six parts).
+- Tools: the tools arrive on click; then the model writes text → the harness turns it into code and runs it (the FHIR
+  request) → text comes back. The carvedilol line's order date is now the tool's (2025-08-26; it said 2025-05-01).
+- Prompt: the box grows by Morph and the new prompt is typed in; answers come a word at a time. The second slide now
+  uses the recorded run's prompt and a shortened version of its answer (gpt-6-luna, `rosa-notes-gap.json`); that run
+  also had her notes and the note tools, which the speaker notes now say.
+- Pictures now stack in drawing order (they used to land on top of every shape).
+
+Not verified: animations, typing and Morph in PowerPoint itself; the check was LibreOffice's static render of how each
+slide ends, the Morph check and xmllint.
+
+## pptx (2026-11-03, evening): second pass, from the user's review
+
+The user, on the first version: it looks terrible; use the faculty talk as the template (its title slide, a
+disclosure slide for now, its icons). No titles before the setup; slides should explain themselves. The map is just a
+model, the model with a blue sheet beside it, and the model in its loop. The setup slides' titles are the step, the
+bar icons have no labels, Morph only where something should move. Checks are now guardrails.
+
+Done (`pptx/build.mjs`, 23 slides):
+
+- Title and Disclosures as in the faculty talk, with its three logos (`pptx/logos/`).
+- Ported from the faculty talk once its session finished (its build of 21:42), in our blue: how a language model
+  learns (four Morph frames of the training picture: "Once upon a" → dog, then time; "Started on apixaban for atrial"
+  → flutter, then fibrillation, green when right) and "it writes, one word at a time". The videos (`pptx/anim/`,
+  `pptx/video/`, `just pptx-videos`) are gone: the faculty talk dropped them for this native picture.
+- Kept ours for context (the user likes the Rosa slides): it doesn't know Rosa, give it her chart, copy and paste.
+  The faculty talk's SGLT2 chat isn't used.
+- Then "text is a universal interface", for Rosa: "Why was her carvedilol stopped?" → `search_notes("carvedilol")` →
+  the 14 May note → the answer. It picks up where copy and paste stops. Then the faculty talk's agent slide (the loop,
+  then the tools arrive: gather context, act; "Language is a universal interface"). Our old agent and harness slides
+  are gone; the harness as a body is in the notes. The Tools slide's example is now `read_records("medications")`,
+  with the exact line the demo's tool returns, so it doesn't repeat the note search.
+- Copy and paste now asks "Is anything missing?": a beta blocker; carvedilol was stopped, but the note doesn't say why.
+- The loop's arcs start and end clear of Reason, Act and Observe; the tool cards have no connector lines.
+- Set it up like a remote colleague: the laptop is a picture, so Morph can't pair it with a card on Task.
+- Task: six example tasks (care gaps, registry abstraction, trial screening, chart summary, results follow-up, patient
+  letters), then the five other steps branch from them.
+- Model: medical student → consultant, then out; then the models as blue circles sized by parameters (diameter ∝
+  cube root), logos inside: Gemma 3 4B, Llama 3.1 8B, Qwen 3.6 35B, gpt-oss 117B, DeepSeek V3 671B; a dashed line;
+  GPT, Claude and Gemini in a dashed circle, size not published. Sizes checked on the model cards (links in the notes).
+- Data: Rosa's record as a minimal EHR (banner, side menu, twelve panels); the five the task needs get outlined, the
+  rest dim; then privacy, focus, approval along the bottom.
+- Rules: two slides. The short prompt → `read_records` → "No. Carvedilol was stopped on 14 May."; then Morph: the
+  prompt grows, `read_records`, `search_notes` → the full answer (green). The recorded runs: `rosa-notes-given.json`,
+  `rosa-notes-gap.json`.
+- Guardrails: blank, for Lovedeep.
+- Transitions: fade between setup slides; Morph only into Task (tiles to the bar) and between the two Rules slides
+  (and, as before, through the first half).
+
+Not verified: animations and Morph in PowerPoint itself. PowerPoint's own export (AppleScript `save as PNG`/`PDF`)
+writes nothing here, because of its sandbox, so the check was LibreOffice's static render.
+
+## pptx (2026-11-03): Bruno's section rebuilt as the PowerPoint, after the faculty talk
+
+The user: simplify and clean up majorly; focus on Bruno's section and make it a PowerPoint. Phyllis covers what agents
+can be used for, so this section is what an agent is. Anchor on model → model + context → agent. Too many colours
+before: colour should mean something. Minimal, visual, tasteful animations, Apple-style blue; copy the AHA 2026
+faculty talk (`~/github/misc/aha26-faculty-talk`) where it's good.
+
+Done: `pptx/build.mjs` replaced (15 → 18 slides). The faculty talk's object, animation and Morph code is ported, and
+its two language-model videos are re-recorded in blue (`pptx/anim/`, `just pptx-videos`). The order is the user's:
+
+1. Title, then the spine (model → model + context → agent), which comes back lit at parts 2 and 3.
+2. What is a large language model (the training video); then it writes, one word at a time (the writing video).
+3. "It doesn't know Rosa": "She is taking…" → carvedilol, lisinopril and furosemide, which turns orange (hallucination).
+4. Give it her chart: the same sentence with her medicines in front of it → the right ones, which turn green.
+5. Today, we copy and paste (her chart → you → a chat).
+6. An agent: a model with tools, in a loop (ReAct, as in the faculty talk), then "the harness gives it a body" (gather, act).
+7. Set it up like a remote colleague: task, model (medical student or consultant; sizes; open or closed), data (what
+   it can see; privacy, focus, approval), tools (it's all text), rules (the prompt: two recorded demo prompts), checks
+   (a blank placeholder for Lovedeep's talk, which the slide doesn't name).
+
+The blue model circle is one Morph object through the first half; the six setup tiles become the bar at the top right.
+Not done: opening it in PowerPoint (checked only through LibreOffice, which shows no animations or Morph). The reveal.js
+talk (`talk/`) wasn't touched.
+
+For the demo (the user's note, not done yet): introduce pi, the harness, in the demo, not in the talk (the talk
+doesn't cover different harnesses). The brief should be about Rosa, after a short intro on what we're doing:
+hospital information sits in data lakes; we've made a synthetic data lake, and we give you an agent running on a
+computer that you point at it.
+
 ## demo (2026-10-27): one demo, with recorded runs
 
 The user: the simulated demo (`demo/` on port 8770) was out of date; use the pi demo (port 8771) and give it recorded

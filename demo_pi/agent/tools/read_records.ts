@@ -16,9 +16,6 @@ const QUERY: Record<string, string> = {
   notes: "DocumentReference?patient={p}",
   allergies: "AllergyIntolerance?patient={p}",
   immunizations: "Immunization?patient={p}",
-  family: "FamilyMemberHistory?patient={p}",
-  social: "Observation?patient={p}&category=social-history",
-  appointments: "Appointment?patient={p}",
 };
 
 export default () => defineTool({

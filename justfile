@@ -1,14 +1,10 @@
-# QCOR 2026 workshop: run `just` to list recipes. Needs Node >= 22.19 (pi), Python 3 and, for some recipes, uv.
+# QCOR 2026 workshop: run `just` to list recipes. Needs Node >= 22.19 (pi) and Python 3.
 # Or open the folder in its dev container (.devcontainer/), which has all of them.
 
 default:
     @just --list
 
-# serve the talk, the style book and shared/ on loopback (/ opens the talk)
-view port="8770":
-    python3 serve.py --port {{port}}
-
-# the "Build an agent" demo: real pi sessions on DEMO_BASE_URL (from .env, if there is one); no model, or --replay: the recorded runs
+# the QCOR 2026 agent demo: real pi sessions on DEMO_BASE_URL (from .env, if there is one); no model, or --replay: the recorded runs
 demo-pi port="8771" *ARGS:
     set -a; [ ! -f .env ] || . ./.env; set +a; cd demo_pi && npm install --no-audit --no-fund --silent && node server.mjs --port {{port}} {{ARGS}}
 
@@ -43,10 +39,6 @@ pptx-render: pptx
     soffice --headless --convert-to pdf --outdir pptx/render pptx/qcor-bruno-agents.pptx >/dev/null
     pdftoppm -png -r 60 pptx/render/qcor-bruno-agents.pdf pptx/render/slide
     @echo "pptx/render/"
-
-# snapshot the talk as talk/talk.pdf (only when you mean to; first run: uvx playwright install chromium)
-talk-pdf:
-    uv run tools/talk_pdf.py
 
 # the demo's tests: a stand-in model end to end, and the recorded replays
 test:

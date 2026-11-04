@@ -23,8 +23,6 @@ export function line(r) {
     }
     case "Coverage": return `${r.payor[0].display}, ${r.class[0].value} (${coded(r.type)}), member ID ${r.subscriberId}, since ${r.period.start}`;
     case "Immunization": return `${r.occurrenceDateTime}  ${coded(r.vaccineCode)}`;
-    case "FamilyMemberHistory": return `${coded(r.relationship)}: ${r.condition.map((c) => `${coded(c.code)}${c.onsetAge ? ` at ${c.onsetAge.value}` : ""}`).join(", ")}`;
-    case "Appointment": return `${r.start.slice(0, 16).replace("T", " ")}  ${r.description}, with ${r.participant[1].actor.display}`;
     case "DocumentReference": return `${noteId(r)}  ${r.date.slice(0, 10)}  ${coded(r.type)}  (${r.author?.[0]?.display || "unknown author"})`;
     case "AllergyIntolerance": return r.code.coding[0].code === "716186003" ? "No known allergies" : `${coded(r.code)}: ${r.type}, reaction ${r.reaction?.[0]?.manifestation?.[0]?.text || "not recorded"}, recorded ${r.recordedDate}`;
     default: return `${r.resourceType}/${r.id}`;

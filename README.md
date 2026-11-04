@@ -8,14 +8,12 @@ self-contained: everything here runs from a plain clone.
 ## Getting started
 
 Requirements: [just](https://github.com/casey/just), Python 3, Node ≥ 22.19 (pi needs it; on Node 20 npm silently
-installs an old pi). Optional: [uv](https://docs.astral.sh/uv/) for `just talk-pdf`; LibreOffice and poppler for
-`just pptx-render` (`sudo tools/install-libreoffice.sh` on Debian/Ubuntu).
+installs an old pi). Optional: LibreOffice and poppler for `just pptx-render` (`sudo tools/install-libreoffice.sh` on Debian/Ubuntu).
 
 ```sh
 git clone https://github.com/brunombatinica/qcor-2026.git && cd qcor-2026
 just                 # list recipes
-just view            # the talk and the style book: http://localhost:8770/  (/ opens the talk)
-just demo-pi         # the "Build an agent" demo: http://localhost:8771/  (no model reachable: replays recorded runs)
+just demo-pi         # the QCOR 2026 agent demo: http://localhost:8771/  (no model reachable: replays recorded runs)
 just demos           # the ten small interactive demos: http://localhost:8771/index.html
 just pptx            # build pptx/qcor-bruno-agents.pptx
 just test            # the demo's tests (a stand-in model, no network)
@@ -42,31 +40,26 @@ clone of this repo.
 ## Working together
 
 Everyone works on `main` in this repo: `git pull` before you start, commit small changes, `git push` when they work.
-If a push is rejected, someone pushed first: `git pull --rebase`, check it still runs, push again. The talk
-(`talk/`), the PowerPoint generator (`pptx/build.mjs`) and the demo (`demo_pi/`, including the recorded runs it
-replays) are all plain files in git; `node_modules/`, the demo's result cache and pi's session state stay local and
+If a push is rejected, someone pushed first: `git pull --rebase`, check it still runs, push again. The
+PowerPoint generator (`pptx/build.mjs`) and the demo (`demo_pi/`, including the recorded runs it replays) are plain
+files in git; `node_modules/`, the demo's result cache and pi's session state stay local and
 rebuild themselves.
 
 In the agents repo this is the submodule `dissemination/qcor-2026/`: commit and push here first, then commit the
 updated pointer there (`just qcor-pull` there fetches everyone's latest).
 
-Working on a remote machine: forward the ports, e.g. `ssh -L 8770:localhost:8770 -L 8771:localhost:8771 <host>`.
+Working on a remote machine: forward the ports, e.g. `ssh -L 8771:localhost:8771 <host>`.
 
 ## What is here
 
 | Path | What |
 |---|---|
-| `talk/` | the deck for Phyllis's and Bruno's talks: 38 animated slides in six signposted parts (reveal.js + `talk.js`; S for speaker notes, `?review` shows end states). `talk.pdf` is a snapshot (`just talk-pdf`) |
-| `pptx/` | Bruno's section as PowerPoint (15 slides, speaker notes): what an agent is, how it works, and setting one up. `just pptx` runs `build.mjs`, which writes `qcor-bruno-agents.pptx` and applies the colour theme (`theme.mjs`) |
-| `gallery.html` | the first asset gallery (superseded by the style book's asset pages; kept for now) |
-| `stylebook/` | thirty-five candidate looks, one page each (a man and a woman, the same slide, ten icons), ★ to pick; its last four pages are the assets: people, duotone icons and colour, logos by group, charts ([stylebook/README.md](stylebook/README.md)) |
-| `demo_pi/` | "Build an agent, with pi": six views (brief, data, tools, prompt, criteria, test). Each choice is a FHIR scope, a pi tool or a line of the prompt, shown under the hood. Rosa (heart block, recorded only in the notes), then 100 synthetic patients scored against gold labels. Live on a model, or with none it replays runs recorded on Qwen ([demo_pi/README.md](demo_pi/README.md), `just demo-pi`, port 8771) |
+| `pptx/` | Bruno's section as PowerPoint (23 slides, animations, speaker notes): model → model + context → agent, then setting one up like a remote colleague (task, model, data, tools, prompt; guardrails hands over to Lovedeep). The template is Bruno's AHA 2026 faculty talk (title and disclosure slides, look, icons, animation code); the slides before the setup are shared with it, and its language-model, "text is a universal interface" and agent slides are ported in blue, with Rosa. Blue is the model, green right, orange made up. `just pptx` runs `build.mjs`, which writes `qcor-bruno-agents.pptx`. It also applies the colour theme (`theme.mjs`) |
+| `demo_pi/` | the QCOR 2026 agent demo, with pi: six views (task, data, tools, prompt, criteria, test). The task is CMS144 (is each heart-failure patient on a beta blocker, and if not, a documented reason or a care gap?); each choice is a FHIR scope, a pi tool or a line of the prompt, shown under the hood. Rosa first, then 100 synthetic patients, each checked against the answer its chart was written with. Live on a model, or with none it replays runs recorded on gpt-6-luna ([demo_pi/README.md](demo_pi/README.md), `just demo-pi`, port 8771) |
 | `demos/` | ten single-page interactive demos and their spec (`demos/SPEC.md`, `just demos`) |
-| `shared/` | Rosa (`rosa.svg` + `portraits/`), `icons.js`, model logos (lobehub/icons), published charts (METR, OWID) |
-| `serve.py` | serves the talk, the style book and `shared/` (`just view`, port 8770) |
-| `sketches/` | the earlier brainstorm board and drafts (superseded by `talk/` and `demo_pi/`) |
+| `shared/` | Rosa (`rosa.svg` + `portraits/`), `icons.js`, logos (model makers from lobehub/icons, CarDS Lab, HL7 FHIR), published charts (METR, OWID) |
 | `docs/pi-notes.md` | notes on the pi agent harness the demo runs on |
-| `tools/` | `talk_pdf.py` (the talk snapshot), `install-libreoffice.sh` (for rendering the PowerPoint) |
+| `tools/` | `install-libreoffice.sh` (for rendering the PowerPoint) |
 | `.devcontainer/` | the dev container: image, post-create (`npm ci`), and the demo's autostart (`start-demo.sh`) |
 | `.env.example` | the settings `.env` can hold: the model endpoint and key, concurrency, autostart |
 | `NOTES.md` | working notes and open questions |

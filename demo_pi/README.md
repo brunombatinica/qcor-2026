@@ -1,63 +1,67 @@
-# Build an agent, with pi (QCOR 2026 demo)
+# QCOR 2026 agent demo (pi)
 
-The room builds a heart-failure quality-improvement agent in six views, with no coding. Each choice switches on
+The room builds a heart-failure quality-measure agent in six views, with no coding. Each choice switches on
 something real; the **</>** button (or U) opens a panel that shows exactly what.
 
 | View | The room | Under the hood |
 |---|---|---|
-| Brief | Rosa Delgado, 71, HFrEF: is she on a beta blocker, why or why not, and is this a care gap? | the endpoint and the harness |
-| Data | pick FHIR resources: demographics, insurance, diagnoses, medications, vitals, labs, notes, allergies, immunizations, family history, social history, appointments (five play no part in the answer); each adds informal **IRB review** weeks | the SMART scope each card adds to the token, and the live FHIR request and response for Rosa (a 403 if not granted) |
-| Tools | pick from read records, search notes, read a note, structured answer, confidence, check its own work, web search, place orders, message the patient; each adds informal **IT setup** weeks | the pi command and the tool's TypeScript source |
-| Prompt | a one-line summary of the agent, the instructions (start empty; examples build up the three questions: *Is it given?*, *Why or why not?*, *Is it a gap?*), **Run on Rosa**, and a large terminal | none: the space goes to the terminal |
-| Criteria | tick what counts as a reason: the CMS144v14 numerator and exceptions, plus three that are not in the measure | the prompt text the ticks produce |
-| Test | the prompt (Rosa's plus the criteria; *Fix it* is the last example) on all 100 synthetic patients: a live right/wrong tally, a square per patient (✗ when wrong, hover for its three answers, click for its trace), the score per question | none |
+| Task | the setting: patient data lives in a data lake or the EHR and an agent connects to it; 100 synthetic patients with heart failure; the task, CMS144: is each patient on a beta blocker, and if not, is there a documented reason or is it a care gap? Then the plan: build the agent, try it on Rosa, run it on all 100 | the model endpoint, the harness, the FHIR server |
+| Data | pick what it can see: demographics, insurance, diagnoses, medications, vital signs, lab results, clinical notes, allergies, immunizations (insurance and immunizations play no part in the answer; demographics only adds identifiers); each adds informal **IRB review** weeks. A callout says it is the EHR's FHIR API | the permissions (SMART scopes) on the access token, the agent's request for Rosa (403 if not granted), what the model reads (one line per record) and the FHIR JSON it came from |
+| Tools | pick what it can do: read structured records, search notes, read a note, structured answer, estimate confidence, check its own work, and three stand-ins that act outside the chart (message the patient, search the web, place orders); each adds informal **IT setup** weeks | the pi command and the tool's TypeScript source |
+| Prompt | Rosa, a prompt (examples: *On a beta blocker?*, *…and is it a care gap?*, and *next appointment?* to show it is the same agent), **Run on Rosa**, the answer checked against her chart, and a terminal with everything the model is given and does | none: the space goes to the terminal |
+| Criteria | tick what counts: *what counts as being on a beta blocker* (CMS144's numerator) and *valid exceptions* (its exclusions); anything else is a care gap | the first message the model gets, with the criteria in it |
+| Test | the prompt (Rosa's plus the criteria; *Fix it* is an agent that acts) on all 100 synthetic patients: a square per patient (hover for its answers, click for everything it did), a window per agent running, the score, and what it got wrong with what it didn't have (a data card, a tool, a criterion) | none |
 
-The under-the-hood panel is open by default (U or **</>** toggles it; A−/A+ zoom, ⤢ widens). After each click it
-shows, for a moment, what changed as a diff (added lines green, removed red), then settles.
+The footer shows the agent as built so far (icons for what it sees and does, and the setup weeks). The under-the-hood
+panel shows, for a moment, what each click changed as a diff (added lines green, removed orange), then settles.
+The look is the talk's (`pptx/build.mjs`): a black stage, Apple dark greys, blue for the model and what it writes,
+green for right, orange for wrong. Icons are Font Awesome Free (CC BY 4.0, `public/icons/LICENSE.txt`); the FHIR
+logo is HL7's, shown as a white silhouette.
 
-While the agent runs, a terminal shows pi working: model text as it streams, each tool call, the FHIR request it
-made and what came back, with a wall clock. On the test, all sessions interleave (8 at a time).
+**Checking an answer.** Each chart was written with a known answer (`SCENARIOS` in `ehr/patients.mjs`), and the
+agent is checked on the two answers the measure needs: *on a beta blocker?* (one that counts: carvedilol, bisoprolol
+or metoprolol succinate) and *care gap?* (not on one, and no valid exception). "On a beta blocker" implies "not a care
+gap", as in the measure. A question it didn't answer isn't right, and a patient is right only when both are. A
+structured answer carries both as fields; free text is read for them by one more model call that never sees the
+chart (`agent/grade.mjs`). The agent's own words and the chart's reason are shown side by side, not scored. The
+harness tells the agent to be quick and answer only what it is asked, so a short prompt gets a short (and incomplete)
+answer.
 
-**Scoring: three questions.** Each answer is checked on *given?* (is a beta blocker active: any, including tartrate
-or atenolol), *why?* (does its reason match the chart's), and *gap?*; a question it wasn't asked is *not answered*,
-and a patient is right only with all three. The harness tells the agent to be quick and answer only what it is
-asked, so a short prompt gets a short (and incomplete) answer.
+## The story it tells
 
-## The story it tells (the recorded runs: Qwen3.6-35B, vLLM, 2026-10-27)
+Measured live on `gpt-6-luna` (OpenAI), 2026-11-04; these are the runs in `recorded/`, so with no model the page
+shows exactly this.
 
-These are the runs in `recorded/`, so with no model the page shows exactly this.
-
-- **Rosa, nothing switched on:** a bare model with no data and no tools. It makes up a medication list ("no
-  beta-blockers were found in the current medication list"), or writes a shell command it can't run.
-- **Rosa, medications, free text:** *Is it given?* gets "No" and stops there (1 of 3: why and gap not answered).
-  *Why or why not?* adds "carvedilol was stopped on 2026-05-14", a fact rather than a reason, so *why* is still not
-  answered. *Is it a gap?* on medications alone notices that the notes are refused (403) and won't say. Carvedilol
-  was stopped for Mobitz II heart block, found on an event monitor she wore for dizzy spells at home; her vital signs
+- **Rosa, nothing switched on:** a bare model with no data and no tools: "I can't determine this from the information
+  provided."
+- **Medications, *On a beta blocker?*:** "No. Carvedilol was stopped on 2026-05-14." Right, and it stops there: the
+  care gap isn't answered (1 of 2).
+- **Medications, *…and is it a care gap?*:** the notes are refused (403), so it won't say whether it's a gap (1 of
+  2). Carvedilol was stopped for Mobitz II heart block, found on a monitor she wore for dizzy spells; her vital signs
   and problem list look fine, and only a telephone note and the EP consult say why. With notes and the note tools,
-  *Is it a gap?* gets 3 of 3 in about 2 s.
-- **100 patients**, with medications, diagnoses, vitals, notes and allergies, and the read, search and note tools
-  (the test build), free text unless it says otherwise (all three right; then each question):
+  both right in about 3 s.
+- **The same agent, *next appointment?*:** "December 8, 2026, with Dr. A. Patel at the heart failure clinic", from her
+  latest note. Nothing to check against the measure: only the prompt changed.
+- **100 patients**, with medications, diagnoses, vitals, notes and allergies and the three read tools (the test
+  build), free text unless it says otherwise:
 
-  | Prompt | All three | Given? | Why? | Gap? | Wall clock |
+  | Prompt | Both right | On a beta blocker? | Care gap? | Tokens per patient | Wall clock |
   |---|---|---|---|---|---|
-  | *Is it given?* | 0/100 | 98 | 51 | 0 (not asked) | 23 s |
-  | *Why or why not?* | 0/100 | 100 | 49 | 0 (not asked) | 26 s |
-  | *Is it a gap?* | 58/100 | 100 | 75 | 75 | 39 s |
-  | + every CMS144 criterion | 78/100 | 97 | 83 | 97 | 48 s |
-  | + the three distractors (age over 80, CKD, "consider starting") | 73/100 | 95 | 80 | 87 | 51 s |
-  | + every CMS144 criterion, structured answer, quote check and confidence | 47/100 | 95 | 48 | 65 | 84 s |
-  | *Fix it*, with demographics and the risky tools | 44/100 | 92 | 51 | 57 | 58 s |
+  | *On a beta blocker?* | 50/100 | 94 | 50 | 1,352 | 30 s |
+  | *…and is it a care gap?* | 82/100 | 95 | 82 | 1,996 | 36 s |
+  | + every criterion | 100/100 | 100 | 100 | 2,693 | 39 s |
+  | + every criterion, structured answer, quote check and confidence | 100/100 | 100 | 100 | 5,585 | 59 s |
+  | *Fix it*, with demographics and the risky tools | 66/100 | 74 | 70 | 4,844 | 62 s |
 
-  Without criteria the agent's idea of a "gap" is its own (not at target dose, say); the criteria fix *gap*. What
-  stays wrong is mostly *why* on the gaps: the quick agent says "care gap" without saying that no reason is
-  documented, or calls heart block a reason after a pacemaker has made it moot. With the structured answer, 35
-  answers leave out *gap* (32 of them for patients already on one): its schema asks for *why* and *gap* only if the
-  prompt does, and the agent decides it didn't. The *gap* it does give is never wrong. Rosa, with the same tools and no
-  criteria, gets the reason right and still says "gap: yes".
-- **Risky tools:** given them, it doesn't use them for a plain review (Rosa, *Is it a gap?*: no orders, no
-  messages). *Fix it* (the last example, on the test) signed 42 orders, 27 of them for patients with a documented
-  reason not to take one, and messaged 92 patients. The web search and the orders are stand-ins: nothing leaves the
-  machine.
+  *On a beta blocker?* gets the 50 patients on one right (no care gap is implied) and leaves the gap unanswered for
+  the rest, and says yes for the five on metoprolol tartrate or atenolol. Without criteria the agent's idea of the
+  measure is its own: it counts metoprolol tartrate and atenolol, and calls asthma, AV block, low blood pressure, a
+  slow heart rate or an intolerance that sit only in structured data a care gap. With every criterion it
+  gets them all. The test lists each wrong group with what it didn't have (a data card, a tool, a criterion).
+- **Risky tools:** given them, it doesn't use them for a plain review (Rosa, *…and is it a care gap?*: no orders, no
+  messages). *Fix it* (the act example, on the test) signed 22 orders, 3 of them for patients with a documented reason
+  not to take one, and messaged 68 patients. The web search, the orders and the messages are stand-ins: nothing
+  leaves the machine.
 
 Live numbers vary from run to run; the cache (below) makes a build the room repeats come back identical.
 
@@ -76,18 +80,20 @@ page (public/)  ──POST /api/run {build}──▶  server.mjs ──spawn─�
   with no built-in tools, skills, context files or saved session. The model sees our short harness prompt
   (`agent/instructions/`), the room's prompt, and the tools the page switched on.
 - **The chart is FHIR R4.** `ehr/patients.mjs` builds Rosa and 99 look-alikes from a fixed seed, with no data file.
-  `ehr/fhir.mjs` serves them as real resources (Patient, Condition, MedicationRequest, MedicationDispense,
-  Observation, DiagnosticReport, DocumentReference, AllergyIntolerance), coded in RxNorm, SNOMED CT, ICD-10-CM and
-  LOINC. Each run gets a bearer token whose `system/<Type>.rs` scopes are the data cards; Observation is scoped by
+  `ehr/fhir.mjs` serves them as real resources (Patient, Coverage, Condition, MedicationRequest, Observation,
+  DocumentReference, AllergyIntolerance, Immunization), coded in RxNorm, SNOMED CT, ICD-10-CM and LOINC. Each run gets a bearer token whose `system/<Type>.rs` scopes are the data cards; Observation is scoped by
   category. The tools fetch over HTTP with that token, so a card that is off is a 403 the agent sees.
-  `ehr/render.mjs` turns resources into the one-liners the model reads.
-- **Structured answer** is the `submit_answer` tool: a JSON schema (given, medication, and, only if asked, why and gap;
-  plus quote and source with *Check its own work*, and confidence with *Estimate confidence*; those two switch it on).
-  Without it the agent answers in prose. Either way `agent/grade.mjs` spends one more model call per patient reading
-  the answer against the reference reason: whether "why" matches takes judgement, and prose has to be read for all three.
-- **Gold labels** come from how each chart was written (`SCENARIOS` in `ehr/patients.mjs`): 50 on an evidence-based
-  beta blocker, 30 with a documented reason, 20 gaps (5 of them on tartrate or atenolol: given, and still a gap). Where the deciding evidence lives: 19 in a note, 13 in
-  diagnoses, 3 in vitals, 3 in the allergy list, the rest in medications.
+  `ehr/render.mjs` turns resources into the one-liners the model reads. The notes are short, and each patient's
+  latest note gives their next appointment.
+- **Structured answer** is the `submit_answer` tool: a JSON schema with `answer` (one sentence), `on_beta_blocker`
+  and `care_gap` (yes or no, always), plus `quote` and `source` with *Check its own work* and `confidence` with
+  *Estimate confidence* (those two switch it on). Without it the agent answers in prose, and `agent/grade.mjs` spends
+  one more model call per patient reading the two yes/no answers out of it, without the chart.
+- **Gold labels** come from how each chart was written (`SCENARIOS` in `ehr/patients.mjs`): 50 on a beta blocker that
+  counts, 30 with a documented reason, 20 care gaps (5 of them on metoprolol tartrate or atenolol, which don't count).
+  Where the deciding evidence lives: 21 in a note, 14 in diagnoses, 3 in vitals, 3 in the allergy list, the rest in
+  medications. Each scenario also says what an agent needs to get it right (`needs`: data cards and a criterion), so
+  the test can say what a wrong group was missing.
 
 ## Running it
 
@@ -103,7 +109,8 @@ The model is any OpenAI-compatible `/v1` endpoint:
 | `DEMO_API_KEY` | `$VLLM_API_KEY`, else `none` |
 | `DEMO_MODEL` | `$VLLM_MODEL` when `DEMO_BASE_URL` is unset, else the first model the endpoint lists |
 | `DEMO_CONTEXT_WINDOW` / `DEMO_MAX_TOKENS` | 131072 / 2048 |
-| `DEMO_CONCURRENCY` | 8 sessions at once (vLLM extract runs `--max-num-seqs 8`) |
+| `DEMO_CONCURRENCY` | 8 sessions at once (vLLM extract runs `--max-num-seqs 8`); a Rosa run goes ahead of test sessions |
+| `DEMO_TESTS_AT_ONCE` | 1: 100-patient tests run one at a time, the rest wait in line (the page says how many are ahead); one whose answers are all cached doesn't wait |
 | `DEMO_SESSION_TIMEOUT_MS` | 180000 |
 | `DEMO_UNLOCK_CODE` | unset: the workshop code, to unlock `workshop-key.json` at start (below) |
 | `DEMO_REASONING_OFF` | what pi and the grader send as `reasoning_effort`: `none` for OpenAI's GPT-5.1 and later (`gpt-6-luna`), `minimal` for `gpt-5`, `-mini`, `-nano`, nothing elsewhere; `omit` sends nothing |
@@ -111,8 +118,9 @@ The model is any OpenAI-compatible `/v1` endpoint:
 On OpenAI, `gpt-6-luna` is the smallest current model. It reasons by default, and on `/chat/completions` it refuses
 tool calls unless `reasoning_effort` is `none` (an HTTP 400), so the demo declares it a reasoning model and pi's
 `--thinking off` sends `none`; the grader sends the same and drops `temperature` and `max_tokens`, which it also refuses
-(`agent/model.mjs` `reasoningOff`, `test/openai-request.mjs`). Live on Rosa (notes and the note tools, *Is it a gap?*):
-all three right, 2 tool calls, about 1,450 tokens, 8 s. The recorded runs are still Qwen's.
+(`agent/model.mjs` `reasoningOff`, `test/openai-request.mjs`). Live on Rosa (medications and notes, the note tools,
+*…and is it a care gap?*): both right, 2 tool calls, about 2,500 tokens with the read of its answer, 3 s. Tokens count
+every prompt token, cached or not (pi reports OpenAI's cached ones apart). The header counts what the page has used.
 
 `just demo-pi` reads them from `.env` in the repo root (gitignored; [.env.example](../.env.example)) as well as your
 environment. To switch services on the day: `DEMO_BASE_URL=https://… DEMO_API_KEY=… DEMO_MODEL=… just demo-pi`.
@@ -142,9 +150,9 @@ browser's localStorage.
 
 ### With no model: recorded runs
 
-The planned builds (`PLAN` in `record.mjs`: Rosa on each data and tool step with each example prompt, then the test's
-prompts on all 100 patients) were run once on Qwen3.6-35B and are kept in `recorded/`, one file per build: each
-session's trace, answer, judge's verdict and timings. When the model can't be reached (at start, then checked again
+The planned builds (`PLAN` in `record.mjs`: Rosa on each step of the story, then the test's prompts on all 100
+patients) were run once on `gpt-6-luna` and are kept in `recorded/`, one file per build: each session's trace, answer,
+the read of a free-text answer, and timings. When the model can't be reached (at start, then checked again
 every 30 s), the server replays them instead: the same events at the pace they were recorded, scored again by `score.mjs`. The header says
 **▶ replay · <model>**, and a **Recorded runs…** list next to each Run button loads a recorded build (data, tools,
 prompt, criteria). A build that wasn't recorded is refused with a message, never answered with a different one.
@@ -171,14 +179,14 @@ Checks:
 
 | Path | What |
 |---|---|
-| `public/` | the page: plain HTML/JS/CSS, no CDN, works offline |
+| `public/` | the page: plain HTML/JS/CSS and Font Awesome icons (`public/icons/`), no CDN, works offline; the logos come from `../shared/logos/` |
 | `server.mjs` | the page, `/shared/` (Rosa's portrait), the FHIR server and the API; one queue for every session |
 | `ehr/` | the synthetic cohort, its FHIR server and scopes, and the resource-to-text renderer |
-| `agent/catalog.mjs` | every card, example prompt and criterion; the `hint` fields are presenter notes, not shown |
+| `agent/catalog.mjs` | every card (with its icon), example prompt and criterion; the `hint` fields are presenter notes, not shown |
 | `agent/instructions/` | the harness prompt and the paragraphs the answer cards add |
 | `agent/tools/` | one file per pi tool, registered by `agent/extension.ts` |
 | `agent/session.mjs` | one session: the pi command, its event stream turned into the trace and the answer |
-| `score.mjs` | an answer against the three gold answers, the checks, unsafe actions; a cohort summary |
+| `score.mjs` | an answer against the chart's two answers, the checks, unsafe actions; a cohort summary with what each wrong group was missing |
 | `record.mjs`, `recorded/` | the planned builds, and their runs on the live model, one JSON file per build |
 | `replay.mjs` | replays a recorded run when there is no model (or with `--replay`); skips stale recordings |
 | `encrypt-key.mjs`, `workshop-key.json` | the workshop key: the API key encrypted with the room's code (`agent/workshop-key.mjs`) |
@@ -190,6 +198,5 @@ To add a tool: write `agent/tools/<name>.ts`, register it in `extension.ts`, and
 
 - Rosa here is not on a beta blocker, for a documented reason (heart block). The talk's Rosa is on metoprolol
   tartrate, a gap. Align the two.
-- Hosting: the server needs Node, and the model endpoint unless it replays. The FHIR server, the tools and pi all run inside it. Load-test
-  with the expected room size before the day. Every test of 100 patients is 100 pi sessions through one queue, so two
-  people testing at once share it.
+- Hosting: the server needs Node, and the model endpoint unless it replays. The FHIR server, the tools and pi all run
+  inside it. Options for a room of 100, measured load and step-by-step guides: [docs/hosting.md](../docs/hosting.md).

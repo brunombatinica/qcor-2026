@@ -25,10 +25,9 @@
     "source=qcor-2026-claude,target=/home/node/.claude,type=volume",
     "source=qcor-2026-ssh-host-keys,target=/etc/ssh/qcor_host_keys,type=volume"
   ],
-  "forwardPorts": [8771, 8770],
+  "forwardPorts": [8771],
   "portsAttributes": {
-    "8771": { "label": "Build an agent (demo_pi)", "onAutoForward": "notify" },
-    "8770": { "label": "talk + style book (just view)", "onAutoForward": "silent" }
+    "8771": { "label": "QCOR 2026 agent demo (demo_pi)", "onAutoForward": "notify" }
   },
   // the model endpoint and key come from .env (gitignored; copy .env.example), or from Codespaces secrets
   "postCreateCommand": "bash .devcontainer/post-create.sh",

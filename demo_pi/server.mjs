@@ -5,10 +5,12 @@
 //
 //   GET  /api/config    the cards (agent/catalog.mjs), Rosa, and whether the model answers
 //   POST /api/preview   {build}             what a run would be given: scopes, tools, system prompt, first message, command
+//   POST /api/peek      {sources, source}   one data card's FHIR request for Rosa with these scopes: status, JSON, and what the model reads
 //   GET  /api/source    ?file=<tool>.ts     a tool's source, for the under-the-hood panel
 //   POST /api/unlock    {code}              the workshop code: unlocks the model in workshop-key.json (agent/model.mjs)
 //   POST /api/run       {build, patient}    one session, streamed as server-sent events: the trace, then the scored answer
-//   POST /api/cohort    {build, n, fresh}   n patients, DEMO_CONCURRENCY at a time, streamed as they run, then a summary
+//   POST /api/cohort    {build, n, fresh}   n patients, DEMO_CONCURRENCY at a time, streamed as they run, then a summary;
+//                                           one test at a time (DEMO_TESTS_AT_ONCE), the rest wait in line
 //   POST /auth/token, GET /fhir/…           the synthetic EHR (ehr/fhir.mjs)
 //
 // Cohort results are cached per model, build and cohort under .cache/, so a build the room has already tried comes back at
@@ -20,12 +22,13 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { dirname, extname, join, normalize as normPath } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ACT_EXAMPLE, CRITERIA, DATA, EXAMPLES, TOOLS, criteriaPrompt, normalize } from "./agent/catalog.mjs";
-import { judge } from "./agent/grade.mjs";
+import { ACT_EXAMPLE, CRITERIA, CRITERIA_GROUPS, DATA, EXAMPLES, TOOLS, criteriaPrompt, normalize } from "./agent/catalog.mjs";
+import { read } from "./agent/grade.mjs";
 import { MODEL, connect, unlock } from "./agent/model.mjs";
 import { FHIR, byPatientId, commandLine, piTools, runSession, systemPrompt, userPrompt } from "./agent/session.mjs";
-import { handleFhir, scopeOf } from "./ehr/fhir.mjs";
+import { handleFhir, issueToken, scopeOf } from "./ehr/fhir.mjs";
 import { PATIENTS, STATUSES, TODAY } from "./ehr/patients.mjs";
+import { line } from "./ehr/render.mjs";
 import { COHORT, REPLAY, catalog, recorded, recordings, replay, stale } from "./replay.mjs";
 import { score, summarize } from "./score.mjs";
 
@@ -38,27 +41,58 @@ const arg = (name, fallback) => { const i = process.argv.indexOf(name); return i
 const PORT = Number(arg("--port", process.env.PORT ?? 8771));
 const HOST = arg("--host", process.env.HOST || "0.0.0.0");
 
-// one queue for every session, so a cohort and the room's Rosa runs share the model fairly
+// one queue for every session, CONCURRENCY at a time; a Rosa run goes ahead of test sessions, so a click on Run on
+// Rosa doesn't wait behind someone's 100 patients. A finished session hands its slot straight to the next one.
 let running = 0;
-const waiting = [];
-async function slot(fn) {
-  if (running >= CONCURRENCY) await new Promise((r) => waiting.push(r));
-  running += 1;
-  try { return await fn(); } finally { running -= 1; waiting.shift()?.(); }
+const waiting = { rosa: [], cohort: [] };
+async function slot(fn, lane = "cohort") {
+  if (running < CONCURRENCY) running += 1;
+  else await new Promise((r) => waiting[lane].push(r));
+  try { return await fn(); } finally {
+    const next = waiting.rosa.shift() || waiting.cohort.shift();
+    if (next) next(); else running -= 1;
+  }
+}
+
+// 100-patient tests run TESTS_AT_ONCE at a time (default 1), in the order they were asked for: one test at a time
+// keeps the room under the model's tokens-per-minute limit (../docs/hosting.md). A test that waits is told how many
+// are ahead of it; one whose answers are all in the cache doesn't wait.
+const TESTS_AT_ONCE = Number(process.env.DEMO_TESTS_AT_ONCE || 1);
+let testsRunning = 0;
+const testLine = [];                                  // { start, tell }
+const tellLine = () => testLine.forEach((t, i) => t.tell(testsRunning + i));
+function nextTest() {
+  while (testsRunning < TESTS_AT_ONCE && testLine.length) { testsRunning += 1; testLine.shift().start(); }
+  tellLine();
+}
+/** Waits for a test's turn: resolves to the function that ends it, or null if the page left while waiting. */
+function testTurn(signal, tell) {
+  return new Promise((resolve) => {
+    let ended = false;
+    const end = () => { if (!ended) { ended = true; testsRunning -= 1; nextTest(); } };
+    const entry = { start: () => resolve(end), tell };
+    testLine.push(entry);
+    signal.addEventListener("abort", () => {
+      const i = testLine.indexOf(entry);
+      if (i >= 0) { testLine.splice(i, 1); tellLine(); resolve(null); }
+    }, { once: true });
+    nextTest();
+  });
 }
 
 // a cached result is reused only for the same model, build, system prompt and cohort (editing instructions/ or
 // ehr/patients.mjs invalidates it)
-const SCORING = 6;                                    // bump when scoring or judging changes
+const SCORING = 7;                                    // bump when reading free text changes (agent/grade.mjs); scores are recomputed
 const buildKey = (b) => createHash("sha1").update(JSON.stringify([MODEL.baseUrl, MODEL.id, b, systemPrompt(b), COHORT, SCORING])).digest("hex").slice(0, 12);
 
 // cache: "use" reads and writes it, "refresh" only writes it (the page's "ignore cache"), absent leaves it alone
-async function runScored(patientId, build, { onEvent, signal, cache, stream } = {}) {
-  const file = cache && join(CACHE, buildKey(build), `${patientId}.json`);
-  if (cache === "use" && existsSync(file)) return { ...JSON.parse(readFileSync(file, "utf8")), cached: true };
-  const result = await slot(() => (signal?.aborted ? { patientId, trace: [], usage: { input: 0, output: 0 }, status: "cancelled" } : runSession({ patientId, build, onEvent, signal, stream })));
-  const a = result.answer;
-  if (a ? a.why : result.text) result.judged = await judge(a ? JSON.stringify(a) : result.text, byPatientId(patientId).gold.why);
+const cacheFile = (build, patientId) => join(CACHE, buildKey(build), `${patientId}.json`);
+async function runScored(patientId, build, { onEvent, signal, cache, stream, lane } = {}) {
+  const file = cache && cacheFile(build, patientId);
+  if (cache === "use" && existsSync(file)) { const row = JSON.parse(readFileSync(file, "utf8")); return { ...row, score: score(row, build), cached: true }; }
+  const result = await slot(() => (signal?.aborted ? { patientId, trace: [], usage: { input: 0, output: 0 }, status: "cancelled" } : runSession({ patientId, build, onEvent, signal, stream })), lane);
+  // a free-text answer is read by one more model call, for its two yes/no answers; a structured one needs none
+  if (!result.answer && result.text) result.read = await read(result.text);
   const row = { ...result, score: score(result, build) };
   if (file && result.status === "ok") { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, JSON.stringify(row)); }
   return row;
@@ -103,10 +137,23 @@ async function config() {
   return {
     model: { id: MODEL.id, baseUrl: MODEL.baseUrl, ok: MODEL.ok, error: MODEL.error, locked: MODEL.locked },
     replay: replayed ? replayInfo() : null, recorded: replayed ? catalog() : [],
-    data: DATA.map((d) => ({ ...d, scope: scopeOf(d) })), tools: TOOLS, criteria: CRITERIA, examples: EXAMPLES, act: ACT_EXAMPLE, statuses: STATUSES,
-    cohort: PATIENTS.length, concurrency: CONCURRENCY, today: TODAY,
-    rosa: { id: rosa.id, name: rosa.name, age: rosa.age, ef: rosa.ef, gold: rosa.gold },
+    data: DATA.map((d) => ({ ...d, scope: scopeOf(d) })), tools: TOOLS, criteria: CRITERIA, criteriaGroups: CRITERIA_GROUPS, examples: EXAMPLES, act: ACT_EXAMPLE, statuses: STATUSES,
+    cohort: PATIENTS.length, names: PATIENTS.map((p) => p.name), concurrency: CONCURRENCY, today: TODAY,
+    rosa: { id: rosa.id, name: rosa.name, age: rosa.age, ef: rosa.ef, gold: rosa.gold, next: rosa.next.date },
   };
+}
+
+// what the agent's Read structured records call would get for one card, with the scopes switched on: the FHIR request
+// and response, and the one line per resource the model actually reads (ehr/render.mjs)
+async function peek(sources, source) {
+  const card = DATA.find((d) => d.id === source);
+  if (!card) return { error: "unknown card" };
+  const token = issueToken(sources.filter((id) => DATA.some((d) => d.id === id)));
+  const path = card.query.replace("{p}", PATIENTS[0].id);
+  const res = await fetch(`${FHIR.base}/${path}`, { headers: { Authorization: `Bearer ${token.access_token}` } });
+  const body = await res.json();
+  const resources = (body.entry || []).map((e) => e.resource);
+  return { request: `GET /fhir/${path}`, token: token.access_token.slice(0, 10), scope: token.scope, status: res.status, lines: resources.map(line), body };
 }
 
 const SOURCE_FILES = new Set([...TOOLS.map((t) => t.file), "fhir.ts"]);
@@ -122,6 +169,7 @@ async function api(req, res, url) {
   if (req.method !== "POST") return json(res, 405, { error: "POST" });
   const body = await readBody(req);
   if (url.pathname === "/api/unlock") return (await unlock(body.code)) ? json(res, 200, { ok: MODEL.ok, error: MODEL.error }) : json(res, 403, { error: "That code didn't work." });
+  if (url.pathname === "/api/peek") return json(res, 200, await peek(body.sources || [], body.source));
   const build = normalize(body.build);
   if (url.pathname === "/api/preview") return json(res, 200, { ...wiring(build, byPatientId(body.patient)), criteria: criteriaPrompt(body.criteria || []) });
   const kind = { "/api/run": "rosa", "/api/cohort": "cohort" }[url.pathname];
@@ -139,22 +187,34 @@ async function api(req, res, url) {
     const patient = byPatientId(body.patient);
     send({ kind: "wiring", ...wiring(build, patient) });
     if (rec) await replay(rec, send, abort.signal);
-    else send({ kind: "result", ...(await runScored(patient.id, build, { onEvent: send, signal: abort.signal, stream: true })) });
+    else send({ kind: "result", ...(await runScored(patient.id, build, { onEvent: send, signal: abort.signal, stream: true, lane: "rosa" })) });
     return res.end();
   }
   const n = Math.max(1, Math.min(PATIENTS.length, Number(body.n) || PATIENTS.length));
   send({ kind: "wiring", ...wiring(build, PATIENTS[0]), n });
   if (rec) { await replay(rec, send, abort.signal); return res.end(); }
-  const rows = await Promise.all(PATIENTS.slice(0, n).map(async (p) => {
-    send({ kind: "queued", patientId: p.id });
-    const row = await runScored(p.id, build, {
-      signal: abort.signal, cache: body.fresh ? "refresh" : "use",
-      onEvent: (item) => item.kind !== "delta" && send({ kind: "event", patientId: p.id, item: { ...item, text: item.text?.slice(0, 300) } }),
-    });
-    send({ kind: "patient", row });
-    return row;
-  }));
-  send({ kind: "summary", build, summary: summarize(rows) });
+  const cohort = PATIENTS.slice(0, n);
+  const allCached = !body.fresh && cohort.every((p) => existsSync(cacheFile(build, p.id)));
+  // while it waits, the place in line goes out again every 15 s, so no proxy closes a quiet stream
+  let ahead = 0;
+  const tell = (k) => { ahead = k; send({ kind: "line", ahead: k }); };
+  const keepAlive = setInterval(() => ahead && tell(ahead), 15_000);
+  const end = allCached ? () => {} : await testTurn(abort.signal, tell);
+  clearInterval(keepAlive);
+  if (!end) return res.end();
+  if (ahead) send({ kind: "line", ahead: 0 });
+  try {
+    const rows = await Promise.all(cohort.map(async (p) => {
+      send({ kind: "queued", patientId: p.id });
+      const row = await runScored(p.id, build, {
+        signal: abort.signal, cache: body.fresh ? "refresh" : "use",
+        onEvent: (item) => item.kind !== "delta" && send({ kind: "event", patientId: p.id, item: { ...item, text: item.text?.slice(0, 300) } }),
+      });
+      send({ kind: "patient", row });
+      return row;
+    }));
+    send({ kind: "summary", build, summary: summarize(rows) });
+  } finally { end(); }
   return res.end();
 }
 
@@ -186,7 +246,7 @@ export const ready = new Promise((resolve) => server.listen(PORT, HOST, async ()
   FHIR.base = `http://127.0.0.1:${port}/fhir`;
   if (MODEL.locked && process.env.DEMO_UNLOCK_CODE && !(await unlock(process.env.DEMO_UNLOCK_CODE))) console.log("DEMO_UNLOCK_CODE is wrong for workshop-key.json");
   if (!REPLAY) await connect();
-  console.log(`Build an agent (pi): http://localhost:${port}`);
+  console.log(`QCOR 2026 agent demo (pi): http://localhost:${port}`);
   console.log(REPLAY ? "model: none (--replay)" : MODEL.locked ? `model: ${MODEL.id} at ${MODEL.baseUrl}, locked until someone enters the workshop code` : MODEL.ok ? `model: ${MODEL.id} at ${MODEL.baseUrl}` : `model not reachable yet: ${MODEL.error}`);
   console.log(`replay: ${recordings.size} recorded runs${stale.length ? `, ${stale.length} stale and skipped (${stale.join(", ")}): npm run record` : ""}${REPLAY || !MODEL.ok ? ", replaying" : ", not used while the model answers"}`);
   resolve(port);

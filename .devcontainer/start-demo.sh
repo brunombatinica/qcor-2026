@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts the "Build an agent" demo in tmux session "demo", at every container start (postStartCommand), so a
+# Starts the QCOR 2026 agent demo in tmux session "demo", at every container start (postStartCommand), so a
 # deployed container serves it with no one logged in. It restarts the server if it exits.
 #
 #   tmux attach -t demo     watch it (Ctrl-b d to leave it running)

@@ -1,5 +1,5 @@
 # qcor-2026 dev container: everything this repo runs on, and nothing from the agents repo.
-# Node 22 (pi needs >= 22.19), Python 3 (serve.py), just, uv, tmux (the demo's autostart session).
+# Node 22 (pi needs >= 22.19), Python 3 (`just demos`), just, uv, tmux (the demo's autostart session).
 # LIBREOFFICE=true adds LibreOffice + poppler for `just pptx-render` (about 600 MB, so off by default).
 FROM mcr.microsoft.com/devcontainers/javascript-node:22-bookworm
 

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "QCOR 2026 'Build an agent, live': the page picks data, tools and checks; server.mjs wires them into a real pi agent session",
+  "description": "QCOR 2026 agent demo: the page picks data, tools, a prompt and criteria; server.mjs wires them into a real pi agent session",
   "scripts": {
     "start": "node server.mjs",
     "test": "node test/e2e.mjs && node test/replay.mjs && node test/unlock.mjs && node test/openai-request.mjs",
