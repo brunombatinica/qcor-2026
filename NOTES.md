@@ -31,7 +31,8 @@ Then: Test's line is "Write a prompt for the agent to find beta-blocker care gap
 (gpt-6-luna: $0.10 / $0.01 cached / $0.50 per million, OpenAI's standard rates; `PRICES` in `agent/catalog.mjs`); the
 answer card, the test's tokens tile and the runs table show the cost too. A last slide, **Ask the EHR**: a ChatEHR-like
 chat about any patient, the whole chart and the reading tools, the conversation so far in each prompt (`/api/ask`).
-Live only; tested on the stand-in model, not on Luna.
+Live only; tested on the stand-in model, not on Luna. The runs table under Test is gone: with a room using it, a
+list of every run isn't needed.
 
 ## Demo, rulebooks and the page (2026-11-04, evening; Ryan)
 

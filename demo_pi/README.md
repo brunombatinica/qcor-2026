@@ -154,7 +154,7 @@ tool calls unless `reasoning_effort` is `none` (an HTTP 400), so the demo declar
 every prompt token, cached or not (pi reports OpenAI's cached ones apart). The header shows the run going on now, or
 the last one: its tokens and what they cost (`PRICES` in `agent/catalog.mjs`: gpt-6-luna at OpenAI's standard rates,
 $0.10 per million tokens in, $0.01 cached, $0.50 out; `DEMO_PRICE_IN`, `DEMO_PRICE_CACHED` and `DEMO_PRICE_OUT` for
-another model, else no cost is shown). The answer card, the test's tokens tile and the runs table show it too.
+another model, else no cost is shown). The answer card and the test's tokens tile show it too.
 
 `just demo-pi` reads them from `.env` in the repo root (gitignored; [.env.example](../.env.example)) as well as your
 environment. To switch services on the day: `DEMO_BASE_URL=https://… DEMO_API_KEY=… DEMO_MODEL=… just demo-pi`.

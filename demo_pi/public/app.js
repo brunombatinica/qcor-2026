@@ -20,7 +20,6 @@ const state = {
   focus: { data: null, tools: null }, hood: saved.hood ?? false, hoodSeen: saved.hoodSeen ?? false, zoom: saved.zoom ?? 1, wide: false, busy: false,
   chart: { patient: "p000", tab: "summary", note: null },
 };
-const runs = [];
 let cfg;
 
 const save = () => { localStorage.setItem(KEY, JSON.stringify({ view: state.view, sources: [...state.sources], tools: [...state.tools], prompt: state.prompt, testPrompt: state.testPrompt, rules: state.rules, hood: state.hood, hoodSeen: state.hoodSeen, zoom: state.zoom })); recSync(); };
@@ -573,8 +572,6 @@ async function runCohort() {
         const seconds = Math.round((performance.now() - t0) / 100) / 10;
         results(m.summary, cached, seconds, m.rules || state.rules);
         $("tally").hidden = true; $("agentsBox").open = false;
-        runs.unshift({ build: b, rules: m.rules || state.rules, summary: m.summary, seconds });
-        runsTable();
       }
     }, cohortAbort.signal);
   } catch (e) {
@@ -589,14 +586,6 @@ async function runCohort() {
   status();
   cohortAbort = null;
   runButton(false);
-}
-
-function runsTable() {
-  const ics = (list, ids) => `<span class="ics">${list.filter((x) => ids.includes(x.id)).map((x) => `<span title="${esc(x.label)}">${icon(x.icon)}</span>`).join("") || "nothing"}</span>`;
-  $("runs").innerHTML = `<tr><th>Run</th><th>Sees</th><th>Does</th><th>Prompt</th><th>Checked against</th><th>Care gaps found</th><th>False alarms</th><th>Right</th><th>Care gap · Why</th><th>Tokens</th><th>Cost</th><th>Wall clock</th></tr>` +
-    runs.map((r, i) => `<tr><td>${runs.length - i}</td><td>${ics(cfg.data, r.build.sources)}</td><td>${ics(cfg.tools, r.build.tools)}</td>
-      <td class="small muted" title="${esc(r.build.prompt)}">${esc(r.build.prompt.slice(0, 70))}${r.build.prompt.length > 70 ? "…" : ""}</td>
-      <td>${esc(cfg.rules[r.rules]?.label || r.rules)}</td><td class="num">${r.summary.gaps ? `${r.summary.gaps.found}/${r.summary.gaps.total}` : "–"}</td><td class="num">${r.summary.gaps?.falseAlarms ?? "–"}</td><td class="num">${r.summary.right}/${r.summary.n}</td><td class="num">${r.summary.questions.gap.right} · ${r.summary.questions.why.right}</td><td class="num">${num(r.summary.tokens)}</td><td class="num">${r.summary.tokensIn != null && cfg.price ? usd(cost(r.summary.tokensIn, r.summary.tokensOut, r.summary.tokensCached)) : "–"}</td><td class="num">${r.seconds} s</td></tr>`).join("");
 }
 
 // ---- replay: with no model the server replays recorded runs (replay.mjs); a picker loads one of their builds ----
