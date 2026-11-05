@@ -31,7 +31,9 @@ is read from its options, for the questions the prompt asked; free text is read 
 question and the answer, never the chart (`agent/grade.mjs`). "On a beta blocker" implies "not a care gap", as in the
 measure; a question it didn't answer isn't right, and a patient is right only when both are. The harness tells the
 agent to be quick and answer only what it is asked, so *On a beta blocker?* gets a short answer that says nothing
-about a care gap: not finished.
+about a care gap: not finished. That answer is still checked, on its own row of Rosa's card: a prompt that asks "on a
+beta blocker" is scored on it too (on one that counts, `gold.given`), and the yes or no answers whichever of it and
+*care gap?* the prompt asks first. It doesn't make the answer right; the task is the care gap.
 
 **Definitions.** The definition picked on Test is the answer key (`RULES` and `goldFor` in `agent/catalog.mjs`); the
 suggestions are only what the agent is told, so the room can tell it one definition and check it against the other

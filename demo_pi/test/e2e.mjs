@@ -74,6 +74,8 @@ const PROMPT = "Is there a beta-blocker care gap for this patient? Why or why no
   assert.ok(props.option_2.enum.includes("medical reason"));
   assert.ok(row.answer.option_1 && !row.read, "no second call");
   assert.deepEqual(Object.values(row.score.questions).map((q) => q.right), [null, null], "a care gap and why were not asked");
+  const g = row.score.given;
+  assert.deepEqual([g.asked, g.agent, g.gold, g.right], [true, row.answer.option_1, "no", row.answer.option_1 === "no"], "on a beta blocker? was asked: its yes or no, checked against the chart");
 }
 
 // a tool card is a tool the model is given; a data card is a scope its tools are refused without
@@ -103,6 +105,7 @@ const PROMPT = "Is there a beta-blocker care gap for this patient? Why or why no
   assert.ok(row.trace.some((t) => t.tool === "check_quote" && t.kind === "observe"));
   assert.equal(row.score.correct, true);
   assert.deepEqual(Object.values(row.score.questions).map((q) => q.right), [true, true], "care gap, and why");
+  assert.equal(row.score.given.asked, false, "the care-gap prompt doesn't ask whether she is on one");
   assert.equal(row.score.quote.found, true);
 }
 

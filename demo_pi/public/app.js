@@ -264,11 +264,13 @@ const termRosa = new Term($("termRosa"), "pi · Rosa");
 const QUESTIONS = [["gap", "Care gap?"], ["why", "Why?"]];
 const mark = (r) => `<span class="mark ${r === true ? "ok" : r === false ? "no" : "na"}">${r === true ? "✓" : r === false ? "✗" : "–"}</span>`;
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : "");
-const answerLabel = (k, v) => (!v ? "" : k === "gap" ? cap(v) : cap(cfg.why[v] || v));
+const answerLabel = (k, v) => (!v ? "" : k === "gap" || k === "given" ? cap(v) : cap(cfg.why[v] || v));
 
 function checkTable(s) {
-  return `<table class="qa"><thead><tr><th></th><th>Agent</th><th>Chart</th><th></th></tr></thead><tbody>${QUESTIONS.map(([k, label]) => {
-    const x = s.questions[k];
+  // "On a beta blocker?" only when the prompt asked it (score.mjs); the care gap and why are always the task
+  const rows = [...(s.given?.asked ? [["given", "On a beta blocker?"]] : []), ...QUESTIONS];
+  return `<table class="qa"><thead><tr><th></th><th>Agent</th><th>Chart</th><th></th></tr></thead><tbody>${rows.map(([k, label]) => {
+    const x = k === "given" ? s.given : s.questions[k];
     const agent = x.agent ? `<span class="ag">${esc(answerLabel(k, x.agent))}</span>${x.implied ? `<span class="imp">implied</span>` : ""}` : `<span class="na">–</span>`;
     return `<tr><th>${label}</th><td>${agent}</td><td>${esc(answerLabel(k, x.gold))}</td><td>${mark(x.right)}</td></tr>`;
   }).join("")}</tbody></table>`;
@@ -307,7 +309,7 @@ function verdictCard(row, { who = "", off = false, ran = null } = {}) {
   if (s.webQueries.length) flags.push(`Searched the web${s.leaked.length ? ` with the patient's ${s.leaked.join(", ")}` : ""}`);
   const flagHtml = flags.map((f) => `<div class="flag">${esc(f)}</div>`).join("");
   if (off) return `<div class="verdict">${whyHtml}${said}${flagHtml}${meta}</div>`;
-  const q = Object.values(s.questions), wrong = q.some((x) => x.right === false);
+  const q = Object.values(s.questions), wrong = q.some((x) => x.right === false) || s.given?.right === false;
   const [cls, badge, top] = s.correct ? ["right", "✓", "Right"] : wrong ? ["wrong", "✗", "Wrong"] : ["na", "–", "Not finished"];
   return `<div class="verdict"><div class="vtop ${cls}"><span class="badge">${badge}</span>${top}</div>${whyHtml}${said}${checkTable(s)}${flagHtml}${meta}</div>`;
 }
@@ -316,7 +318,8 @@ function verdictCard(row, { who = "", off = false, ran = null } = {}) {
 function logDetails(t, row, off) {
   const s = row.score, q = s.questions, ok = (r) => (r ? "✓" : r === false ? "✗" : "–"), lines = [];
   if (!off) {
-    lines.push(s.structured ? `read     ${JSON.stringify({ option_1: row.answer?.option_1 ?? null, option_2: row.answer?.option_2 ?? null })}` : row.read ? `read     ${JSON.stringify({ care_gap: row.read.careGap, why: row.read.why })}  (${num(readTokens(row))} tokens)` : "read     –");
+    lines.push(s.structured ? `read     ${JSON.stringify({ option_1: row.answer?.option_1 ?? null, option_2: row.answer?.option_2 ?? null })}` : row.read ? `read     ${JSON.stringify({ care_gap: row.read.careGap, on_beta_blocker: row.read.onBetaBlocker ?? null, why: row.read.why })}  (${num(readTokens(row))} tokens)` : "read     –");
+    if (s.given?.asked) lines.push(`score    on_beta_blocker: ${s.given.agent ?? "null"} ${ok(s.given.right)}   gold: ${s.given.gold}`);
     lines.push(`score    care_gap: ${q.gap.agent ?? "null"}${q.gap.implied ? " (implied)" : ""} ${ok(q.gap.right)}   why: ${q.why.agent ?? "null"} ${ok(q.why.right)}`);
     lines.push(`gold     care_gap: ${q.gap.gold}   why: ${q.why.gold}   scenario: ${s.scenario}`);
   }

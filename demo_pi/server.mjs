@@ -84,7 +84,7 @@ function testTurn(signal, tell) {
 
 // a cached result is reused only for the same model, build, system prompt and cohort (editing instructions/ or
 // ehr/patients.mjs invalidates it)
-const SCORING = 10;                                   // bump when reading free text changes (agent/grade.mjs); scores are recomputed
+const SCORING = 11;                                   // bump when reading free text changes (agent/grade.mjs); scores are recomputed
 // the agent's tools are part of the build too: editing one (agent/tools/, agent/extension.ts) invalidates the cache
 const TOOL_CODE = createHash("sha1").update(["extension.ts", ...readdirSync(join(HERE, "agent", "tools")).sort().map((f) => `tools/${f}`)].map((f) => readFileSync(join(HERE, "agent", f), "utf8")).join("\n")).digest("hex");
 const buildKey = (b) => createHash("sha1").update(JSON.stringify([MODEL.baseUrl, MODEL.id, b, systemPrompt(b), COHORT, SCORING, TOOL_CODE])).digest("hex").slice(0, 12);
