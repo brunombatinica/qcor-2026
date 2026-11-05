@@ -5,6 +5,7 @@
   --bg: #000; --text: #f5f5f7; --muted: #8e8e93; --card: #1c1c1e; --raised: #2c2c2e; --dim: #3a3a3c; --edge: #48484a;
   --blue: #0a84ff; --blue-s: rgba(10, 132, 255, 0.16); --green: #30d158; --green-s: rgba(48, 209, 88, 0.16);
   --red: #ff453a; --red-s: rgba(255, 69, 58, 0.16); --purple: #bf5af2; --purple-s: rgba(191, 90, 242, 0.14);
+  --amber: #ff9f0a; --amber-s: rgba(255, 159, 10, 0.14);
   --font: "Helvetica Neue", Arial, Helvetica, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
   --hood: min(540px, 36vw); --hood-font: 11.5px;
@@ -184,10 +185,12 @@ textarea:focus { outline: none; border-color: var(--edge); }
 .termHead { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--card); font: 12px var(--mono); }
 .termHead .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
 .term.running .dot { background: var(--green); animation: pulse 1s infinite; }
+.term.waiting .dot { background: var(--amber); } .term.waiting .status { color: var(--amber); }   /* in line for an agent */
 .termHead .status { flex: 1; color: var(--muted); } .termHead .clock { color: var(--text); font-variant-numeric: tabular-nums; }
 .termHead .key { color: var(--muted); font-size: 11px; } .termHead .key i { font-style: normal; color: var(--blue); } .termHead .key u { text-decoration: none; color: var(--purple); }
 @keyframes pulse { 50% { opacity: 0.3; } }
 .termBody { flex: 1; overflow: auto; padding: 8px 0; font: 12px/1.55 var(--mono); }
+.term.running:not(.waiting) .termBody::after { content: "▍"; display: block; padding: 1px 12px 1px 74px; color: var(--blue); animation: pulse 1s infinite; }   /* still working */
 .ln { display: grid; grid-template-columns: 62px auto 1fr; padding: 1px 12px; white-space: pre-wrap; word-break: break-word; }
 .ln .ts { color: var(--dim); } .ln .pid { color: var(--edge); margin-right: 8px; } .ln .tx { min-width: 0; }
 .ln.cmd .tx { color: var(--muted); }
@@ -198,8 +201,14 @@ textarea:focus { outline: none; border-color: var(--edge); }
 .ln.use .tx { color: var(--dim); }
 .ln.more { cursor: pointer; } .ln.more:hover .tx { color: var(--text); }
 .ln.ans .tx { color: var(--purple); font-weight: 700; } .ln.done .tx { color: var(--green); } .ln.err .tx { color: var(--red); }
+.ln.wait .tx { color: var(--amber); }
 .ln.chk .tx { color: var(--muted); } .ln.chk.first .tx { border-top: 1px dashed var(--dim); padding-top: 6px; margin-top: 6px; }
 .ln.alarm .tx { color: #fff; background: var(--red); padding: 0 6px; border-radius: 4px; justify-self: start; font-weight: 700; }
+
+/* a run in line for an agent, under the Run button until its turn */
+.queued { margin-top: 16px; background: var(--amber-s); border: 1px solid rgba(255, 159, 10, 0.35); border-radius: 14px; padding: 12px 16px; display: grid; gap: 4px; }
+.queued b { color: var(--amber); font-size: 15px; } .queued span { color: var(--muted); font-size: 13px; }
+.queued b::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--amber); vertical-align: middle; animation: pulse 1s infinite; }
 
 /* the answer, and the check against the chart: nothing else */
 .verdict { margin-top: 16px; background: var(--card); border-radius: 14px; padding: 14px 16px; }

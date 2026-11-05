@@ -11,6 +11,7 @@
 //   POST /api/example   {tool, sources}     what one tool would do for Rosa with these scopes: the call and what comes back
 //   POST /api/unlock    {code}              the workshop code: unlocks the model in workshop-key.json (agent/model.mjs)
 //   POST /api/run       {build, patient}    one session, streamed as server-sent events: the trace, then the scored answer
+//                                           (if every agent is busy, first its place in line: wait …, then start)
 //   POST /api/cohort    {build, n, fresh}   n patients, DEMO_CONCURRENCY at a time, streamed as they run, then a summary;
 //                                           one test at a time (DEMO_TESTS_AT_ONCE), the rest wait in line
 //   POST /auth/token, GET /fhir/…           the synthetic EHR (ehr/fhir.mjs)
@@ -45,16 +46,24 @@ const HOST = arg("--host", process.env.HOST || "0.0.0.0");
 
 // one queue for every session, CONCURRENCY at a time; a Rosa run goes ahead of test sessions, so a click on Run on
 // Rosa doesn't wait behind someone's 100 patients. A finished session hands its slot straight to the next one.
+// `tell`, if given, hears how many sessions are ahead of it while it waits (again each time the line moves), then null
+// when its turn comes, so the page can say it is in line rather than stuck.
 let running = 0;
 const waiting = { rosa: [], cohort: [] };
-async function slot(fn, lane = "cohort") {
+const tellWaiting = () => [...waiting.rosa, ...waiting.cohort].forEach((w, i) => w.tell?.(i));
+async function slot(fn, lane = "cohort", tell) {
   if (running < CONCURRENCY) running += 1;
-  else await new Promise((r) => waiting[lane].push(r));
+  else {
+    await new Promise((go) => { waiting[lane].push({ go, tell }); tellWaiting(); });
+    tell?.(null);
+  }
   try { return await fn(); } finally {
     const next = waiting.rosa.shift() || waiting.cohort.shift();
-    if (next) next(); else running -= 1;
+    if (next) { next.go(); tellWaiting(); } else running -= 1;
   }
 }
+// what a page waiting for its one session is sent: its place in line, then "start"
+const inLine = (send) => (ahead) => send(ahead === null ? { kind: "start" } : { kind: "wait", ahead, of: CONCURRENCY });
 
 // 100-patient tests run TESTS_AT_ONCE at a time (default 1), in the order they were asked for: one test at a time
 // keeps the room under the model's tokens-per-minute limit (../docs/hosting.md). A test that waits is told how many
@@ -91,10 +100,10 @@ const buildKey = (b) => createHash("sha1").update(JSON.stringify([MODEL.baseUrl,
 
 // cache: "use" reads and writes it, "refresh" only writes it (the page's "ignore cache"), absent leaves it alone
 const cacheFile = (build, patientId) => join(CACHE, buildKey(build), `${patientId}.json`);
-async function runScored(patientId, build, { onEvent, signal, cache, stream, lane, rules } = {}) {
+async function runScored(patientId, build, { onEvent, signal, cache, stream, lane, rules, tell } = {}) {
   const file = cache && cacheFile(build, patientId);
   if (cache === "use" && existsSync(file)) { const row = JSON.parse(readFileSync(file, "utf8")); return { ...row, score: score(row, build, rules), cached: true }; }
-  const result = await slot(() => (signal?.aborted ? { patientId, trace: [], usage: { input: 0, output: 0 }, status: "cancelled" } : runSession({ patientId, build, onEvent, signal, stream })), lane);
+  const result = await slot(() => (signal?.aborted ? { patientId, trace: [], usage: { input: 0, output: 0 }, status: "cancelled" } : runSession({ patientId, build, onEvent, signal, stream })), lane, tell);
   // free text is read by one more model call, for its two answers; the structured answer's fixed options need none
   const b = normalize(build);
   if (!b.tools.includes("structured") && answerText(result)) result.read = await read(answerText(result), b.prompt);
@@ -241,7 +250,7 @@ async function api(req, res, url) {
     res.on("close", () => abort.abort());
     const send = sse(res);
     send({ kind: "wiring", ...wiring(build, patient) });
-    const r = await slot(() => runSession({ patientId: patient.id, build, onEvent: send, signal: abort.signal, stream: true }), "rosa");
+    const r = await slot(() => runSession({ patientId: patient.id, build, onEvent: send, signal: abort.signal, stream: true }), "rosa", inLine(send));
     send({ kind: "answer", text: answerText(r), usage: r.usage, seconds: r.seconds, status: r.status, error: r.error });
     return res.end();
   }
@@ -262,7 +271,7 @@ async function api(req, res, url) {
     const patient = byPatientId(body.patient);
     send({ kind: "wiring", ...wiring(build, patient) });
     if (rec) await replay(rec, send, abort.signal, rules);
-    else send({ kind: "result", ...(await runScored(patient.id, build, { onEvent: send, signal: abort.signal, stream: true, lane: "rosa", rules })) });
+    else send({ kind: "result", ...(await runScored(patient.id, build, { onEvent: send, signal: abort.signal, stream: true, lane: "rosa", rules, tell: inLine(send) })) });
     return res.end();
   }
   const n = Math.max(1, Math.min(PATIENTS.length, Number(body.n) || PATIENTS.length));

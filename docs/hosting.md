@@ -29,6 +29,8 @@ runs.** The 100-patient test is where it gets heavy, in two ways:
 - **Queue.** A test puts 100 sessions in the shared queue. Before 2026-11-04 a Rosa run waited behind all of them
   (62 s behind 3); now Rosa runs go first, and tests run one at a time (`DEMO_TESTS_AT_ONCE`, default 1), the rest
   waiting in line with "In line: 2 tests ahead of yours" on the page. A test whose answers are all cached doesn't wait.
+  When every slot is busy, a Rosa run or an Ask the EHR question is told its place too: an amber "In line for an
+  agent: 3 runs ahead of yours" under Run and in the terminal, until its turn, so nobody takes it for stuck.
 - **Tokens.** If all 100 people each run one test with a different build, that is 10,000 sessions, about 14M to 56M
   tokens, in a few minutes. The workshop project's limit for `gpt-6-luna` is 2,000,000 tokens and 5,000 requests per
   minute (read from the API's `x-ratelimit-*` headers, 2026-11-04), so the room can run about 2 to 5 different tests a
@@ -116,7 +118,8 @@ Infrastructure as Code (`.railway/railway.ts`, applied with the Railway CLI), is
    - **Deploy → Replica Limits:** nothing to set. A replica gets up to the plan's 8 vCPU and 8 GB by itself, and is
      billed for what it uses; the room needs no more (the measurements). Set lower only to cap the bill.
    - `DEMO_CONCURRENCY` is for the whole server, not per person: at most that many sessions at once, from everyone, the
-     rest waiting. 32 is what 8 vCPU was measured with; 2 would make a room of 50 wait minutes for Rosa.
+     rest waiting (the page says so, with its place in line). 32 is what 8 vCPU was measured with; 2 would make a room
+     of 50 wait minutes for Rosa.
    - **Build → Watch Paths:** `/demo_pi/**`, `/shared/**`, `/Dockerfile`, `/.dockerignore`. Railway redeploys on every
      push to `main`; with these, a push that only changes the slides or notes doesn't.
 6. **A volume for the cache.** Right-click the canvas (or ⌘K) → **Volume** → attach it to the service, mount path

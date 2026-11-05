@@ -176,6 +176,29 @@ const PROMPT = "Is there a beta-blocker care gap for this patient? Why or why no
   for (const ev of [ea, eb]) assert.equal(ev.find((e) => e.kind === "summary").summary.n, 3);
 }
 
+// every agent busy (a test holds them all): a Rosa run is told its place in line, then its turn, ahead of the test's
+// waiting patients; two at once are told 0 and 1. One that doesn't wait is told nothing.
+{
+  const { concurrency } = await (await fetch(`${base}/api/config`)).json();
+  const a = { tools: ["read_records"], sources: ["medications"], prompt: `${PROMPT} (busy)` };
+  const busy = events("/api/cohort", { build: a, n: Math.min(100, concurrency + 6), fresh: true });
+  await new Promise((r) => setTimeout(r, 150));
+  const rosa = { build: a, patient: "p000" };
+  const both = await Promise.all([events("/api/run", rosa), events("/api/run", rosa)]);
+  for (const ev of both) {
+    const at = (k) => ev.findIndex((e) => e.kind === k);
+    assert.ok(at("wiring") < at("wait") && at("wait") < at("start") && at("start") < at("result"), "the wiring, its place in line, its turn, then the answer");
+    assert.ok(ev.filter((e) => e.kind === "wait").every((e) => e.of === concurrency), "how many run at once");
+    assert.equal(ev.filter((e) => e.kind === "start").length, 1);
+    assert.equal(ev.find((e) => e.kind === "result").status, "ok");
+  }
+  assert.deepEqual(both.map((ev) => ev.find((e) => e.kind === "wait").ahead).sort(), [0, 1], "the second is behind the first");
+  assert.equal(both.map((ev) => ev.filter((e) => e.kind === "wait").at(-1).ahead).join(), "0,0", "each is next before its turn");
+  await busy;
+  const alone = await events("/api/run", rosa);
+  assert.ok(!alone.some((e) => e.kind === "wait" || e.kind === "start"), "a free agent: no line");
+}
+
 server.close();
 model.close();
 console.log("e2e: all checks passed");

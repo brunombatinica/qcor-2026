@@ -191,6 +191,7 @@ function tabHtml(c, tab) {
 
 // ---- terminal: the model's words and tool calls in blue, its handed-in answer in purple, what comes back in grey ----
 
+const aheadText = (n) => (n ? `${n} ${n === 1 ? "run" : "runs"} ahead of yours` : "yours is next");
 const argText = (args) => Object.entries(args || {}).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(", ");
 
 class Term {
@@ -199,8 +200,9 @@ class Term {
     el.innerHTML = `<div class="termHead"><span class="dot"></span><span class="tt">${esc(title)}</span><span class="status"></span><span class="key"><i>blue</i> the model writes · <u>purple</u> its answer · grey comes back</span><span class="clock">00:00.0</span></div><div class="termBody"></div>`;
     this.body = el.querySelector(".termBody");
     this.timer = null;
+    this.waits = new Map();                           // session (its prefix) → its line while it waits for an agent
   }
-  reset(status = "") { this.body.innerHTML = ""; this.live = null; this.setStatus(status); this.el.querySelector(".clock").textContent = "00:00.0"; }
+  reset(status = "") { this.body.innerHTML = ""; this.live = null; this.waits = new Map(); this.el.classList.remove("waiting"); this.setStatus(status); this.el.querySelector(".clock").textContent = "00:00.0"; }
   setStatus(s) { this.el.querySelector(".status").textContent = s; }
   start() {
     this.t0 = performance.now();
@@ -208,7 +210,7 @@ class Term {
     clearInterval(this.timer);
     this.timer = setInterval(() => (this.el.querySelector(".clock").textContent = clock(performance.now() - this.t0)), 100);
   }
-  stop() { clearInterval(this.timer); this.el.classList.remove("running"); }
+  stop() { clearInterval(this.timer); this.el.classList.remove("running", "waiting"); }
   line(cls, html, t, { prefix = "", max = 500 } = {}) {
     const div = document.createElement("div");
     div.className = `ln ${cls}`;
@@ -225,6 +227,21 @@ class Term {
     const sys = this.line("sys", `▸ system prompt (${num(w.system.length)} characters): click to read`);
     sys.onclick = () => { sys.classList.toggle("open"); sys.querySelector(".tx").textContent = sys.classList.contains("open") ? `▾ system prompt\n${w.system}` : `▸ system prompt (${num(w.system.length)} characters): click to read`; };
     this.line("you", esc(w.prompt));
+  }
+  // while every agent is busy (the server runs a fixed number at once, for the whole room): one line per session with
+  // its place in line, kept up to date; when its turn comes the line says how long it waited
+  queue(m, opts = {}) {
+    const key = opts.prefix || "";
+    let w = this.waits.get(key);
+    if (m.kind === "wait") {
+      if (!w) { w = { tx: this.line("wait", "", undefined, opts).querySelector(".tx"), t0: performance.now() }; this.waits.set(key, w); }
+      w.tx.textContent = `⏳ in line: ${aheadText(m.ahead)} · ${m.of === 1 ? "the one agent is" : `all ${m.of} agents are`} busy`;
+    } else if (w) {
+      w.tx.textContent = `▶ started after ${clock(performance.now() - w.t0)} in line`;
+      this.waits.delete(key);
+    }
+    this.el.classList.toggle("waiting", this.waits.size > 0);
+    this.setStatus(this.waits.size ? "in line" : "running");
   }
   // one pi event (from session.mjs) as terminal lines
   event(m, opts = {}) {
@@ -329,6 +346,9 @@ function logDetails(t, row, off) {
   lines.forEach((l, i) => t.line(`chk${i ? "" : " first"}`, esc(l)));
 }
 
+// a run that is waiting for a free agent, under the Run button (on a phone the terminal is further down)
+const queuedCard = (m) => `<div class="queued"><b>In line for an agent: ${aheadText(m.ahead)}</b><span>The server runs ${m.of} ${m.of === 1 ? "agent" : "agents"} at once for the whole room. Yours starts by itself when one finishes; no need to click again.</span></div>`;
+
 async function runRosa() {
   if (state.busy) return;
   if (!state.prompt.trim()) { $("prompt").focus(); $("prompt").classList.add("shake"); setTimeout(() => $("prompt").classList.remove("shake"), 400); return; }
@@ -343,7 +363,12 @@ async function runRosa() {
   try {
     await stream("/api/run", { build: ran, patient: cfg.rosa.id, rules: state.rules }, (m) => {
       if (m.kind === "wiring") { termRosa.intro(m); lastWiring = m; }
-      else if (m.kind === "result") {
+      else if (m.kind === "wait" || m.kind === "start") {
+        // every agent is busy: say so where the answer will be, until its turn; then the clock times the run, not the wait
+        termRosa.queue(m);
+        $("answer").innerHTML = m.kind === "wait" ? queuedCard(m) : "";
+        if (m.kind === "start") termRosa.start();
+      } else if (m.kind === "result") {
         termRosa.line(off || m.score.correct ? "done" : "err", `■ ${esc(m.status === "ok" ? "done" : m.status)}${m.error ? `: ${esc(m.error)}` : ""}`, (m.seconds || 0) * 1000);
         logDetails(termRosa, m, off);
         $("answer").innerHTML = verdictCard(m, { off, ran });
@@ -663,7 +688,7 @@ function setPicks(list) { askPicks = list; chat = []; drawPick(); drawChat(); te
 
 function drawChat() {
   const many = askPicks.length > 1;
-  const reply = (r) => r.a === undefined ? `<div class="msg agent pending">${many ? `<b class="mwho">${esc(r.name)}</b>` : ""}reading the chart…</div>`
+  const reply = (r) => r.a === undefined ? `<div class="msg agent pending">${many ? `<b class="mwho">${esc(r.name)}</b>` : ""}${r.wait != null ? `in line for an agent, ${aheadText(r.wait)}…` : "reading the chart…"}</div>`
     : `<div class="msg agent${r.error ? " err" : ""}">${many ? `<b class="mwho">${esc(r.name)}</b>` : ""}${esc(r.a || r.error || "No answer")}${r.meta ? `<div class="mmeta">${r.meta}</div>` : ""}</div>`;
   const who = askPicks.length === 1 ? `${esc(nameOf(askPicks[0]))}'s chart` : `these ${askPicks.length} patients' charts`;
   $("chat").innerHTML = chat.length ? chat.map((m) => `<div class="msg you">${esc(m.q)}</div>${m.replies.map(reply).join("")}`).join("")
@@ -690,6 +715,7 @@ async function ask(q) {
     try {
       await stream("/api/ask", { patient: r.pid, question: q, history: past[r.pid] }, (e) => {
         if (e.kind === "wiring") { if (i === 0) termAsk.intro(e); }
+        else if (e.kind === "wait" || e.kind === "start") { termAsk.queue(e, opts); r.wait = e.kind === "wait" ? e.ahead : null; drawChat(); }
         else if (e.kind === "answer") {
           const c = cost(e.usage.input, e.usage.output, e.usage.cached);
           Object.assign(r, { a: e.text, error: e.status === "ok" ? "" : e.error || e.status,
