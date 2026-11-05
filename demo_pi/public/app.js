@@ -641,11 +641,11 @@ const ASK_EXAMPLES = ["Which GDMT medications is this patient on?", "Is this pat
   "Is there a reason not to start an MRA, such as potassium or kidney function?", "What were the latest potassium and creatinine?"];
 const termAsk = new Term($("termAsk"), "pi · Ask the EHR");
 const pidOf = (i) => `p${String(i).padStart(3, "0")}`, nameOf = (pid) => cfg.names[Number(pid.slice(1))];
-let askPicks = ["p000"], chat = [], asking = false;
+let askPicks = [], chat = [], asking = false;          // nobody picked until someone does
 
 function drawPick() {
   const n = askPicks.length;
-  $("askPickBtn").innerHTML = `${n ? esc(askPicks.slice(0, 2).map(nameOf).join(", ")) + (n > 2 ? ` +${n - 2}` : "") : "Pick patients"}<span class="caret">▾</span>`;
+  $("askPickBtn").innerHTML = `${n ? esc(askPicks.slice(0, 2).map(nameOf).join(", ")) + (n > 2 ? ` +${n - 2}` : "") : "Select patients"}<span class="caret">▾</span>`;
   const find = $("askFind").value.trim().toLowerCase(), top = $("askList").scrollTop;
   $("askList").innerHTML = cfg.names.map((name, i) => [pidOf(i), name]).filter(([pid, name]) => !find || name.toLowerCase().includes(find) || pid.includes(find)).map(([pid, name]) => {
     const on = askPicks.includes(pid), full = !on && n >= ASK_MAX;
@@ -664,15 +664,16 @@ function drawChat() {
     : `<div class="msg agent${r.error ? " err" : ""}">${many ? `<b class="mwho">${esc(r.name)}</b>` : ""}${esc(r.a || r.error || "No answer")}${r.meta ? `<div class="mmeta">${r.meta}</div>` : ""}</div>`;
   const who = askPicks.length === 1 ? `${esc(nameOf(askPicks[0]))}'s chart` : `these ${askPicks.length} patients' charts`;
   $("chat").innerHTML = chat.length ? chat.map((m) => `<div class="msg you">${esc(m.q)}</div>${m.replies.map(reply).join("")}`).join("")
-    : `<div class="msg agent hint">${askPicks.length ? `Ask about ${who}.` : "Pick a patient first."}</div>`;
+    : `<div class="msg agent hint">${askPicks.length ? `Ask about ${who}.` : "Select patients to get started."}</div>`;
   $("chat").scrollTop = $("chat").scrollHeight;
   $("askExamples").hidden = chat.length > 0;          // starting points, until the conversation starts
-  if (!cfg.replay) $("askInput").placeholder = askPicks.length > 1 ? "Ask about these patients…" : "Ask about this patient…";
+  if (!cfg.replay) $("askInput").placeholder = !askPicks.length ? "Select patients, then ask about their charts…" : askPicks.length > 1 ? "Ask about these patients…" : "Ask about this patient…";
 }
 
 async function ask(q) {
   q = String(q || "").trim();
-  if (!q || asking || !askPicks.length) return;
+  if (!askPicks.length) return openPick(true);       // asked with nobody picked: open the list
+  if (!q || asking) return;
   asking = true; $("askBtn").disabled = true; $("askInput").value = "";
   const many = askPicks.length > 1;
   const m = { q, replies: askPicks.map((pid) => ({ pid, name: nameOf(pid) })) };
