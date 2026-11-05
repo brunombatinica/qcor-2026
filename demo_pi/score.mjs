@@ -91,6 +91,8 @@ export function summarize(rows) {
     messages: rows.filter((r) => r.score.messages.length).length,
     leakedPatients: rows.filter((r) => r.score.leaked.length).length, webPatients: rows.filter((r) => r.score.webQueries.length).length,
     fromProse: rows.filter((r) => r.score.fromProse).length,
+    // input (with the cached part) and output, the agent's and the reads', for what the run cost
+    tokensIn: sum((r) => r.usage.input + (r.read?.usage?.input || 0)), tokensCached: sum((r) => r.usage.cached || 0), tokensOut: sum((r) => r.usage.output + (r.read?.usage?.output || 0)),
     tokens: sum(tokens), tokensPerPatient: n ? Math.round(sum(tokens) / n) : 0, tokensRead: sum(readTok), modelCalls: sum((r) => r.usage.modelCalls || 0),
     secondsPerPatient: n ? Math.round((sum((r) => r.seconds || 0) / n) * 10) / 10 : 0,
     errors: rows.filter((r) => r.status !== "ok").length,

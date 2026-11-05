@@ -149,6 +149,19 @@ const PROMPT = "Is there a beta-blocker care gap for this patient? Why or why no
   assert.ok(ev.filter((e) => e.kind === "patient").every((e) => e.row.cached && e.row.score.rules === "esc"), "same runs from the cache, scored under ESC");
 }
 
+// Ask the EHR: a question about one patient, with the whole chart, the conversation so far in the prompt, an answer back
+{
+  requests.length = 0;
+  const ev = await events("/api/ask", { patient: "p000", question: "Why isn't this patient on a beta blocker?", history: [{ q: "Is she on carvedilol?", a: "No, it was stopped." }] });
+  const wiring = ev.find((e) => e.kind === "wiring"), answer = ev.find((e) => e.kind === "answer");
+  assert.ok(wiring.scopes.length >= 9 && wiring.prompt.includes("Earlier in this conversation") && wiring.prompt.includes("Now: Why isn't"), "the whole chart, and what was said before");
+  assert.equal(answer.status, "ok");
+  assert.ok(answer.text && answer.usage.input > 0, "an answer, and what it used");
+  assert.equal((await post("/api/ask", { patient: "p000", question: " " })).status, 400);
+  const cfg = await (await fetch(`${base}/api/config`)).json();
+  assert.equal(cfg.price, null, "no price for a model we don't know");
+}
+
 // one test at a time: a second, different test waits in line, is told how many are ahead, then runs
 {
   const a = { tools: ["read_records"], sources: ["medications"], prompt: `${PROMPT} (a)` };

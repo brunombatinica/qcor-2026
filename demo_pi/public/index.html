@@ -12,7 +12,7 @@
     <nav id="steps"></nav>
     <div class="tools">
       <span id="model" class="model">connecting…</span>
-      <span id="tokens" class="tokens" title="Tokens this page has used: every model call, and the reads of free-text answers"></span>
+      <span id="tokens" class="tokens" title="Tokens of the run going on now, or the last one"></span>
       <form id="unlock" class="unlock" hidden onsubmit="return false"><input id="unlockCode" placeholder="Workshop code" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Workshop code"><button>Unlock</button><span id="unlockMsg" class="small"></span></form>
       <button id="hoodBtn" class="hoodBtn" title="Under the hood (U)">&lt;/&gt;</button>
     </div>
@@ -105,9 +105,8 @@
         <div class="split runSplit">
           <div class="col">
             <h2 class="testHead">Screen the health system for <span style="white-space: nowrap">beta-blocker care gaps</span></h2>
-            <p class="howto">Write one prompt. <b data-model>The model</b> reads each patient's chart and says who has a care gap. Find every true care gap without false alarms.</p>
+            <p class="howto">Write a prompt for the agent to find beta-blocker care gaps.</p>
             <div class="rulebook" id="rulebook" role="radiogroup" aria-label="Definition"></div>
-            <div class="keyNote" id="keyNote"></div>
             <textarea id="testPrompt" rows="7" placeholder="Your prompt for every patient…"></textarea>
             <div class="suggest" id="suggest"></div>
           </div>
@@ -121,6 +120,21 @@
           </div>
         </div>
         <table id="runs"></table>
+      </section>
+
+      <!-- 8 -->
+      <section class="view" data-view="ask" data-title="Ask the EHR" data-icon="comment">
+        <div class="split runSplit">
+          <div class="col askCol">
+            <h2 class="testHead">Ask the EHR</h2>
+            <p class="howto">Pick a patient and ask anything about their chart. The agent reads the whole record to answer.</p>
+            <select id="askPatient" class="rec askWho" aria-label="Patient"></select>
+            <div class="chat" id="chat"></div>
+            <div class="examples" id="askExamples"></div>
+            <form class="askBox" id="askForm"><textarea id="askInput" rows="2" placeholder="Ask about this patient…"></textarea><button class="primary" id="askBtn">Ask</button></form>
+          </div>
+          <div class="col"><div class="term full" id="termAsk"></div></div>
+        </div>
       </section>
     </main>
 

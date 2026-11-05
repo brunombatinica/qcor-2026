@@ -149,6 +149,14 @@ export function criteriaPrompt(ids) {
 
 export const CONFIDENCE_FLOOR = 70;
 
+// What a run costs: USD per million tokens at standard rates, by model (gpt-6-luna: OpenAI's rate card, November 2026,
+// $0.10 in, $0.01 cached in, $0.50 out). DEMO_PRICE_IN, DEMO_PRICE_CACHED and DEMO_PRICE_OUT set another model's.
+export const PRICES = { "gpt-6-luna": { in: 0.1, cached: 0.01, out: 0.5 } };
+export function priceOf(model, env = process.env) {
+  if (env.DEMO_PRICE_IN && env.DEMO_PRICE_OUT) return { in: +env.DEMO_PRICE_IN, cached: +(env.DEMO_PRICE_CACHED ?? env.DEMO_PRICE_IN), out: +env.DEMO_PRICE_OUT };
+  return PRICES[String(model || "").split("/").pop()] || null;
+}
+
 /** A build from the page, cleaned: known ids only, in catalog order. */
 export function normalize(build = {}) {
   const pick = (list, ids) => list.map((x) => x.id).filter((id) => (ids || []).includes(id));

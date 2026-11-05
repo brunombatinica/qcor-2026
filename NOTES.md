@@ -26,6 +26,13 @@ prompt with either gets it); squares coloured by the care-gap answer, so the red
 false alarms the headline counts (before, red meant either answer wrong: 30/31 found showed 9 red); the tally only
 while it runs; the agents' windows folded away after.
 
+Then: Test's line is "Write a prompt for the agent to find beta-blocker care gaps." and the "N of 100 have a care gap
+· answer key …" note is gone. The header shows the current (or last) run's tokens and cost, not the page's total
+(gpt-6-luna: $0.10 / $0.01 cached / $0.50 per million, OpenAI's standard rates; `PRICES` in `agent/catalog.mjs`); the
+answer card, the test's tokens tile and the runs table show the cost too. A last slide, **Ask the EHR**: a ChatEHR-like
+chat about any patient, the whole chart and the reading tools, the conversation so far in each prompt (`/api/ask`).
+Live only; tested on the stand-in model, not on Luna.
+
 ## Demo, rulebooks and the page (2026-11-04, evening; Ryan)
 
 Ryan, going through the hosted demo: the Task slide as the goal (an agent that reads the EHR and finds care gaps, as

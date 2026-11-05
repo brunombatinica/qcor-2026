@@ -24,7 +24,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { createServer } from "node:http";
 import { dirname, extname, join, normalize as normPath } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ACT_EXAMPLE, CRITERIA, CRITERIA_GROUPS, DATA, EXAMPLES, RULES, TOOLS, WHY, criteriaPrompt, goldFor, keyInfo, normalize, rulesOf } from "./agent/catalog.mjs";
+import { ACT_EXAMPLE, CRITERIA, CRITERIA_GROUPS, DATA, EXAMPLES, RULES, TOOLS, WHY, criteriaPrompt, goldFor, keyInfo, normalize, priceOf, rulesOf } from "./agent/catalog.mjs";
 import { read } from "./agent/grade.mjs";
 import { MODEL, connect, unlock } from "./agent/model.mjs";
 import { FHIR, byPatientId, commandLine, piTools, runSession, systemPrompt, userPrompt } from "./agent/session.mjs";
@@ -142,6 +142,7 @@ async function config() {
   return {
     model: { id: MODEL.id, baseUrl: MODEL.baseUrl, ok: MODEL.ok, error: MODEL.error, locked: MODEL.locked },
     replay: replayed ? replayInfo() : null, recorded: replayed ? catalog() : [],
+    price: priceOf(replayed ? replayInfo().models[0] : MODEL.id),
     data: DATA.map((d) => ({ ...d, scope: scopeOf(d) })), tools: TOOLS, criteria: CRITERIA, criteriaGroups: CRITERIA_GROUPS,
     // the lines criteriaPrompt adds around the sentences (headings, the closing line), so the page can take its block out
     criteriaFrame: criteriaPrompt(CRITERIA.map((c) => c.id)).split("\n").filter((l) => l && !l.startsWith("- ")), key: keyInfo(PATIENTS),
@@ -226,6 +227,24 @@ async function api(req, res, url) {
   if (url.pathname === "/api/peek") return json(res, 200, await peek(body.sources || [], body.source, body.patient));
   if (url.pathname === "/api/example") return json(res, 200, await example(body.tool, body.sources || []));
   const build = normalize(body.build);
+  // Ask the EHR: one question about one patient, with the whole chart and the reading tools, and the conversation so
+  // far in the prompt (each question is a fresh session). Nothing is scored, cached or recorded, so it needs the model.
+  if (url.pathname === "/api/ask") {
+    if (await replaying()) return json(res, 409, { error: "Ask the EHR needs the live model; it can't be replayed." });
+    const patient = byPatientId(body.patient) || PATIENTS[0];
+    const question = String(body.question || "").slice(0, 2000).trim();
+    if (!question) return json(res, 400, { error: "Ask a question." });
+    const history = (Array.isArray(body.history) ? body.history : []).filter((h) => h?.q && h?.a).slice(-6);
+    const prompt = history.length ? `Earlier in this conversation:\n\n${history.map((h) => `Q: ${String(h.q).slice(0, 1000)}\nA: ${String(h.a).slice(0, 2000)}`).join("\n\n")}\n\nNow: ${question}` : question;
+    const build = { sources: DATA.map((d) => d.id), tools: ["read_records", "search_notes", "read_note"], prompt };
+    const abort = new AbortController();
+    res.on("close", () => abort.abort());
+    const send = sse(res);
+    send({ kind: "wiring", ...wiring(build, patient) });
+    const r = await slot(() => runSession({ patientId: patient.id, build, onEvent: send, signal: abort.signal, stream: true }), "rosa");
+    send({ kind: "answer", text: answerText(r), usage: r.usage, seconds: r.seconds, status: r.status, error: r.error });
+    return res.end();
+  }
   if (url.pathname === "/api/preview") return json(res, 200, { ...wiring(build, byPatientId(body.patient)), criteria: criteriaPrompt(body.criteria || []) });
   const kind = { "/api/run": "rosa", "/api/cohort": "cohort" }[url.pathname];
   if (!kind) return json(res, 404, { error: "unknown endpoint" });

@@ -9,7 +9,7 @@ const clock = (ms) => { const s = Math.max(0, ms) / 1000; return `${String(Math.
 const num = (n) => Number(n || 0).toLocaleString("en-US");
 const VIEWS = [...document.querySelectorAll(".view")].map((v) => v.dataset.view);
 const EARLY = ["overview", "intro", "chart"];          // before anything is built
-const OWN = ["test"];                                   // views that give the panel's space to the agents
+const OWN = ["test", "ask"];                            // views that give the panel's space to the agents
 
 const KEY = "qcor-demo-v3";
 const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
@@ -60,17 +60,28 @@ async function loadIcons(names) {
 }
 const fillIcons = (root = document) => root.querySelectorAll("i[data-icon]").forEach((el) => { el.outerHTML = icon(el.dataset.icon); });
 
-// ---- the token counter: every model call this page makes, and the reads of free-text answers ----
+// ---- the run counter: the tokens of the run going on now (or the last one), and what they cost ----
 
-let tokenTotal = 0, bumpTimer;
-function addTokens(n) {
-  if (!n || cfg?.replay) return;
-  tokenTotal += n;
-  $("tokens").innerHTML = `<b>${num(tokenTotal)}</b> tokens`;
+// cfg.price: USD per million tokens for the model (agent/catalog.mjs PRICES); null when we don't know it
+const cost = (input, output, cached = 0) => (cfg.price ? ((input - cached) * cfg.price.in + cached * cfg.price.cached + output * cfg.price.out) / 1e6 : null);
+const usd = (c) => (c === null ? "" : "$" + (c < 0.01 ? c.toFixed(4) : c.toFixed(2)));
+const runTok = { in: 0, out: 0, cached: 0 };
+let bumpTimer;
+function drawTokens() {
+  const c = cost(runTok.in, runTok.out, runTok.cached);
+  $("tokens").innerHTML = `this run <b>${num(runTok.in + runTok.out)}</b> tokens${c === null ? "" : ` · <b>${usd(c)}</b>`}`;
+}
+function newRun() { if (cfg?.replay) return; Object.assign(runTok, { in: 0, out: 0, cached: 0 }); drawTokens(); }
+function addTokens(input = 0, output = 0, cached = 0) {
+  if (!(input || output) || cfg?.replay) return;
+  runTok.in += input; runTok.out += output; runTok.cached += cached;
+  drawTokens();
   $("tokens").classList.add("bump");
   clearTimeout(bumpTimer);
   bumpTimer = setTimeout(() => $("tokens").classList.remove("bump"), 400);
 }
+const addRead = (row) => row.read?.usage && addTokens(row.read.usage.input, row.read.usage.output);
+const rowCost = (row) => cost(row.usage.input + (row.read?.usage?.input || 0), row.usage.output + (row.read?.usage?.output || 0), row.usage.cached || 0);
 const readTokens = (row) => (row.read?.usage ? row.read.usage.input + row.read.usage.output : 0);
 const rowTokens = (row) => row.usage.input + row.usage.output + readTokens(row);
 
@@ -105,7 +116,7 @@ function summary() {
   const w = weeks(build(""));
   $("irbMeter").innerHTML = `IRB review<b>${w.irb ? `≈ ${wk(w.irb)}` : "none"}</b>`;
   $("itMeter").innerHTML = `IT setup<b>${w.it ? `≈ ${wk(w.it)}` : "none"}</b>`;
-  if (EARLY.includes(state.view)) { $("buildBar").innerHTML = ""; return; }
+  if (EARLY.includes(state.view) || state.view === "ask") { $("buildBar").innerHTML = ""; return; }   // Ask reads the whole chart
   const d = cfg.data.filter((x) => state.sources.has(x.id)), t = cfg.tools.filter((x) => state.tools.has(x.id));
   const chip = (x, kind) => `<button class="chip${shownChips.has(kind + x.id) ? "" : " pop"}" data-kind="${kind}" data-id="${x.id}" title="${esc(x.label)}: click to take it away">${icon(x.icon)}</button>`;
   $("buildBar").innerHTML = d.map((x) => chip(x, "data")).join("") + (d.length && t.length ? `<i class="sep"></i>` : "") + t.map((x) => chip(x, "tools")).join("") +
@@ -285,7 +296,8 @@ function verdictCard(row, { who = "", off = false, ran = null } = {}) {
     : `<div class="said none">No answer${row.status !== "ok" ? `: ${esc(row.error || row.status)}` : ""}</div>`;
   // what it used, large: tokens (the agent's calls, then the read of a free-text answer), model calls, tool calls, time
   const u = row.usage, agentTok = u.input + u.output, gradeTok = readTokens(row);
-  const meta = `<div class="stats">${stat(num(rowTokens(row)), "tokens", gradeTok ? `${num(agentTok)} agent · ${num(gradeTok)} reading its answer` : "")}${stat(u.modelCalls ?? 0, `model call${u.modelCalls === 1 ? "" : "s"}`)}${stat(u.toolCalls ?? 0, `tool call${u.toolCalls === 1 ? "" : "s"}`)}${stat(`${row.seconds ?? "–"} s`, "time")}</div>` +
+  const c = rowCost(row);
+  const meta = `<div class="stats">${stat(num(rowTokens(row)), "tokens", [c === null ? "" : `≈ ${usd(c)}`, gradeTok ? `${num(agentTok)} agent · ${num(gradeTok)} reading its answer` : ""].filter(Boolean).join("<br>"))}${stat(u.modelCalls ?? 0, `model call${u.modelCalls === 1 ? "" : "s"}`)}${stat(u.toolCalls ?? 0, `tool call${u.toolCalls === 1 ? "" : "s"}`)}${stat(`${row.seconds ?? "–"} s`, "time")}</div>` +
     (who || row.cached || row.replayed ? `<div class="meta">${[who, row.cached && "from cache", row.replayed && "replay"].filter(Boolean).map(esc).join(" · ")}</div>` : "");
   const flags = [];
   if (s.orders.length) flags.push(`Signed an order: ${s.orders.join(", ")}`);
@@ -321,6 +333,7 @@ async function runRosa() {
   termRosa.reset("running");
   termRosa.start();
   rosaAbort = new AbortController();
+  newRun();
   const off = offTask(state.prompt), ran = build(state.prompt);
   try {
     await stream("/api/run", { build: ran, patient: cfg.rosa.id, rules: state.rules }, (m) => {
@@ -329,10 +342,10 @@ async function runRosa() {
         termRosa.line(off || m.score.correct ? "done" : "err", `■ ${esc(m.status === "ok" ? "done" : m.status)}${m.error ? `: ${esc(m.error)}` : ""}`, (m.seconds || 0) * 1000);
         logDetails(termRosa, m, off);
         $("answer").innerHTML = verdictCard(m, { off, ran });
-        if (!m.replayed) addTokens(readTokens(m));
+        if (!m.replayed) addRead(m);
       } else {
         termRosa.event(m);
-        if (m.kind === "usage") addTokens(m.input + m.output);
+        if (m.kind === "usage") addTokens(m.input, m.output, m.cached);
       }
     }, rosaAbort.signal);
     termRosa.setStatus("done");
@@ -365,11 +378,8 @@ async function setTicked(ids) {
 }
 function setTestPrompt(text) { state.testPrompt = text; $("testPrompt").value = text; save(); suggest(); }
 
-const keyBy = () => cfg.key[state.rules];
 function rulebook() {
   $("rulebook").innerHTML = Object.entries(cfg.rules).map(([id, r]) => `<button role="radio" aria-checked="${id === state.rules}" data-rules="${id}"><b>${esc(r.label)}</b><span>${esc(r.sub)}</span></button>`).join("");
-  const r = cfg.rules[state.rules], k = keyBy();
-  $("keyNote").innerHTML = `<b>${r.gaps}</b> of ${cfg.cohort} patients have a care gap under ${esc(r.label)} · answer key ${k.by === "opus" ? `labelled by <b>${esc(k.model)}</b> (${esc(k.effort)} effort)${k.disagree ? `, ${k.disagree} differ from how the charts were written` : ""}` : "from how each chart was written"}`;
 }
 // switching keeps the suggestions both definitions share; all of one stays all of the other
 async function setRules(id) {
@@ -413,7 +423,7 @@ function results(s, cached, seconds, rules = state.rules) {
   $("results").innerHTML = `
     <div class="resTop"><div>${gapScore(s, rules)}</div><div class="resBars">${bars(QUESTIONS.map(([k, label]) => ({ label, right: s.questions[k].right, n: s.n })))}
     ${flags.length ? `<div class="flags">${flags.join("")}</div>` : ""}</div></div>
-    <div class="stats">${stat(num(s.tokens), "tokens", [`${num(s.tokensPerPatient)} per patient`, s.tokensRead ? `${num(s.tokens - s.tokensRead)} agent · ${num(s.tokensRead)} reading its answers` : ""].filter(Boolean).join("<br>"))}${stat(num(s.modelCalls ?? 0), "model calls", s.n ? `${Math.round(((s.modelCalls ?? 0) / s.n) * 10) / 10} per patient` : "")}${stat(seconds != null ? `${seconds} s` : "–", "wall clock", `${s.secondsPerPatient} s per patient, ${cfg.concurrency} at once`)}</div>
+    <div class="stats">${stat(num(s.tokens), "tokens", [s.tokensIn != null && cfg.price ? `≈ ${usd(cost(s.tokensIn, s.tokensOut, s.tokensCached))}` : "", `${num(s.tokensPerPatient)} per patient`, s.tokensRead ? `${num(s.tokens - s.tokensRead)} agent · ${num(s.tokensRead)} reading its answers` : ""].filter(Boolean).join("<br>"))}${stat(num(s.modelCalls ?? 0), "model calls", s.n ? `${Math.round(((s.modelCalls ?? 0) / s.n) * 10) / 10} per patient` : "")}${stat(seconds != null ? `${seconds} s` : "–", "wall clock", `${s.secondsPerPatient} s per patient, ${cfg.concurrency} at once`)}</div>
     ${cached ? `<div class="meta">${cached} from cache</div>` : ""}`;
 }
 
@@ -529,6 +539,7 @@ async function runCohort() {
   const b = build(state.testPrompt);
   cohortBuild = b;
   cohortAbort = new AbortController();
+  newRun();
   runButton(true);
   try {
     await stream("/api/cohort", { build: b, n, fresh: $("fresh").checked, rules: state.rules }, (m) => {
@@ -540,7 +551,7 @@ async function runCohort() {
         const sq = $(`sq-${m.patientId}`);
         if (sq && !sq.classList.contains("run")) { sq.classList.add("run"); active += 1; }
         const it = m.item;
-        if (it.kind === "usage") addTokens(it.input + it.output);
+        if (it.kind === "usage") addTokens(it.input, it.output, it.cached);
         else if (it.kind === "act") {
           const call = `${it.tool}(${Object.values(it.args || {}).map((v) => JSON.stringify(v)).join(", ").slice(0, 80)})`;
           liveAct.set(m.patientId, call);
@@ -555,7 +566,7 @@ async function runCohort() {
         if (r.cached) cached += 1;
         const q = r.score.questions.gap;
         if (q.agent === "yes") q.gold === "yes" ? (found += 1) : (alarms += 1);
-        if (!r.cached && !r.replayed) addTokens(readTokens(r));
+        if (!r.cached && !r.replayed) addRead(r);
         square(r);
         if (!r.cached || done <= cfg.concurrency) wins.finish(r);
       } else if (m.kind === "summary") {
@@ -582,10 +593,10 @@ async function runCohort() {
 
 function runsTable() {
   const ics = (list, ids) => `<span class="ics">${list.filter((x) => ids.includes(x.id)).map((x) => `<span title="${esc(x.label)}">${icon(x.icon)}</span>`).join("") || "nothing"}</span>`;
-  $("runs").innerHTML = `<tr><th>Run</th><th>Sees</th><th>Does</th><th>Prompt</th><th>Checked against</th><th>Care gaps found</th><th>False alarms</th><th>Right</th><th>Care gap · Why</th><th>Tokens</th><th>Wall clock</th></tr>` +
+  $("runs").innerHTML = `<tr><th>Run</th><th>Sees</th><th>Does</th><th>Prompt</th><th>Checked against</th><th>Care gaps found</th><th>False alarms</th><th>Right</th><th>Care gap · Why</th><th>Tokens</th><th>Cost</th><th>Wall clock</th></tr>` +
     runs.map((r, i) => `<tr><td>${runs.length - i}</td><td>${ics(cfg.data, r.build.sources)}</td><td>${ics(cfg.tools, r.build.tools)}</td>
       <td class="small muted" title="${esc(r.build.prompt)}">${esc(r.build.prompt.slice(0, 70))}${r.build.prompt.length > 70 ? "…" : ""}</td>
-      <td>${esc(cfg.rules[r.rules]?.label || r.rules)}</td><td class="num">${r.summary.gaps ? `${r.summary.gaps.found}/${r.summary.gaps.total}` : "–"}</td><td class="num">${r.summary.gaps?.falseAlarms ?? "–"}</td><td class="num">${r.summary.right}/${r.summary.n}</td><td class="num">${r.summary.questions.gap.right} · ${r.summary.questions.why.right}</td><td class="num">${num(r.summary.tokens)}</td><td class="num">${r.seconds} s</td></tr>`).join("");
+      <td>${esc(cfg.rules[r.rules]?.label || r.rules)}</td><td class="num">${r.summary.gaps ? `${r.summary.gaps.found}/${r.summary.gaps.total}` : "–"}</td><td class="num">${r.summary.gaps?.falseAlarms ?? "–"}</td><td class="num">${r.summary.right}/${r.summary.n}</td><td class="num">${r.summary.questions.gap.right} · ${r.summary.questions.why.right}</td><td class="num">${num(r.summary.tokens)}</td><td class="num">${r.summary.tokensIn != null && cfg.price ? usd(cost(r.summary.tokensIn, r.summary.tokensOut, r.summary.tokensCached)) : "–"}</td><td class="num">${r.seconds} s</td></tr>`).join("");
 }
 
 // ---- replay: with no model the server replays recorded runs (replay.mjs); a picker loads one of their builds ----
@@ -629,6 +640,42 @@ function pickers() {
     $(id).hidden = false;
     $(id).onchange = () => { const r = list.find((x) => x.id === $(id).value); if (r) loadRecorded(r); };
   }
+}
+
+// ---- Ask the EHR: questions about one patient, a fresh session each, with the conversation so far ----
+
+const ASK_EXAMPLES = ["What beta blockers has this patient been on, and when?", "Why isn't this patient on a beta blocker?", "What were the last heart rate and blood pressure?",
+  "Do the notes mention side effects?", "When is the next appointment?"];
+const termAsk = new Term($("termAsk"), "pi · Ask the EHR");
+let chat = [], asking = false;
+function drawChat() {
+  $("chat").innerHTML = chat.length ? chat.map((m) => `<div class="msg you">${esc(m.q)}</div>` + (m.a === undefined ? `<div class="msg agent pending">reading the chart…</div>`
+    : `<div class="msg agent${m.error ? " err" : ""}">${esc(m.a || m.error || "No answer")}${m.meta ? `<div class="mmeta">${m.meta}</div>` : ""}</div>`)).join("")
+    : `<div class="chatEmpty">Ask about ${esc(cfg.names[Number($("askPatient").value.slice(1))])}'s chart.</div>`;
+  $("chat").scrollTop = $("chat").scrollHeight;
+  $("askExamples").hidden = chat.length > 0;          // starting points, until the conversation starts
+}
+async function ask(q) {
+  q = String(q || "").trim();
+  if (!q || asking) return;
+  asking = true; $("askBtn").disabled = true; $("askInput").value = "";
+  const history = chat.filter((m) => m.a).map((m) => ({ q: m.q, a: m.a }));
+  const m = { q }; chat.push(m); drawChat();
+  termAsk.reset("running"); termAsk.start(); newRun();
+  try {
+    await stream("/api/ask", { patient: $("askPatient").value, question: q, history }, (e) => {
+      if (e.kind === "wiring") termAsk.intro(e);
+      else if (e.kind === "answer") {
+        const c = cost(e.usage.input, e.usage.output, e.usage.cached);
+        Object.assign(m, { a: e.text, error: e.status === "ok" ? "" : e.error || e.status,
+          meta: [`${e.usage.toolCalls} tool call${e.usage.toolCalls === 1 ? "" : "s"}`, `${num(e.usage.input + e.usage.output)} tokens`, c === null ? "" : usd(c), `${e.seconds ?? "–"} s`].filter(Boolean).join(" · ") });
+        termAsk.line(e.status === "ok" ? "done" : "err", `■ ${esc(e.status === "ok" ? "done" : e.status)}`, (e.seconds || 0) * 1000);
+      } else { termAsk.event(e); if (e.kind === "usage") addTokens(e.input, e.output, e.cached); }
+    });
+    termAsk.setStatus("done");
+  } catch (err) { m.a = ""; m.error = err.message; termAsk.line("err", esc(err.message)); termAsk.setStatus("error"); }
+  if (m.a === undefined) m.a = "";
+  termAsk.stop(); asking = false; $("askBtn").disabled = false; drawChat(); $("askInput").focus();
 }
 
 // ---- under the hood ----
@@ -790,13 +837,14 @@ async function hood() {
 // ---- start ----
 
 cfg = await (await fetch("/api/config")).json();
-await loadIcons(["house", "bullseye", "brain", "file-medical", "database", "screwdriver-wrench", "file-pen", "list-check", "users", "user", "triangle-exclamation",
+await loadIcons(["house", "bullseye", "brain", "comment", "file-medical", "database", "screwdriver-wrench", "file-pen", "list-check", "users", "user", "triangle-exclamation",
   ...cfg.data.map((d) => d.icon), ...cfg.tools.map((t) => t.icon), ...TABS.map((t) => t[2])]);
 fillIcons();
 $("model").textContent = cfg.replay ? `replay · ${cfg.replay.models.map((m) => m.split("/").pop()).join(", ") || "nothing recorded"}` : cfg.model.ok ? cfg.model.id.split("/").pop() : "no model";
 $("model").title = cfg.replay ? `Runs recorded on ${cfg.replay.recorded}, replayed; no model is called (${cfg.replay.why})` : cfg.model.ok ? `${cfg.model.id} at ${cfg.model.baseUrl}` : cfg.model.error;
 $("model").className = `model ${cfg.replay ? "replay" : cfg.model.ok ? "ok" : "bad"}`;
-$("tokens").innerHTML = cfg.replay ? "" : `<b>0</b> tokens`;
+$("tokens").innerHTML = "";
+$("tokens").title = `Tokens of the run going on now, or the last one: every model call, and the reads of free-text answers${cfg.price ? `; cost at $${cfg.price.in} in, $${cfg.price.out} out per million tokens` : ""}`;
 // a locked model (agent/workshop-key.mjs): the code we give the room unlocks it for everyone on this server
 if (cfg.model.locked) {
   $("unlock").hidden = false;
@@ -861,6 +909,15 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "ArrowLeft") $("back").click();
 });
 termRosa.reset("idle");
+termAsk.reset("idle");
+$("askPatient").innerHTML = cfg.names.map((n, i) => `<option value="p${String(i).padStart(3, "0")}">${esc(n)} · p${String(i).padStart(3, "0")}</option>`).join("");
+$("askPatient").onchange = () => { chat = []; drawChat(); termAsk.reset("idle"); };
+$("askExamples").innerHTML = ASK_EXAMPLES.map((q, i) => `<button class="chipBtn" data-q="${i}">${esc(q)}</button>`).join("");
+$("askExamples").onclick = (e) => { const b = e.target.closest("[data-q]"); if (b) ask(ASK_EXAMPLES[b.dataset.q]); };
+$("askForm").onsubmit = (e) => { e.preventDefault(); ask($("askInput").value); };
+$("askInput").onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask($("askInput").value); } };
+drawChat();
+if (cfg.replay) { $("askInput").disabled = $("askBtn").disabled = true; $("askInput").placeholder = "Ask the EHR needs the live model (it can't be replayed)"; }
 grid();
 new Windows($("agents"), cfg.concurrency);
 $("agentsLabel").textContent = `${cfg.concurrency} agents at once`;
@@ -873,5 +930,4 @@ if (state.testPrompt.startsWith(cfg.act.text) || state.testPrompt.startsWith(cfg
 }
 rulebook();
 suggest();
-document.querySelectorAll("[data-model]").forEach((el) => (el.textContent = modelName()));
 go(state.view);
