@@ -52,7 +52,7 @@ Cloud vCPUs are usually slower than a Mac's cores, so leave headroom: 8 vCPU or 
 | Reachable from the AHA room | yes, HTTPS URL at once | only after a Security Planning Assessment and a load balancer request; until then Yale network or VPN only | yes, once someone sets it up | yes, but each person runs their own copy |
 | Setup, by us | about 30 min, no one else needed | a container in an hour; public access is a ticket process with no stated timeline | about 1 h, through whoever holds the account | a notebook, tested once |
 | Setup, per attendee | scan a QR code | scan a QR code | scan a QR code | Google account, open the notebook, run it, 1 to 3 min (estimate), a laptop |
-| Holds 100 people | yes, one server, up to 48 vCPU / 48 GB on Hobby | yes, if the container size is large enough | yes, pick the instance size | each has their own 2-vCPU machine; no shared queue, no shared cache |
+| Holds 100 people | yes, one server, up to 8 vCPU / 8 GB on Hobby (24 / 24 on Pro) | yes, if the container size is large enough | yes, pick the instance size | each has their own 2-vCPU machine; no shared queue, no shared cache |
 | Cost | Hobby $5 or Pro $20 a month, plus a few dollars of use | Yale billing | about $0.36/h for 8 vCPU / 16 GB (c7i.2xlarge, on demand; check the console) | free |
 | Model tokens | shared cache: a build costs once | shared cache | shared cache | no sharing: every person pays for every build |
 
@@ -91,8 +91,8 @@ be used: it is deprecated, new services can't opt into it, and it stops being re
 Infrastructure as Code (`.railway/railway.ts`, applied with the Railway CLI), is more than one service needs.
 
 1. **Push** `main` to GitHub.
-2. Sign in at [railway.com](https://railway.com) with GitHub, on Hobby ($5 a month, $5 of use included; at most 48 vCPU
-   and 48 GB per service). Let Railway's GitHub app see `brunombatinica/qcor-2026` (all repositories, or only this one).
+2. Sign in at [railway.com](https://railway.com) with GitHub, on Hobby ($5 a month, $5 of use included; 8 vCPU and
+   8 GB per replica, 48 / 48 across its 6 replicas; we run one). Let Railway's GitHub app see `brunombatinica/qcor-2026` (all repositories, or only this one).
 3. **New Project → Deploy from GitHub repo →** `brunombatinica/qcor-2026`. It builds and starts at once. With no
    variables yet, the server can't reach a model, so it replays the recordings: a working page before any key is set.
 4. **Variables** (the service's Variables tab, Raw Editor):
@@ -113,7 +113,10 @@ Infrastructure as Code (`.railway/railway.ts`, applied with the Railway CLI), is
      doesn't start leaves the old one up.
    - **Deploy → Region:** US East. **Replicas:** 1 (each replica has its own queue and cache). **Serverless:** off,
      so the first person in the room doesn't wait for it to wake.
-   - **Deploy → Resource Limits:** 8 vCPU and 8 GB, a ceiling on the bill; the room needs no more (the measurements).
+   - **Deploy → Replica Limits:** nothing to set. A replica gets up to the plan's 8 vCPU and 8 GB by itself, and is
+     billed for what it uses; the room needs no more (the measurements). Set lower only to cap the bill.
+   - `DEMO_CONCURRENCY` is for the whole server, not per person: at most that many sessions at once, from everyone, the
+     rest waiting. 32 is what 8 vCPU was measured with; 2 would make a room of 50 wait minutes for Rosa.
    - **Build → Watch Paths:** `/demo_pi/**`, `/shared/**`, `/Dockerfile`, `/.dockerignore`. Railway redeploys on every
      push to `main`; with these, a push that only changes the slides or notes doesn't.
 6. **A volume for the cache.** Right-click the canvas (or ⌘K) → **Volume** → attach it to the service, mount path
