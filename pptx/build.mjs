@@ -5,7 +5,9 @@
 // The template is Bruno's AHA 2026 faculty talk (misc/aha26-faculty-talk, deck/build.js): its title and disclosure
 // slides, a black stage, Apple dark-mode colours, Arial, Font Awesome icons, every object native and editable on theme
 // colours. The slides before "Set it up like a remote colleague" are shared with that talk: the language-model, "text is
-// a universal interface" and agent slides are ported from it (3 Nov 2026), in our blue and with Rosa.
+// a universal interface" and agent slides are ported from it (3 Nov 2026), in our blue and with Rosa; its 4 Nov review
+// round is carried over too (bubble.mjs: iMessage bubbles, measured off iOS 26; tool calls and results as bubbles; the
+// language model's likeliest words, with bars; the logo footer).
 // Each colour means one thing, and nothing else is coloured:
 //   blue    the model, and the words it writes (and its context, on the map)
 //   green   right: what it wrote matches her chart
@@ -13,16 +15,19 @@
 //   greys   everything else: the patient, her chart, tools, people
 // Slides have no titles until the setup; there the title is the step, and the icon bar at the top right shows where we are.
 // The model sits on the left and what it is given on the right; chats are iMessage bubbles, yours grey, the model's blue.
+// A tool call is the model's bubble, outlined in blue, in monospace; a tool's result is a bubble on your side, outlined
+// in white (it goes into the model, like your messages).
 //
 // What pptxgenjs can't write is added to the slide XML afterwards (postProcess): entrance and exit animations (Fade,
 // Wipe, typing letter by letter, words one at a time), video playback, and Morph transitions. Morph pairs objects named
 // "!!id" across slides, but it also pairs unnamed shapes of the same kind, so a Morph slide shows only paired objects
 // until its first animation; every other object enters by animation. The setup slides fade into each other; only the
-// move into the bar and the prompt box that grows on the prompt slides are Morph.
+// move into the bar, the open models making room for the closed ones, and the prompt box that grows are Morph.
 import { createRequire } from "node:module";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { applyTheme } from "./theme.mjs";
+import { bubbleMetrics, bubblePath, BUBBLE_COLORS } from "./bubble.mjs";
 
 const require = createRequire(import.meta.url);
 const pptxgen = require("pptxgenjs");
@@ -46,6 +51,16 @@ const THEME = {
 };
 const hex = (c) => HEX[c] || c;
 const MONO = "Courier New";
+// Gradient fills (the faculty talk's): a shape is written with a unique marker colour that postProcess swaps for the
+// gradient. Stops are [position 0–1, colour, opacity %]; angle in degrees (90: top to bottom).
+const GRADS = new Map();
+const gradient = (stops, angle = 0) => {
+  const key = "FE" + String(GRADS.size + 1).padStart(4, "0");
+  const gs = ([p, c, opacity]) => `<a:gs pos="${Math.round(p * 100000)}"><a:srgbClr val="${hex(c)}">${opacity !== undefined ? `<a:alpha val="${Math.round(opacity * 1000)}"/>` : ""}</a:srgbClr></a:gs>`;
+  GRADS.set(key, `<a:gradFill rotWithShape="1"><a:gsLst>${stops.map(gs).join("")}</a:gsLst><a:lin ang="${Math.round(angle * 60000)}" scaled="0"/></a:gradFill>`);
+  return key;
+};
+const CAND_FADE = gradient([[0, "card", 25], [1, "card", 100]], 90); // the candidates below the top three fade into the box
 
 const pres = new pptxgen();
 pres.layout = "LAYOUT_WIDE"; // 13.333 × 7.5 in
@@ -211,13 +226,15 @@ class Ctx {
     return name;
   }
   icon(icon, x, y, s, color = "text", o = {}) { return this.picture(iconData(icon, color), x, y, s, s, { alt: icon, ...o }); }
-  // A PNG fitted inside the box, keeping its aspect ratio; align left, centre (default) or right.
+  // A PNG fitted inside the box, keeping its aspect ratio; align left, centre (default) or right; valign top, middle
+  // (default) or bottom.
   image(file, x, y, w, h, o = {}) {
     const name = this.name(o, "Picture"), [pw, ph] = pngSize(file), r = pw / ph;
     let iw = w, ih = w / r;
     if (ih > h) { ih = h; iw = h * r; }
     const ix = o.align === "left" ? x : o.align === "right" ? x + w - iw : x + (w - iw) / 2;
-    this.add(() => this.slide.addImage({ path: file, x: ix, y: y + (h - ih) / 2, w: iw, h: ih, altText: o.alt || name, objectName: name }));
+    const iy = o.valign === "top" ? y : o.valign === "bottom" ? y + h - ih : y + (h - ih) / 2;
+    this.add(() => this.slide.addImage({ path: file, x: ix, y: iy, w: iw, h: ih, altText: o.alt || name, objectName: name }));
     return name;
   }
   // names: string | string[] (nested ok). The first gets `on` (click, with or after), the rest run with it.
@@ -242,11 +259,13 @@ const runs = (t) => (typeof t === "string" ? t : t.map((r) => (typeof r === "str
 const br = (text, o = {}) => ({ text, breakLine: true, ...o }); // a run that ends its line
 
 // ---------------------------------------------------------------- recurring pieces
-// The faculty talk's logo row, along the bottom of the title slide.
-function logos(s, y) {
-  s.image(LOGO("aha-scientific-sessions-white.png"), M, y, 1.6, 0.6, { align: "left", name: "Logo Scientific Sessions" });
-  s.image(LOGO("aha-white.png"), W / 2 - 0.8, y - 0.05, 1.6, 0.7, { name: "Logo AHA" });
-  s.image(LOGO("cards-lab-yale-white.png"), W - M - 2.0, y, 2.0, 0.6, { align: "right", name: "Logo CarDS Lab" });
+// The faculty talk's logo footer, along the bottom of the title slide: a little larger, so their small print reads,
+// and close to the slide's edges.
+function logos(s) {
+  const e = 0.5, b = H - 0.36; // side margin; the logos' common bottom edge
+  s.image(LOGO("aha-scientific-sessions-white.png"), e, b - 0.47, 1.6, 0.47, { align: "left", valign: "bottom", name: "Logo Scientific Sessions" });
+  s.image(LOGO("aha-white.png"), W / 2 - 0.8, b - 0.62, 1.6, 0.62, { valign: "bottom", name: "Logo AHA" });
+  s.image(LOGO("cards-lab-yale-white.png"), W - e - 2.1, b - 0.55, 2.1, 0.55, { align: "right", valign: "bottom", name: "Logo CarDS Lab" });
 }
 // Reference at the bottom centre, "Surname et al., Venue Year".
 const cite = (s, text) => s.text(text, M + 0.8, 6.88, CW - 1.6, 0.46, { fontSize: 11, color: "muted", align: "center", valign: "bottom", name: "Citation" });
@@ -284,6 +303,16 @@ function loop(s, cx, cy, R, o = {}) {
     angleRange: [a1, a2], line: { color: "blue", width: o.width || 3, endArrow: true, transparency: o.transparency }, morph: m && `loop-${k}`, name: `Loop arc ${k}`,
   }));
 }
+// The harness: the software around the model, which runs its tools. A ring between the model and its loop (the faculty
+// talk's ring, in the model's blue, as its tool calls are); Morph "!!harness" unless morph is false.
+function harness(s, cx, cy, r, o = {}) {
+  return s.circle(cx, cy, 2 * r, { line: { color: "blue", width: o.width || 2, transparency: o.transparency }, morph: o.morph !== false && "harness", name: "Harness" });
+}
+// An agent: the model, in its harness, in its loop. The loop has radius R; the ring is 0.75 R and the model 1.05 R
+// across, unless hr and md say otherwise.
+function agent(s, cx, cy, R, { md = 1.05 * R, hr = 0.75 * R, pills, width = 3, ...o } = {}) {
+  return [...loop(s, cx, cy, R, { pills, width, ...o }), harness(s, cx, cy, hr, { width: (width * 2) / 3, ...o }), ...model(s, cx, cy, md, o)];
+}
 // A tool as a card: icon and name (Morph "!!tool-i"). dim: a tool it isn't given (grey, with a lock).
 function toolCard(s, i, icon, label, x, y, w, h, o = {}) {
   const g = [
@@ -296,11 +325,11 @@ function toolCard(s, i, icon, label, x, y, w, h, o = {}) {
 }
 
 // Words laid out like a paragraph (Arial metrics), so each word can be its own text box and appear on its own.
-function flow(words, x0, y0, maxW, pt, lineH, bold) {
-  const sp = measure(" ", pt, bold);
+function flow(words, x0, y0, maxW, pt, lineH, bold, mw = measure) {
+  const sp = mw(" ", pt, bold);
   let x = x0, y = y0;
   return words.map((w) => {
-    const ww = measure(w, pt, bold);
+    const ww = mw(w, pt, bold);
     if (x > x0 && x + ww > x0 + maxW) { x = x0; y += lineH; }
     const t = { w, x, y, ww };
     x += ww + sp;
@@ -320,9 +349,10 @@ function sentence(s, prompt, cont, { x, y, w, pt, lineH, final }) {
 }
 
 // The faculty talk's training picture: text in → a hopper → the model (a box of sliders) → its output, straight out of
-// the model's middle, and under it the label: the word the text really had, an outline because it comes from outside
-// the model. The box is in blues because it is the model. Every part has a Morph name, so the frames move into each other.
-const TR = { cy: 3.45, hx0: 4.0, hx1: 5.1, mx: 5.1, mw: 3.5, mh: 2.9, bx: 9.65, bw: 2.75, bh: 1.2, lgap: 0.4 };
+// the model's middle (no arrow), and under it the label: the word the text really had, an outline because it comes from
+// outside the model. The box is in blues because it is the model, and the output has the model's blue as its rim. Every
+// part has a Morph name, so the frames move into each other.
+const TR = { cy: 3.45, hx0: 4.0, hx1: 5.1, mx: 5.1, mw: 3.5, mh: 2.9, bx: 9.65, bw: 2.75, bh: 1.2, ch: 1.7, lgap: 0.4 };
 const BOX = { outer: "0B2A4A", inner: "0A4D99", track: "06305F", fill: "blue" };
 function modelBox(s, x, y, w, h, vals) {
   const p = 0.2;
@@ -349,17 +379,32 @@ function hopper(s, x0, x1, cy, h0, h1) {
 }
 const valueBox = (s, [x, y, w, h], head, value, o = {}) => s.text([br(head, { color: "muted", fontSize: 15 }), { text: value, bold: true, fontSize: 30, color: o.color }],
   x, y, w, h, { ...(o.outline ? { line: { color: "edge", width: 2 } } : { fill: "card" }), shape: "ROUNDED_RECTANGLE", rectRadius: 0.15, align: "center", valign: "middle", morph: o.morph });
-const OUT_BOX = [TR.bx, TR.cy - TR.bh / 2, TR.bw, TR.bh], LABEL_BOX = [TR.bx, TR.cy + TR.bh / 2 + TR.lgap, TR.bw, TR.bh];
+// Its output: its likeliest next words, each with a bar for how likely it is (no numbers); it picks the top one, green
+// when that's the label. Below the top three the words fade into the box, so it reads as more than these few. Each
+// word keeps its Morph name, so between frames the words re-rank.
+function candidates(s, [x, y, w, h], cands, label) {
+  const rh = 0.36, y0 = y + 0.48, bx = x + 1.32, bmax = w - 1.32 - 0.3;
+  s.shape("ROUNDED_RECTANGLE", x, y, w, h, { fill: "card", line: { color: "blue", width: 2 }, rectRadius: 0.15, morph: "tr-output" });
+  s.text("Output", x, y + 0.1, w, 0.3, { fontSize: 15, color: "muted", align: "center", morph: "tr-output-head" });
+  if (cands.length) s.shape("ROUNDED_RECTANGLE", x + 0.12, y0 - 0.02, w - 0.24, rh + 0.04, { fill: "raised", rectRadius: 0.1, morph: "cand-pick" });
+  cands.forEach(([word, p], i) => {
+    const yy = y0 + i * rh, top = i === 0;
+    s.text(word, x + 0.26, yy, 1.05, rh, { fontSize: top ? 19 : 16, bold: top, color: top ? (word === label ? "green" : "text") : "muted", valign: "middle", morph: `cand-${word}` });
+    s.shape("ROUNDED_RECTANGLE", bx, yy + rh / 2 - 0.05, Math.max(0.04, bmax * p), 0.1, { fill: top ? "blue" : "edge", rectRadius: 0.05, morph: `candbar-${word}` });
+  });
+  if (cands.length > 3) { const fy = y0 + 3 * rh - 0.02; s.shape("ROUNDED_RECTANGLE", x + 0.06, fy, w - 0.12, y + h - 0.06 - fy, { fill: CAND_FADE, rectRadius: 0.1, morph: "cand-fade" }); }
+}
 // Everything right of the text. Returns the label box, which the first frame reveals on click.
-function trainingScene(s, { vals, out, outColor, label }) {
+function trainingScene(s, { vals, cands, label }) {
   hopper(s, TR.hx0, TR.hx1, TR.cy, 3.05, 0.66);
   modelBox(s, TR.mx, TR.cy - TR.mh / 2, TR.mw, TR.mh, vals);
-  s.arrow(TR.mx + TR.mw + 0.12, TR.cy, TR.bx - 0.12, TR.cy, { morph: "tr-arrow" });
-  valueBox(s, OUT_BOX, "Output", out, { color: outColor, morph: "tr-output" });
-  return label === null ? null : valueBox(s, LABEL_BOX, "Label", label, { outline: true, morph: "tr-label" });
+  const oh = cands.length > 3 ? 0.48 + cands.length * 0.36 + 0.1 : TR.ch;
+  candidates(s, [TR.bx, TR.cy - oh / 2, TR.bw, oh], cands, label);
+  return label === null ? null : valueBox(s, [TR.bx, TR.cy + oh / 2 + TR.lgap, TR.bw, TR.bh], "Label", label, { outline: true, morph: "tr-label" });
 }
 
-// The spine, with no title: a model; a model and its context (a blue sheet beside it); an agent (the model in its loop).
+// The spine, with no title: a model; a model and its context (a blue sheet beside it); an agent (the model in its
+// harness, in its loop).
 // active 0 builds the three on click; 1–3 lights one and dims the others. Only the lit column carries Morph names, so
 // it is the one that moves into the next slide.
 const MAP_Y = 3.45, MAP_DX = 3.9;
@@ -370,7 +415,7 @@ async function mapSlide(active, notes) {
   const cols = [
     model(s, c[0], MAP_Y, 1.6, { transparency: t(0), morph: mm(0) }),
     [...model(s, c[1] - 0.6, MAP_Y, 1.6, { transparency: t(1), morph: mm(1) }), s.icon("file-lines", c[1] + 0.35, MAP_Y - 0.6, 1.2, "blue", { transparency: t(1), name: "Context", morph: mm(1) && "context" })],
-    [...loop(s, c[2], MAP_Y, 1.1, { transparency: t(2), morph: mm(2) }), ...model(s, c[2], MAP_Y, 1.4, { transparency: t(2), morph: mm(2) })],
+    agent(s, c[2], MAP_Y, 1.2, { transparency: t(2), morph: mm(2) }),
   ];
   const labels = ["Model", "Model + context", "Agent"].map((l, i) => s.text(l, c[i] - 2.0, MAP_Y + 1.35, 4.0, 0.6, { fontSize: 28, bold: true, color: t(i) ? "dim" : "text", align: "center", name: `Label ${l}` }));
   if (!active) cols.forEach((g, i) => s.anim([g, labels[i]]));
@@ -389,42 +434,50 @@ function setupBar(s, active) {
     s.icon(icon, x + 0.11, BAR.y + 0.11, 0.28, on ? "text" : i < active ? "muted" : "dim", { morph: `bar-icon-${i}` });
   });
 }
-// A tool call, as the model writes it: monospace on the model's blue.
-const call = (s, text, cx, y, w = 2.3, o = {}) => s.text(text, cx - w / 2, y, w, o.h || 0.4, { fontSize: o.pt || 14, bold: true, font: MONO, color: "text", fill: "blue", shape: "ROUNDED_RECTANGLE", rectRadius: 0.2, align: "center", valign: "middle", name: o.name || `Call ${text}` });
-
-// A chat bubble with a tail at its bottom corner, as in iMessage: yours grey with the tail on the right, the model's
-// blue with the tail on the left. x is the tail's side: the right edge for yours, the left edge for the model's. The
-// bubble fits its text (Arial metrics), up to maxW wide.
-function bubblePath(x, y, w, h, side) {
-  const r = Math.min(0.2, h / 2), k = 0.5523 * r, R = x + w, B = y + h;
-  const pts = [
-    [x + r, y], [R - r, y],
-    { x: R, y: y + r, c1: [R - r + k, y], c2: [R, y + r - k] },
-    [R, B - 0.22],
-    { x: R + 0.12, y: B, c1: [R, B - 0.08], c2: [R + 0.05, B - 0.005] }, // the tail's outer edge, down to its tip
-    { x: R - 0.26, y: B, c1: [R - 0.03, B - 0.02], c2: [R - 0.14, B - 0.06] }, // and back under the bubble
-    [x + r, B],
-    { x, y: B - r, c1: [x + r - k, B], c2: [x, B - r + k] },
-    [x, y + r],
-    { x: x + r, y, c1: [x, y + r - k], c2: [x + r - k, y] },
-  ];
-  if (side === "right") return pts;
-  const m = (p) => [2 * x + w - p[0], p[1]];
-  return pts.map((p) => (Array.isArray(p) ? m(p) : { x: 2 * x + w - p.x, y: p.y, c1: m(p.c1), c2: m(p.c2) }));
+// A chat bubble, as in iMessage (iOS 26, dark mode; the geometry is in bubble.mjs, the faculty talk's, measured off
+// Apple's own renders). Yours is grey, on the right; the model's is blue, on the left (o.from "model"). x is the body's
+// tail-side edge: its right edge for yours, its left edge for the model's. The tail hangs under that corner. The bubble
+// fits its text (Arial metrics, or Courier New's for o.font MONO), up to maxW wide; "\n" starts a new line. o.tail
+// false: no tail (every bubble but the last in a run from one sender). o.line: an outline; o.icon: [icon, colour]
+// before the text. o.fill: yours is iMessage's grey on the black stage; on a card pass "dim", so it stands off it.
+// Returns the body's box (x, y, w, h, cy) and the gaps to the next bubble: gapRun (same sender, after a bubble with no
+// tail) and gapTurn (the sender changes); tailDrop: how far the tail hangs below the body.
+const measureMono = (t, pt) => (t.length * 0.6 * pt) / 72;
+function bubbleLayout(text, maxW, o = {}) {
+  const pt = o.pt || 16, m = bubbleMetrics(pt), bold = !!o.bold, mw = o.font === MONO ? (t, p) => measureMono(t, p) : measure;
+  const ic = o.icon ? m.em * 0.95 : 0, ig = o.icon ? m.em * 0.45 : 0;
+  let lines = 0, tw = 0;
+  text.split("\n").forEach((para) => {
+    const toks = flow(para.split(" "), 0, 0, maxW - 2 * m.padX - ic - ig, pt, 1, bold, mw);
+    lines += new Set(toks.map((t) => t.y)).size;
+    tw = Math.max(tw, ...toks.map((t) => t.x + t.ww));
+  });
+  return { pt, m, bold, ic, ig, lines, tw, w: tw + ic + ig + 2 * m.padX, h: lines * m.lineH + 2 * m.padY, gapRun: m.gapRun, gapTurn: m.gapTurn, tailDrop: m.tailDrop };
 }
 function chatBubble(s, text, x, y, maxW, o = {}) {
-  const pt = o.pt || 16, mx = 0.17, my = 0.1, lineH = (pt * 1.2) / 72;
-  const toks = flow(text.split(" "), 0, 0, maxW - 2 * mx - 0.12, pt, 1, false);
-  const lines = new Set(toks.map((t) => t.y)).size, tw = Math.max(...toks.map((t) => t.x + t.ww)) + 0.12;
-  const w = tw + 2 * mx, h = lines * lineH + 2 * my, mine = o.from !== "model", bx = mine ? x - w : x;
-  const shape = s.path(bubblePath(bx, y, w, h, mine ? "right" : "left"), { fill: mine ? "dim" : "blue", name: `${o.name} bubble` });
-  const t = s.text(text, bx + mx, y + my, tw, h - 2 * my, { fontSize: pt, valign: "middle", name: o.name });
-  return { g: [shape, t], shape, text: t, w, h };
+  const model = o.from === "model", side = o.side || (model ? "left" : "right"), L = bubbleLayout(text, maxW, o), { pt, m, w, h } = L, bx = side === "right" ? x - w : x;
+  const shape = s.path(bubblePath(bx, y, w, h, side, { pt, tail: o.tail }), { fill: o.fill || (model ? "blue" : BUBBLE_COLORS.received), line: o.line, name: `${o.name} bubble` });
+  const icon = o.icon ? s.icon(o.icon[0], bx + m.padX, y + m.padY + (m.lineH - L.ic) / 2, L.ic, o.icon[1] || "text", { name: `${o.name} icon` }) : null;
+  const paras = text.split("\n"), body = paras.length > 1 ? paras.map((t, i) => (i < paras.length - 1 ? br(t) : t)) : text;
+  const t = s.text(body, bx + m.padX + L.ic + L.ig, y + m.padY, L.tw + 0.1, L.lines * m.lineH, { fontSize: pt, bold: L.bold, color: o.color, font: o.font, valign: "middle", name: o.name });
+  return { g: [shape, icon, t].filter(Boolean), shape, text: t, x: bx, y, w, h, cy: y + h / 2, gapRun: m.gapRun, gapTurn: m.gapTurn, tailDrop: m.tailDrop };
 }
+// A tool call, as the model writes it: its own bubble, on the model's side, outlined in its blue, in monospace, with the
+// tool's icon. A tool's result: a bubble on the other side (it goes into the model, like your messages), outlined in
+// white. The same shapes as the chat, so they read as what they are: more text in the conversation (the faculty talk's).
+const TOOL = {
+  call: ({ icon = "magnifying-glass", ...o } = {}) => ({ side: "left", font: MONO, bold: true, color: "blue", fill: "bg", line: { color: "blue", width: 2 }, icon: [icon, "blue"], ...o }),
+  result: ({ icon = "database", ...o } = {}) => ({ side: "right", font: MONO, bold: true, color: "text", fill: "bg", line: { color: "text", width: 1.5 }, icon: [icon, "text"], ...o }),
+};
+// A tool call on its own (not in a chat): a capsule, centred on cx, with its top at y. Returns its parts.
+const call = (s, text, cx, y, o = {}) => {
+  const opts = { pt: o.pt || 14, ...TOOL.call({ icon: o.icon }), tail: false, name: o.name || `Call ${text}` };
+  return chatBubble(s, text, cx - bubbleLayout(text, 8, opts).w / 2, y, 8, opts).g;
+};
 
 // A link that leaves and arrives level (vertical: upright), a cubic with its control points halfway along.
 const linkCtl = ([x0, y0], [x1, y1], vertical) => (vertical ? [[x0, (y0 + y1) / 2], [x1, (y0 + y1) / 2]] : [[(x0 + x1) / 2, y0], [(x0 + x1) / 2, y1]]);
-const link = (s, a, b, o = {}) => { const [c1, c2] = linkCtl(a, b, o.vertical); return s.path([a, { x: b[0], y: b[1], c1, c2 }], { open: true, line: { color: o.color || "dim", width: o.width || 1.5 }, name: o.name }); };
+const link = (s, a, b, o = {}) => { const [c1, c2] = linkCtl(a, b, o.vertical); return s.path([a, { x: b[0], y: b[1], c1, c2 }], { open: true, line: { color: o.color || "dim", width: o.width || 1.5, endArrow: o.arrow }, name: o.name }); };
 // The boxes ([x, y, w, h]) a link passes within m of; the build stops on any, so links stay clear of labels.
 function linkHits(a, b, boxes, o = {}) {
   const [c1, c2] = linkCtl(a, b, o.vertical), m = o.margin ?? 0.06, P = [a, c1, c2, b];
@@ -446,10 +499,10 @@ async function build() {
       title: "What is an agent?", subtitle: "And how to set one up", transition: "none",
       byline: [br("Bruno Batinica, MBChB", { bold: true, fontSize: 22 }), br("Yale School of Medicine", { color: "muted" }), { text: "QCOR workshop, AHA Scientific Sessions 2026", color: "muted" }],
       notes: `
-Thanks, Phyllis. Phyllis showed you what agents can be used for. My part is what an agent actually is, and how you set one up.
+Thank you, Phyllis. I'm going to talk about what exactly an agent is, and how we can set one up.
 Same patient as the rest of the session: Rosa. She's synthetic, like every patient today.`,
     });
-    logos(s, 6.45);
+    logos(s);
     await s.done();
   }
 
@@ -462,32 +515,35 @@ Same patient as the rest of the session: Rosa. She's synthetic, like every patie
 
   // ── The spine: model → model + context → agent
   await mapSlide(0, `
-One idea to hold on to for the next few minutes.
-(click) We start with a model.
-(click) Then a model with context: the information we give it.
-(click) Then an agent: the model in a loop, which goes and gets its own context. Each step builds on the one before.`);
+We go back to this paradigm.
+(click) We have models.
+(click) We have models plus context: the information we give it.
+(click) And then we have an agent, which enables their full capabilities: the model in a loop, which goes and gets its own context.
+So let's start with what a model is, and dig into that a little deeper.`);
 
   // ── How a language model learns (the faculty talk's training picture, four Morph frames)
   {
     const vals = [[0.3, 0.76, 0.42, 0.64, 0.22, 0.56], [0.44, 0.6, 0.56, 0.52, 0.4, 0.5], [0.38, 0.7, 0.47, 0.6, 0.32, 0.62], [0.55, 0.5, 0.63, 0.46, 0.52, 0.44]];
     const F = [
-      ["Once upon a", "dog", "time", false], ["Once upon a", "time", "time", true],
-      ["Started on furosemide for heart", "burn", "failure", false], ["Started on furosemide for heart", "failure", "failure", true],
+      ["Once upon a", [["dog", 0.38], ["time", 0.27], ["day", 0.15], ["year", 0.06], ["night", 0.04]], "time"],
+      ["Once upon a", [["time", 0.71], ["day", 0.12], ["dog", 0.04], ["year", 0.03], ["night", 0.02]], "time"],
+      ["Started on furosemide for heart", [["burn", 0.34], ["failure", 0.29], ["rate", 0.18], ["attack", 0.07], ["disease", 0.04]], "failure"],
+      ["Started on furosemide for heart", [["failure", 0.83], ["rate", 0.06], ["burn", 0.03], ["attack", 0.02], ["disease", 0.01]], "failure"],
     ];
     const notes = [`
-So what is a large language model? A neural network trained on one task: predict the next word. (Strictly, the next token: a word or a piece of one.)
-The input is text with the next word missing: "Once upon a…". Inside, the model is millions or billions of numbers, the sliders. Its output, out of the model: "dog".
-(click) The label is simply the word that actually came next in the text, "time". It comes from outside the model, and nobody has to write it: the text labels itself. We compare the output with the label.`,
-    `(Morph) So every slider moves a little, in the direction that makes "time" more likely. Now it gets it right.`,
-    `(Morph) Then the next piece of text, and the next: general text, and medical text. "Started on furosemide for heart…": it guesses "burn"; the label is "failure".`,
-    `(Morph) Adjust, and it's right. Repeat that for trillions of words: Llama 3 was pretrained on over 15 trillion tokens. To predict the next word that well, it has to learn a lot about language, and about what language describes, medicine included.
+What a model is trained to do is, roughly, just predict the next word in a series. (Strictly, the next token: a word or a piece of one.)
+It's trained on general text: "Once upon a…". Inside, the model is millions or billions of numbers, the sliders. Its output is every possible next word, each with how likely it is (the bars): the top few here, and thousands more fading away underneath. It picks the likeliest: "dog". Wrong.
+(click) It sees the label, the word that actually came next: "time". Nobody has to write the labels: the text labels itself.`,
+    `(Morph) So it adjusts: every slider moves a little, and now it gets "time".`,
+    `(Morph) It's trained on a vast corpus of text, medical information included. "Started on furosemide for heart…": it guesses "burn"; the label is "failure".`,
+    `(Morph) Adjust, and it's right. Repeat that over trillions of words: Llama 3 was pretrained on over 15 trillion tokens. That's why it also learns clinical information, and can be used for it.
 
 Source: Meta AI, "Introducing Meta Llama 3", April 2024: “Llama 3 is pretrained on over 15T tokens that were all collected from publicly available sources.” https://ai.meta.com/blog/meta-llama-3/#:~:text=Llama%203%20is%20pretrained%20on%20over%2015T%20tokens`];
     for (let k = 0; k < 4; k++) {
       const s = new Ctx("CONTENT", { transition: k ? "morph" : "fade", notes: notes[k] });
-      const [text, out, label, ok] = F[k];
+      const [text, cands, label] = F[k];
       s.text([{ text: `${text} ` }, { text: "______", color: "muted" }], 0.95, TR.cy - 1.0, 2.85, 2.0, { fontSize: 22, bold: true, fill: "card", shape: "ROUNDED_RECTANGLE", rectRadius: 0.15, valign: "middle", margin: 14, morph: "llm-in" });
-      const lab = trainingScene(s, { vals: vals[k], out, outColor: ok ? "green" : undefined, label });
+      const lab = trainingScene(s, { vals: vals[k], cands, label });
       if (!k) s.anim(lab);
       await s.done();
     }
@@ -498,9 +554,9 @@ Source: Meta AI, "Introducing Meta Llama 3", April 2024: “Llama 3 is pretraine
     const s = new Ctx("CONTENT", {
       transition: "morph",
       notes: `
-(Morph) Trained, the model does one thing: given the text so far, it predicts the next word.
-(click: it writes by itself) We add that word to the text and go again. One word at a time, it writes the sentence: "…for heart failure to relieve congestion." Blue is what the model wrote.
-One word at a time, it can write anything: a discharge summary, a letter, an answer to a question.`,
+(Morph) And the beautiful thing: once a model is trained, because it can output the next word, it can generate any text.
+(click: it writes by itself) Add that word to the text and go again: "…for heart failure to relieve congestion." Blue is what the model wrote.
+One word at a time, it can write anything: a discharge summary, a letter, an answer to a question. This is very powerful.`,
     });
     const cx0 = 0.95, cy0 = TR.cy - 1.45, cwid = 2.85, chgt = 2.9, pt = 20, lh = 0.4;
     s.shape("ROUNDED_RECTANGLE", cx0, cy0, cwid, chgt, { fill: "card", rectRadius: 0.15, morph: "llm-in" });
@@ -509,10 +565,9 @@ One word at a time, it can write anything: a discharge summary, a letter, an ans
     const lines = new Map();
     toks.slice(0, prompt.length).forEach((t) => (lines.get(t.y) || lines.set(t.y, []).get(t.y)).push(t));
     [...lines.values()].forEach((ts, i) => s.text(ts.map((t) => t.w).join(" "), ts[0].x, ts[0].y, ts.at(-1).x + ts.at(-1).ww - ts[0].x + 0.3, lh, { fontSize: pt, bold: true, name: `Prompt ${i}` }));
-    trainingScene(s, { vals: [0.55, 0.5, 0.63, 0.46, 0.52, 0.44], out: " ", label: null });
-    const ob = OUT_BOX;
+    trainingScene(s, { vals: [0.55, 0.5, 0.63, 0.46, 0.52, 0.44], cands: [], label: null });
     toks.slice(prompt.length).forEach((t, i) => {
-      const o = s.text(t.w, ob[0], ob[1] + 0.38, ob[2], 0.7, { fontSize: 30, bold: true, color: "blue", align: "center", valign: "middle", name: `Out ${i}` });
+      const o = s.text(t.w, TR.bx, TR.cy - 0.3, TR.bw, 0.7, { fontSize: 30, bold: true, color: "blue", align: "center", valign: "middle", name: `Out ${i}` });
       const w = s.text(t.w, t.x, t.y, t.ww + 0.3, lh, { fontSize: pt, bold: true, color: "blue", name: `Word ${i}` });
       s.anim(o, { on: i ? "after" : "click", dur: 220, delay: i ? 200 : 0 });
       s.anim(w, { on: "after", dur: 220, delay: 280 });
@@ -525,10 +580,10 @@ One word at a time, it can write anything: a discharge summary, a letter, an ans
   {
     const s = new Ctx("CONTENT", {
       notes: `
-It knows a lot of medicine. But all of it was fixed in training: it has no short-term memory of its own, and it has never seen Rosa's chart. So ask it to finish a sentence about her.
-(click) It writes something plausible: carvedilol, lisinopril and furosemide, what a lot of people with heart failure take.
-(click) It's made up. Rosa takes sacubitril/valsartan, not lisinopril, and her carvedilol was stopped in May for heart block.
-That's all a hallucination is: the model doing its one job, finishing the sentence, with nothing true to go on.`,
+The problem: it doesn't know our patients. We start with Rosa, and ask it to complete the sentence.
+(click) It says something that looks reasonable: carvedilol, lisinopril and furosemide, what a lot of people with heart failure take.
+(click) But it's hallucinated. It doesn't know Rosa: she wasn't in any of its training. (She takes sacubitril/valsartan, not lisinopril, and her carvedilol was stopped in May for heart block.)
+It's doing its one job, finishing the sentence, with nothing true to go on. So we need to give it context.`,
     });
     model(s, CTX.mx, CTX.my, CTX.md);
     s.card(CTX.x, 2.3, CTX.w, 2.6, { rectRadius: 0.3, name: "Context" });
@@ -541,28 +596,33 @@ That's all a hallucination is: the model doing its one job, finishing the senten
 
   // ── Part 2
   await mapSlide(2, `
-So the second step: give it context.`);
+So we go back: the second step, models plus context.`);
 
   // ── Model + context: give it her chart (Morph: the model moves across from the map)
   {
     const s = new Ctx("CONTENT", {
       transition: "morph",
       notes: `
-Context is whatever text we put in front of the model. Here: the heart-failure medicines from Rosa's chart, then the same sentence.
-(click) Now the likeliest next words are the ones in front of it: sacubitril/valsartan, spironolactone, dapagliflozin and furosemide.
-(click) Correct, because it's in her chart. Same model, same sentence: the context changed the answer.
+(Morph) So we provide Rosa's chart, her medications, as the first part of the message, then the same sentence. It's all one message, all text.
+That information is now in context: the model's short-term memory.
+(click) When it writes, it uses it, in a grounded way: sacubitril/valsartan, spironolactone, dapagliflozin and furosemide.
+(click) Correct, because it's in her chart. Same model, same sentence: the context changed the answer. Current models are very good at this.
 (Her chart is synthetic, the one in today's demo.)`,
     });
-    // The model and the blue sheet move across from the map (Morph); her chart comes in around the sheet just after.
-    const y0 = 0.95, x = CTX.x + 0.5, tw = CTX.w - 1.0;
+    // The model and the blue sheet move across from the map (Morph); her chart comes in just after. Her chart and the
+    // sentence are one message, all text in the same type: the chart is simply the first part of what the model reads.
+    const y0 = 0.95, x = CTX.x + 0.5, tw = CTX.w - 1.0, pt = 26, lh = 0.48;
     model(s, CTX.mx, CTX.my, CTX.md);
-    const chart = [s.shape("ROUNDED_RECTANGLE", CTX.x, y0, CTX.w, 5.2, { fill: "card", rectRadius: 0.06, morph: "doc" }),
-      s.text("Rosa’s chart", x + 0.5, y0 + 0.29, 4, 0.38, { fontSize: 18, bold: true, color: "muted", valign: "middle", name: "Chart head" }),
-      s.text([br("sacubitril/valsartan 49/51 mg twice daily"), br("spironolactone 25 mg once daily"), br("dapagliflozin 10 mg once daily"), br("furosemide 40 mg once daily"), { text: "carvedilol: stopped 14 May 2026", color: "muted" }],
-        x, y0 + 0.83, tw, 2.2, { fontSize: 22, lineSpacingMultiple: 1.05, name: "Medicines" }),
-      s.line(x, y0 + 3.13, x + tw, y0 + 3.13, { color: "dim", width: 1, name: "Divider" })];
-    s.icon("file-lines", x, y0 + 0.3, 0.36, "blue", { morph: "context" }); // drawn over the chart it heads
-    const { head, words, twins } = sentence(s, ROSA, ["sacubitril/valsartan,", "spironolactone,", "dapagliflozin", "and", "furosemide."], { x, y: y0 + 3.33, w: tw, pt: 28, lineH: 0.52, final: "green" });
+    const card = s.shape("ROUNDED_RECTANGLE", CTX.x, y0, CTX.w, 5.2, { fill: "card", rectRadius: 0.06, morph: "doc" });
+    s.icon("file-lines", x, y0 + 0.3, 0.36, "blue", { morph: "context" });
+    const meds = "Rosa’s medications: sacubitril/valsartan 49/51 mg twice daily, spironolactone 25 mg once daily, dapagliflozin 10 mg once daily, furosemide 40 mg once daily. Carvedilol stopped 14 May 2026.";
+    const medLines = new Map();
+    flow(meds.split(" "), x, y0 + 0.85, tw, pt, lh).forEach((t) => (medLines.get(t.y) || medLines.set(t.y, []).get(t.y)).push(t));
+    const chart = [card, ...[...medLines.values()].map((ts, i) => s.text(ts.map((t) => t.w).join(" "), ts[0].x, ts[0].y, tw + 0.3, lh, { fontSize: pt, name: `Chart ${i}` }))];
+    const sy = y0 + 0.85 + medLines.size * lh + 0.3;
+    const cont = ["sacubitril/valsartan,", "spironolactone,", "dapagliflozin", "and", "furosemide."];
+    if (flow([...ROSA.split(" "), ...cont], x, sy, tw, pt, lh).at(-1).y + lh > y0 + 5.2 - 0.15) throw new Error("context slide: the message overflows the card");
+    const { head, words, twins } = sentence(s, ROSA, cont, { x, y: sy, w: tw, pt, lineH: lh, final: "green" });
     s.anim([chart, head], { on: "after" });
     s.stagger(words, { dur: 300, gap: 150 });
     s.anim([twins, s.text("Correct, with the right context", CTX.x, y0 + 5.35, CTX.w, 0.55, { fontSize: 26, bold: true, color: "green", align: "center", valign: "middle", name: "Correct" })]);
@@ -570,57 +630,66 @@ Context is whatever text we put in front of the model. Here: the heart-failure m
     await s.done();
   }
 
-  // ── Today: copy and paste (Morph: the model moves into the chat, on the left; her chart becomes the EHR, on the right)
+  // ── Today: copy and paste (Morph: the model moves into the chat, on the left; her chart becomes the EHR, on the right).
+  // The faculty talk's layout: the chat's model as far from the card's top as from its left, her chart's sections spread
+  // evenly, a database icon on her chart. One press: you do the gathering, copy by copy, by itself. The next: you ask.
   {
     const s = new Ctx("CONTENT", {
       transition: "morph",
       notes: `
-Who put her chart there? Today, usually we do. It's how most of us use ChatGPT and other chatbots:
-(click) find her medicines, copy, paste;
-(click) find her last note, from primary care, copy, paste;
-(click) then ask: is anything missing? It spots that carvedilol was stopped. But it can't say why: the reason is in a cardiology note we didn't paste. We are doing the gathering, one copy at a time, and it only knows what we happened to copy.
+But how do we get context? Typically, that's your job. It's most of your experience with ChatGPT: first you get the relevant information.
+(click: it runs by itself) You find it, her medicines, and copy and paste it into the chat; then her last note, from primary care.
+(click) And you ask, and get something back: carvedilol was stopped, but the note doesn't say why. The reason is in a cardiology note we didn't paste.
+It's very time-consuming, and it only knows what we happened to copy. So how can we improve this?
 (The note is quoted from her synthetic chart: the primary care visit of 20 October.)`,
     });
-    const ew = 4.3, ey = 1.2, eh = 5.0, cx0 = M, ex = W - M - ew;
+    const ew = 4.3, ey = 1.1, eh = 5.75, cx0 = M, ex = W - M - ew, pad = 0.25, pt = 16;
     // the chat, on the left: the model's side
-    const chat = [s.card(cx0, ey, ew, eh, { rectRadius: 0.06, name: "Chat" }),
-      s.text("Chat", cx0 + 0.8, ey + 0.05, 2, 0.55, { fontSize: 16, bold: true, color: "muted", valign: "middle", name: "Chat head" })];
-    model(s, cx0 + 0.45, ey + 0.32, 0.42);
-    // her chart, on the right
-    const ehr = [s.shape("ROUNDED_RECTANGLE", ex, ey, ew, eh, { fill: "card", rectRadius: 0.06, morph: "doc" }),
-      s.shape("ROUNDED_RECTANGLE", ex, ey, ew, 0.55, { fill: "raised", rectRadius: 0.06, name: "EHR bar" }),
-      s.shape("RECTANGLE", ex, ey + 0.35, ew, 0.2, { fill: "raised", name: "EHR bar base" }),
-      s.icon("file-lines", ex + 0.25, ey + 0.13, 0.3, "muted", { name: "EHR icon" }),
-      s.text("Rosa Delgado", ex + 0.7, ey, 3.0, 0.55, { fontSize: 16, bold: true, color: "muted", valign: "middle", name: "EHR patient" })];
+    const dd = 0.4, dcx = cx0 + pad + dd / 2, dcy = ey + pad + dd / 2;
+    const chat = [s.card(cx0, ey, ew, eh, { rectRadius: 0.08, name: "Chat" }),
+      s.text("Chat", dcx + dd / 2 + 0.15, dcy - 0.25, 2, 0.5, { fontSize: 16, bold: true, color: "muted", valign: "middle", name: "Chat head" })];
+    model(s, dcx, dcy, dd);
+    // her chart, on the right (its card is the context slide's, Morph): a bar, then its sections, spread evenly (as far
+    // below the bar as above the card's foot)
     const rows = [["pills", "Medications"], ["file-lines", "Primary care note"], ["file-lines", "Telephone note"], ["flask", "Lab results"], ["heart-pulse", "Vital signs"]];
-    const ry = (i) => ey + 0.85 + i * 0.78, lit = [];
+    const bar = 0.6, rh = 0.62, top = ey + bar + pad, pitch = (ey + eh - pad - top - rh) / (rows.length - 1);
+    s.shape("ROUNDED_RECTANGLE", ex, ey, ew, eh, { fill: "card", rectRadius: 0.08, morph: "doc" });
+    const ehr = [s.shape("ROUNDED_RECTANGLE", ex, ey, ew, bar, { fill: "raised", rectRadius: 0.08, name: "EHR bar" }),
+      s.shape("RECTANGLE", ex, ey + bar - 0.2, ew, 0.2, { fill: "raised", name: "EHR bar base" }),
+      s.icon("user", ex + pad, ey + (bar - 0.3) / 2, 0.3, "muted", { name: "EHR icon" }),
+      s.text("Rosa Delgado", ex + 0.7, ey, 2.8, bar, { fontSize: 16, bold: true, valign: "middle", name: "EHR patient" }),
+      s.icon("database", ex + ew - pad - 0.3, ey + (bar - 0.3) / 2, 0.3, "text", { name: "EHR database" })];
+    const lit = [];
     rows.forEach(([icon, t], i) => {
-      ehr.push(s.shape("ROUNDED_RECTANGLE", ex + 0.25, ry(i), ew - 0.5, 0.6, { fill: "raised", rectRadius: 0.1, name: `Row ${i}` }),
-        s.icon(icon, ex + 0.45, ry(i) + 0.16, 0.28, "muted", { name: `Row icon ${i}` }),
-        s.text(t, ex + 0.95, ry(i), 2.9, 0.6, { fontSize: 17, valign: "middle", name: `Row ${t}` }));
-      if (i < 2) lit.push(s.shape("ROUNDED_RECTANGLE", ex + 0.25, ry(i), ew - 0.5, 0.6, { line: { color: "text", width: 2 }, rectRadius: 0.1, name: `Row lit ${i}` }));
+      const y = top + i * pitch;
+      ehr.push(s.shape("ROUNDED_RECTANGLE", ex + pad, y, ew - 2 * pad, rh, { fill: "raised", rectRadius: 0.1, name: `Row ${i}` }),
+        s.icon(icon, ex + pad + 0.2, y + (rh - 0.28) / 2, 0.28, "muted", { name: `Row icon ${i}` }),
+        s.text(t, ex + pad + 0.7, y, 2.9, rh, { fontSize: 17, valign: "middle", name: `Row ${t}` }));
+      if (i < 2) lit.push(s.shape("ROUNDED_RECTANGLE", ex + pad, y, ew - 2 * pad, rh, { line: { color: "text", width: 2 }, rectRadius: 0.1, name: `Row lit ${i}` }));
     });
-    // you, in the middle, copying from the chart into the chat
-    const px = W / 2, py = ey + 2.2;
+    // you, between them, level with the middle of the cards, copying from the chart into the chat
+    const px = W / 2, py = ey + eh / 2;
     const you = [s.icon("user", px - 0.45, py - 0.6, 0.9, "text", { name: "You" }),
       s.text("You", px - 1, py + 0.4, 2, 0.4, { fontSize: 18, bold: true, color: "muted", align: "center", name: "You label" })];
     const arrows = [s.arrow(ex - 0.15, py - 0.15, px + 0.65, py - 0.15, { name: "Copy arrow" }), s.arrow(px - 0.65, py - 0.15, cx0 + ew + 0.15, py - 0.15, { name: "Paste arrow" })];
-    // the bubbles: what you paste and ask (grey, right), what the model answers (blue, left)
-    const right = cx0 + ew - 0.3, maxW = 3.75;
-    let y = ey + 0.8;
-    const next = (b) => { y += b.h + 0.22; return b; };
-    const b1 = next(chatBubble(s, "Medications: sacubitril/valsartan, spironolactone, dapagliflozin, furosemide; carvedilol stopped 14\u00A0May", right, y, maxW, { pt: 15, name: "Paste 1" }));
-    const b2 = next(chatBubble(s, "Primary care note: “Heart failure is managed by cardiology.”", right, y, maxW, { pt: 15, name: "Paste 2" }));
-    const b3 = next(chatBubble(s, "Is anything missing?", right, y, maxW, { pt: 15, name: "Ask" }));
+    // the chat, with the same margins as its model: what you paste and ask (grey, right; one run, so only the last has
+    // a tail), what the model answers (blue, left)
+    const right = cx0 + ew - pad, maxW = ew - 2 * pad - 0.35;
+    let y = dcy + dd / 2 + 0.3;
+    const next = (b, gap) => { y += b.h + b[gap]; return b; };
+    const pastes = [[0, "Medications: sacubitril/valsartan, spironolactone, dapagliflozin, furosemide; carvedilol stopped 14 May"], [1, "Primary care note: “Heart failure is managed by cardiology.”"]]
+      .map(([row, t], i) => [lit[row], next(chatBubble(s, t, right, y, maxW, { pt, fill: "dim", tail: false, name: `Paste ${i + 1}` }), "gapRun")]);
+    const ask = next(chatBubble(s, "Is anything missing?", right, y, maxW, { pt, fill: "dim", name: "Ask" }), "gapTurn");
     const ansText = "Carvedilol was stopped, but the note doesn’t say why.";
-    const ans = chatBubble(s, ansText, cx0 + 0.3, y, maxW, { pt: 15, from: "model", name: "Answer" });
-    if (y + ans.h > ey + eh - 0.15) throw new Error("copy and paste: the chat overflows");
+    const ans = chatBubble(s, ansText, cx0 + pad, y, maxW, { pt, from: "model", name: "Answer" });
+    if (y + ans.h + ans.tailDrop > ey + eh - pad) throw new Error("copy and paste: the chat overflows");
     s.anim([chat, ehr, you], { on: "after" });
-    s.anim([arrows, lit[0]]);
-    s.anim(b1.g, { on: "after", dur: 300 });
-    s.anim(lit[1]);
-    s.anim(b2.g, { on: "after", dur: 300 });
-    s.anim(b3.g, { dur: 300 });
+    // one press: each copy, then its paste, one after another
+    pastes.forEach(([row, b], i) => {
+      s.anim(i ? row : [arrows, row], { on: i ? "after" : "click", delay: i ? 300 : 0, dur: 300 });
+      s.anim(b.g, { on: "after", delay: 150, dur: 300 });
+    });
+    s.anim(ask.g, { dur: 300 });
     s.anim(ans.shape, { on: "after", delay: 300, dur: 250 });
     s.written(ans.text, ansText, { on: "after" });
     await s.done();
@@ -628,41 +697,84 @@ Who put her chart there? Today, usually we do. It's how most of us use ChatGPT a
 
   // ── Part 3
   await mapSlide(3, `
-Which brings us to the third step: an agent.`);
+Well, this is where agents come in.`);
 
-  // ── Text is a universal interface (the faculty talk's, for Rosa; Morph: the model moves across from the map)
+  // ── Text is a universal interface (the faculty talk's, for Rosa; Morph: the model and its loop move across from the
+  // map). First how a tool works, it's all text (model → harness → text back); that fades, and her chart comes in. Then
+  // a chat between the agent and her chart, as in the faculty talk: the tool call and its result are chat bubbles too,
+  // the call on the model's side, outlined in its blue, in monospace; the result on yours (it goes into the model, like
+  // your messages), outlined in white. The call goes out to her chart, and the result comes back into the chat.
   {
     const s = new Ctx("CONTENT", {
       transition: "morph",
       notes: `
-How could it get the context itself? Ideally the model would fetch its own, and it can, because text is a universal interface. The same way we give it instructions in text, it can write instructions: it can say what it needs.
-(click) Why was her carvedilol stopped? The question the chat couldn't answer.
-(click) It doesn't answer. It writes a request for a tool: search her notes for carvedilol. Software around the model, the harness, reads that request and runs the search: two of her three notes mention carvedilol.
-(click) The harness hands back the result, as text, into the model's context: the telephone note from 14 May, Mobitz II heart block on carvedilol, carvedilol stopped.
-(click) Now it answers from her chart: Mobitz II heart block, found on a monitor she wore at home. Wire that into a loop, so it can ask again and again, and you have an agent.
-(The note is quoted from her synthetic chart; the demo's search_notes tool returns it this way.)
+(Morph) This is the agent: the model, in its harness (the ring), in its loop. The same way it can generate text, it can generate text that uses a tool.
+(click) It's all text. Just as you'd tell someone "go and fetch me this", the model writes a request for a tool: read her medication records. It's just another message, from the model (the outlined bubble).
+(click) Its harness (the ring, labelled), the software around the model, reads that text, turns it into code and runs it: a request to the EHR for her medications. The model only ever writes text; the harness is what does things with it.
+(click) What comes back is text again, here the line for her carvedilol (exactly what the demo's tool returns), and it goes into the model's context, like your messages do.
+(click) So, with her chart: why was her carvedilol stopped? The question the chat couldn't answer.
+(click) It works out what it needs, "I should check her notes", and writes a tool call: search her notes for carvedilol. The harness runs the search: two of her three notes mention it.
+(click) The result comes back into the chat: the telephone note from 14 May, Mobitz II heart block on carvedilol, carvedilol stopped.
+(click) And it answers the question directly, from her chart: Mobitz II heart block, found on a monitor she wore at home. Nobody pasted anything. This is a very powerful idea.
+Behind the scenes, that's all a chatbot is: a conversation, and the tool calls are just more messages in it.
+(The note is quoted from her synthetic chart; the demo's search_notes tool returns this passage.)
 
 How the labs draw it (for reference): OpenAI, Function calling: https://developers.openai.com/api/docs/guides/function-calling
-Anthropic, How tool use works: https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works`,
+Anthropic, How tool use works: https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works
+Anthropic, Building effective agents (the augmented LLM; the agent loop): https://www.anthropic.com/engineering/building-effective-agents`,
     });
-    // the chat on the left, the model in the middle (Morph from the map), her chart on the right
-    const ey = 1.85, eh = 3.45, cw = 4.2, cy0 = ey, ch = eh, lx = 6.35, ly = ey + eh / 2, ld = 1.5, ex = 8.85, ew = W - M - ex;
-    model(s, lx, ly, ld);
-    const chat = [s.card(M, cy0, cw, ch, { rectRadius: 0.06, name: "Chat" }),
-      s.icon("message", M + 0.28, cy0 + 0.16, 0.26, "muted", { name: "Chat icon" }),
-      s.text("Chat", M + 0.68, cy0 + 0.05, 2, 0.5, { fontSize: 16, bold: true, color: "muted", valign: "middle", name: "Chat head" }),
-      s.shape("ROUNDED_RECTANGLE", M + 0.25, cy0 + ch - 0.58, cw - 0.5, 0.38, { fill: "bg", line: { color: "dim", width: 1 }, rectRadius: 0.19, name: "Chat input" }),
-      s.text("Message", M + 0.45, cy0 + ch - 0.58, 2, 0.38, { fontSize: 13, color: "muted", valign: "middle", name: "Chat input hint" })];
-    const NOTES = [["20 Oct 2026", "Primary care visit"], ["30 Jun 2026", "Electrophysiology consult", 1], ["14 May 2026", "Telephone encounter", 1]];
+    const lx = 2.1, ly = 4.05, LR = 1.2, HR = 0.75 * LR;
+    agent(s, lx, ly, LR); // the map's agent (Morph): the model, in its harness, in its loop
+    // the harness, named: a label above, its arrow down through the loop's top gap to the ring; it stays once it's in
+    const named = [s.text("Harness", lx - 1.0, 1.95, 2.0, 0.42, { fontSize: 18, bold: true, align: "center", valign: "middle", name: "Harness label" }),
+      s.arrow(lx, 2.42, lx, ly - HR - 0.06, { color: "text", width: 2, name: "Harness arrow" })];
+    // 1. It's all text, in three steps down the right: the call (a bubble, the model's side), the code the harness runs,
+    // the result (a bubble, your side)
+    const rx = 5.25, bx = rx + 0.7, rw = W - M - bx, hp = 16;
+    const lab = (t, y) => s.text(t, bx, y, rw, 0.34, { fontSize: 15, color: "muted", valign: "middle", name: `How ${t}` });
+    const down = (y) => s.arrow(bx + rw / 2, y, bx + rw / 2, y + 0.28, { name: `Down ${y}` });
+    const hc = chatBubble(s, 'read_records("medications")', bx, 2.33, rw, { pt: hp, ...TOOL.call({ icon: "table-list" }), name: "How call" });
+    const y2 = hc.y + hc.h + hc.tailDrop + 0.08, y3 = y2 + 0.38 + 0.38 + 0.56 + 0.1;
+    const hr = chatBubble(s, "“carvedilol 12.5 mg oral tablet: 12.5 mg by mouth twice daily. Status stopped, ordered 2025-08-26, stopped 2026-05-14”", W - M, y3 + 0.76, rw, { pt: hp, ...TOOL.result(), name: "How result" });
+    if (hr.y + hr.h + hr.tailDrop > 6.9) throw new Error("tool use: it's all text runs off the slide");
+    const how = [
+      [s.text("It’s all text", rx, 1.15, 6, 0.55, { fontSize: 28, bold: true, valign: "middle", name: "All text" }),
+        lab("The model writes text", 1.95), ...model(s, rx + 0.25, hc.cy, 0.5, { morph: false }), hc.g],
+      [down(y2), lab("The harness turns it into code, and runs it", y2 + 0.38), s.icon("gear", rx + 0.03, y2 + 0.76 + 0.06, 0.44, "muted", { name: "Harness icon" }),
+        s.text("GET /fhir/MedicationRequest?patient=…", bx, y2 + 0.76, rw, 0.56, { fontSize: hp, bold: true, font: MONO, fill: "card", shape: "ROUNDED_RECTANGLE", rectRadius: 0.12, valign: "middle", margin: 12, name: "How code" })],
+      [down(y3), lab("Text comes back, into the model’s context", y3 + 0.38), hr.g],
+    ];
+    // 2. Her chart, on the right, and the chat between the agent and it
+    const eh = 3.45, ex = 9.25, ew = W - M - ex;
+    const x0 = lx + LR + 0.3, x1 = ex - 1.15, maxW = x1 - x0 - 0.2, pt = 16;
+    const gapOf = (L, g) => L[g] || 0;
+    const MSGS = [
+      ["Why was her carvedilol stopped?", { fill: BUBBLE_COLORS.received, name: "Ask" }, "gapTurn"],
+      ["I should check her notes.", { from: "model", tail: false, name: "Thought" }, "gapRun"],
+      ['search_notes("carvedilol")', TOOL.call({ name: "Call" }), "gapTurn"],
+      ["14 May 2026, telephone:\n“…Mobitz II second-degree AV block on carvedilol… Carvedilol stopped today.”", TOOL.result({ name: "Result" }), "gapTurn"],
+      ["Mobitz II heart block, found on a monitor she wore at home in May.", { from: "model", name: "Answer" }],
+    ];
+    const Ls = MSGS.map(([t, o]) => bubbleLayout(t, maxW, { pt, ...o }));
+    let y = 1.0 + (5.9 - Ls.reduce((a, L, i) => a + L.h + (i < MSGS.length - 1 ? gapOf(L, MSGS[i][2]) : L.tailDrop), 0)) / 2;
+    const [ask, thought, req, res, ans] = MSGS.map(([t, o, g]) => {
+      const right = o.side === "right" || (!o.side && o.from !== "model");
+      const b = chatBubble(s, t, right ? x1 : x0, y, maxW, { pt, ...o });
+      y += b.h + gapOf(b, g);
+      return b;
+    });
+    if (ans.y + ans.h + ans.tailDrop > 6.9) throw new Error("tool use: the chat runs off the slide");
+    // her chart sits level with the call and the result
+    const ey = (req.cy + res.cy) / 2 - 1.95, NOTES = [["20 Oct 2026", "Primary care visit"], ["30 Jun 2026", "Electrophysiology consult", 1], ["14 May 2026", "Telephone encounter", 1]];
     const fy = ey + 0.72, ry = (i) => ey + 1.32 + i * 0.66, rh = 0.58;
     const ehr = [s.shape("ROUNDED_RECTANGLE", ex, ey, ew, eh, { fill: "card", rectRadius: 0.06, name: "Chart" }),
       s.shape("ROUNDED_RECTANGLE", ex, ey, ew, 0.55, { fill: "raised", rectRadius: 0.06, name: "Chart bar" }),
       s.shape("RECTANGLE", ex, ey + 0.35, ew, 0.2, { fill: "raised", name: "Chart bar base" }),
-      s.icon("file-medical", ex + 0.25, ey + 0.13, 0.3, "muted", { name: "Chart icon" }),
-      s.text("Her chart: notes", ex + 0.7, ey, 3.0, 0.55, { fontSize: 16, bold: true, color: "muted", valign: "middle", name: "Chart head" }),
+      s.text("Her chart: notes", ex + 0.25, ey, 2.8, 0.55, { fontSize: 16, bold: true, color: "muted", valign: "middle", name: "Chart head" }),
+      s.icon("database", ex + ew - 0.25 - 0.3, ey + 0.125, 0.3, "text", { name: "Chart database" }),
       s.shape("ROUNDED_RECTANGLE", ex + 0.25, fy, ew - 0.5, 0.45, { fill: "bg", rectRadius: 0.1, name: "Search field" }),
       s.icon("magnifying-glass", ex + 0.4, fy + 0.11, 0.23, "muted", { name: "Search icon" }),
-      s.text("Search notes", ex + 0.8, fy, 2.5, 0.45, { fontSize: 14, color: "muted", valign: "middle", name: "Search hint" })];
+      s.text("Search notes", ex + 0.8, fy, ew - 1.15, 0.45, { fontSize: 14, color: "muted", valign: "middle", name: "Search hint" })];
     const lit = [], dim = [];
     NOTES.forEach(([date, title, hit], i) => {
       ehr.push(s.shape("ROUNDED_RECTANGLE", ex + 0.25, ry(i), ew - 0.5, rh, { fill: "raised", rectRadius: 0.1, name: `Note ${i}` }),
@@ -671,65 +783,56 @@ Anthropic, How tool use works: https://platform.claude.com/docs/en/agents-and-to
       (hit ? lit : dim).push(hit ? s.shape("ROUNDED_RECTANGLE", ex + 0.25, ry(i), ew - 0.5, rh, { line: { color: "text", width: 2 }, rectRadius: 0.1, name: `Note hit ${i}` })
         : s.shape("ROUNDED_RECTANGLE", ex + 0.23, ry(i) - 0.02, ew - 0.46, rh + 0.04, { fill: "card", transparency: 30, rectRadius: 0.1, name: `Note miss ${i}` }));
     });
-    const typed = s.text("carvedilol", ex + 0.8, fy, 2.5, 0.45, { fontSize: 14, fill: "bg", valign: "middle", name: "Search typed" });
-    // the request: the model's text (blue) on the arc to her chart; the result comes back on the grey arc below
-    const a0 = [lx + 0.55, ly - 0.52], a1 = [ex - 0.12, fy + 0.22], b0 = [ex - 0.12, ry(2) + rh / 2], b1 = [lx + 0.55, ly + 0.52];
-    const top = s.path([a0, { x: a1[0], y: a1[1], c1: [a0[0] + 0.3, 0.75], c2: [a1[0] - 0.9, 0.75] }], { open: true, line: { color: "blue", width: 2.5, endArrow: true }, name: "Request arc" });
-    const mid = (a0[0] + a1[0]) / 2;
-    const req = call(s, 'search_notes("carvedilol")', mid, 1.1, 3.7, { h: 0.5, pt: 15, name: "Call" });
-    const bot = s.path([b0, { x: b1[0], y: b1[1], c1: [b0[0] - 0.9, 6.55], c2: [b1[0] + 0.3, 6.55] }], { open: true, line: { color: "muted", width: 2.5, endArrow: true }, name: "Result arc" });
-    const res = s.text([br("14 May 2026  Telephone encounter", { fontSize: 12, color: "muted", bold: true }), { text: "“…Mobitz II second-degree AV block on carvedilol… Carvedilol stopped today.”", fontSize: 14 }],
-      mid - 2.4, 5.53, 4.8, 1.0, { fill: "raised", shape: "ROUNDED_RECTANGLE", rectRadius: 0.12, valign: "middle", margin: 10, paraSpaceAfter: 3, name: "Result" });
-    // the bubbles
-    const ask = chatBubble(s, "Why was her carvedilol stopped?", M + cw - 0.3, cy0 + 0.7, 3.8, { name: "Ask" });
-    const ansText = "Mobitz II heart block, found on a monitor she wore at home in May.";
-    const ans = chatBubble(s, ansText, M + 0.25, cy0 + 0.7 + ask.h + 0.25, 3.85, { from: "model", name: "Answer" });
-    if (cy0 + 0.7 + ask.h + 0.25 + ans.h > cy0 + ch - 0.7) throw new Error("tool use: the chat overflows");
-    s.anim([chat, ehr], { on: "after" });
-    s.anim(ask.g, { dur: 300 });
-    s.anim([top, req], { dur: 500 });
+    const typed = s.text("carvedilol", ex + 0.8, fy, ew - 1.15, 0.45, { fontSize: 14, fill: "bg", valign: "middle", name: "Search typed" });
+    if (ey < 1.0 || ey + eh > 6.9) throw new Error("tool use: her chart runs off the slide");
+    if (Math.max(...[ask, thought, req, res, ans].map((b) => b.x + b.w)) > ex - 0.8) throw new Error("tool use: the chat runs into her chart");
+    if (Math.min(...[ask, thought, req, res, ans].map((b) => b.x)) < lx + LR + 0.2) throw new Error("tool use: the chat runs into the loop");
+    // the call goes out to her chart's search, in the model's blue; the telephone note comes back into the chat
+    const out = link(s, [req.x + req.w + 0.15, req.cy], [ex - 0.15, fy + 0.225], { color: "blue", width: 2.5, arrow: true, name: "To her chart" });
+    const back = link(s, [ex - 0.15, ry(2) + rh / 2], [res.x + res.w + 0.15, res.cy], { color: "text", width: 2, arrow: true, name: "From her chart" });
+    s.anim(how[0], { dur: 400 });
+    s.anim([how[1], named], { dur: 400 });
+    s.anim(how[2], { dur: 400 });
+    s.anim(how, { fx: "fade-out", dur: 400 });
+    s.anim([ehr, ask.g], { on: "after", dur: 500 });
+    s.anim(thought.g, { dur: 400 });
+    s.anim(req.g, { on: "after", delay: 300, dur: 400 });
+    s.anim(out, { fx: "wipe-left", on: "after", dur: 400 });
     s.anim([typed, lit, dim], { on: "after", dur: 400 });
-    s.anim([bot, res], { dur: 500 });
+    s.anim(back, { fx: "wipe-right", dur: 300 });
+    s.anim(res.g, { on: "after", dur: 400 });
     s.anim(ans.shape, { dur: 250 });
-    s.written(ans.text, ansText, { on: "after" });
+    s.written(ans.text, MSGS[4][0], { on: "after" });
     await s.done();
   }
 
-  // ── An agent: a model, tools and a loop (the faculty talk's; ReAct). The loop, then the tools one at a time.
+  // ── An agent: a model, tools and a loop (the faculty talk's; ReAct). Reason, Act and Observe come in as soon as the
+  // Morph ends; the tools themselves are on the Tools slide.
   {
     const s = new Ctx("CONTENT", {
       transition: "morph",
       notes: `
-No hype: an agent is a language model that we give tools, and run in a loop. The standard recipe is ReAct (Yao et al., ICLR 2023): (click) the model reasons about what to do next, acts (calls a tool), observes the result, and repeats until the task is done.
-Then the tools, one at a time. Some gather context: (click) read a note, (click) search the notes, (click) read her records: her medications, diagnoses, vital signs.
-(click) And some act in the world: message the patient, (click) and one day, place an order. The software that runs the loop and the tools, the harness, gives the model a body: eyes to gather, hands to act. Gathering and acting are very different levels of trust.
-(click) Why is this so powerful? Language is a universal interface. Almost anything can be written down as text, a note, a lab result, a guideline, an order, so a model that reads and writes text can use almost any tool.
+(Morph) And this is the loop, around the model in its harness: it reasons about what to do next, acts by calling a tool, observes the result, and repeats until the task is done. That's ReAct, the standard recipe (Yao et al., ICLR 2023).
+(click) So an agent is a language model with tools (its harness runs them), in a loop. And because it's all text, it can in principle do anything you can write down as a task, especially anything done on a computer. With that flexibility comes a lot of potential, and a lot of power. So how do we set it up safely?
 
 Ref: Yao S et al. ReAct: synergizing reasoning and acting in language models. ICLR 2023. https://arxiv.org/pdf/2210.03629#page=1`,
     });
-    // The tools sit above the Observe and Act pills, so their links (curves into the model from the left, out of it to
-    // the right) pass clear of the pills; the build stops if one doesn't.
-    const cx = W / 2, cy = 3.85, R = 1.8, md = 1.5, tw = 3.45, th = 0.68, ys = [2.0, 2.92, 3.84], lxl = M, lxr = W - M - tw, hy = 1.2;
-    const gather = [["file-lines", "Read a note"], ["magnifying-glass", "Search notes"], ["table-list", "Read records"]];
-    const act = [["message", "Message the patient"], ["prescription", "Place an order"]];
-    const STEPS = ["Reason", "Act", "Observe"], pills = STEPS.map((l) => [measure(l, 16, true) + 0.42, 0.4]);
-    const pillBox = (k) => { const a = (LOOP_AT[k] * Math.PI) / 180, [w, h] = pills[k]; return [cx + R * Math.cos(a) - w / 2, cy + R * Math.sin(a) - h / 2, w, h]; };
-    const ends = [...gather.map((_, k) => [[lxl + tw, ys[k] + th / 2], [cx - md / 2, cy]]), ...act.map((_, k) => [[cx + md / 2, cy], [lxr, ys[k] + th / 2]])];
-    const keepClear = [0, 1, 2].map(pillBox);
-    ends.forEach(([a, b], k) => { if (linkHits(a, b, keepClear).length) throw new Error(`agent slide: link ${k} runs into a pill`); });
-    const links = ends.map(([a, b], k) => link(s, a, b, { name: `${k < 3 ? "Gather" : "Act"} link ${k}` }));
-    model(s, cx, cy, md);
-    const arcs = loop(s, cx, cy, R, { pills, morph: false });
-    const steps = STEPS.map((label, k) => {
-      const [x, y, w, h] = pillBox(k);
-      return s.text(label, x, y, w, h, { fontSize: 16, bold: true, color: "blue", fill: "bg", line: { color: "blue", width: 1.5 }, shape: "ROUNDED_RECTANGLE", rectRadius: 0.2, align: "center", valign: "middle", name: `Step ${label}` });
+    const cx = W / 2, cy = 3.6, R = 2.0, md = 1.5, hr = 1.05;
+    const STEPS = ["Reason", "Act", "Observe"], pills = STEPS.map((l) => [measure(l, 18, true) + 0.46, 0.44]);
+    agent(s, cx, cy, R, { pills, md, hr }); // the agent from the slide before (Morph): its loop grows around the harness
+    // the ring stays clear of the steps (the nearest corner of each pill) and of the model
+    pills.forEach(([w, h], k) => {
+      const a = (LOOP_AT[k] * Math.PI) / 180, px = R * Math.cos(a), py = R * Math.sin(a);
+      const nx = Math.max(Math.abs(px) - w / 2, 0), ny = Math.max(Math.abs(py) - h / 2, 0);
+      if (Math.hypot(nx, ny) < hr + 0.15) throw new Error(`agent loop: the harness runs into ${STEPS[k]}`);
     });
-    const head = (icon, label, x, align) => [s.icon(icon, align === "right" ? x + tw - 0.45 : x, hy + 0.05, 0.45, "text", { name: `${label} icon` }),
-      s.text(label, align === "right" ? x : x + 0.62, hy, tw - 0.62, 0.55, { fontSize: 22, bold: true, align, valign: "middle", name: `${label} head` })];
-    s.anim([arcs, steps, cite(s, "Yao et al., ICLR 2023")]);
-    gather.forEach(([icon, label], k) => s.anim([k ? [] : head("eye", "Gather context", lxl, "left"), links[k], toolCard(s, 10 + k, icon, label, lxl, ys[k], tw, th, { morph: false })]));
-    act.forEach(([icon, label], k) => s.anim([k ? [] : head("hand", "Act", lxr, "right"), links[3 + k], toolCard(s, 20 + k, icon, label, lxr, ys[k], tw, th, { morph: false })]));
-    s.anim(s.text("Language is a universal interface", M, 6.05, CW, 0.55, { fontSize: 26, bold: true, align: "center", name: "Message" }));
+    if (hr - md / 2 < 0.2) throw new Error("agent loop: the harness runs into the model");
+    const steps = STEPS.map((label, k) => {
+      const a = (LOOP_AT[k] * Math.PI) / 180, [w, h] = pills[k];
+      return s.text(label, cx + R * Math.cos(a) - w / 2, cy + R * Math.sin(a) - h / 2, w, h, { fontSize: 18, bold: true, color: "blue", fill: "bg", line: { color: "blue", width: 1.5 }, shape: "ROUNDED_RECTANGLE", rectRadius: 0.22, align: "center", valign: "middle", name: `Step ${label}` });
+    });
+    s.anim([steps, cite(s, "Yao et al., ICLR 2023")], { on: "after", dur: 400 });
+    s.anim(s.text("An agent: a model with tools, in a loop", M, 6.05, CW, 0.55, { fontSize: 26, bold: true, align: "center", name: "Message" }));
     await s.done();
   }
 
@@ -739,9 +842,9 @@ Ref: Yao S et al. ReAct: synergizing reasoning and acting in language models. IC
     const s = new Ctx("CONTENT", {
       title: "Set it up like a remote colleague", transition: "morph",
       notes: `
-So how do you set one up? I'm going to anthropomorphise, on purpose. Set it up the way you'd set up a capable new colleague who works remotely: they can't walk down the hall to ask what you meant.
-(click) You'd give them a job. You'd pick the right person for it. You'd give them access to the records they need, the software to do the work, instructions, and guardrails that keep the work safe.
-Task, model, data, tools, prompt and guardrails. They're also the steps of the live build in a few minutes.`,
+There's a risk in anthropomorphising, but we think it's a nice way to think about this: set it up like a remote colleague. They can't walk down the hall to ask what you meant, so everything has to be spelled out.
+(click) We need to outline the task we want it to do, the model to use, the data it has, the tools it has, exactly how we prompt it, and the guardrails that keep the work safe.
+We'll go through them one by one. They're also the steps of the live build in a few minutes.`,
     });
     // The laptop is a picture, not shapes, so Morph has nothing to pair it with on the next slide: it just fades.
     const lw = 4.6, lh = lw / LAPTOP.ar, ly = 1.75;
@@ -759,93 +862,166 @@ Task, model, data, tools, prompt and guardrails. They're also the steps of the l
     await s.done();
   }
 
-  // ── Task (Morph: the six tiles move up into the bar; everything else enters after)
+  // ── Task, two slides, with Phyllis's tasks (her "Range of agentic AI tasks", AIAgents.pptx slide 6, in her words).
+  // 1 (Morph: the six tiles move up into the bar): her three groups, on a light blue, then the one we pick turns solid
+  // blue and the rest dim. 2 (Morph): the pick moves to the middle, the rest go, and everything else hangs from it.
   {
-    const s = new Ctx("CONTENT", {
-      title: "Task", bar: 0, transition: "morph",
-      notes: `
-Start with the task, because everything else follows from it.
-(click) What could we ask an agent to do? In quality and outcomes work: find care gaps, abstract registry data, screen patients for trials, summarise a chart before clinic, follow up abnormal results, draft a letter to a patient.
-(click) Pick one. Today's: find care gaps. Is Rosa on a beta blocker, and if not, why not?
-(click) Whichever it is, the task decides the model, the data, the tools, the prompt and the guardrails. A small, clear task is easier to do well, and much easier to check, than "review the chart".`,
-    });
-    // The tasks on a light blue; the one we pick turns solid blue, the bottom middle, so the links fall straight from it.
-    const TASKS = [["table-list", "Abstract registry data"], ["list-check", "Screen for trials"], ["file-lines", "Summarise a chart"],
-      ["vial", "Follow up results"], ["magnifying-glass", "Find care gaps", 1], ["message", "Draft a patient letter"]];
-    const tw = 3.7, th = 0.85, tg = 0.3, tx0 = (W - (3 * tw + 2 * tg)) / 2, ty0 = 1.75, pos = (i) => [tx0 + (i % 3) * (tw + tg), ty0 + Math.floor(i / 3) * (th + 0.25)];
-    const task = (i, icon, label, o) => { const [x, y] = pos(i); return [s.card(x, y, tw, th, { rectRadius: 0.16, ...o, name: `${o.name} ${i}` }),
-      s.icon(icon, x + 0.3, y + (th - 0.4) / 2, 0.4, "text", { name: `${o.name} icon ${i}` }),
-      s.text(label, x + 0.95, y, tw - 1.1, th, { fontSize: 19, bold: true, valign: "middle", name: `${o.name} label ${i}` })]; };
-    s.stagger(TASKS.map(([icon, label], i) => task(i, icon, label, { fill: "blue", transparency: 62, name: "Task" })), { gap: 60, dur: 400 });
-    const pick = TASKS.findIndex((t) => t[2]), [px, py] = pos(pick);
-    s.anim([task(pick, TASKS[pick][0], TASKS[pick][1], { fill: "blue", name: "Picked" }),
-      TASKS.map((_, i) => { if (i === pick) return []; const [x, y] = pos(i); return s.card(x - 0.02, y - 0.02, tw + 0.04, th + 0.04, { fill: "bg", transparency: 45, rectRadius: 0.16, name: `Not picked ${i}` }); })]);
-    const g = [], ts = 0.85, ty = 4.8, from = [px + tw / 2, py + th];
-    SETUP.slice(1).forEach(([icon, label], k) => {
-      const cx = W / 2 + (k - 2) * 2.0;
-      g.push(link(s, from, [cx, ty], { vertical: true, color: "edge", width: 1.75, name: `Follows link ${k}` }));
-      g.push(s.shape("ROUNDED_RECTANGLE", cx - ts / 2, ty, ts, ts, { fill: "card", rectRadius: 0.14, name: `Follows tile ${k}` }));
-      g.push(s.icon(icon, cx - 0.21, ty + 0.215, 0.42, "text", { name: `Follows icon ${k}` }));
-      g.push(s.text(label, cx - 0.95, ty + ts + 0.08, 1.9, 0.35, { fontSize: 16, bold: true, align: "center", name: `Follows label ${k}` }));
-    });
-    s.anim([g, s.text("Everything follows from the task.", M, 6.4, CW, 0.5, { fontSize: 22, bold: true, align: "center", name: "Message" })]);
-    await s.done();
+    const GROUPS = [
+      ["For patients", [["calendar-days", "Find and schedule appointments"], ["comment", "Personalized advice"], ["pills", "Medication reminders"], ["heart-pulse", "Summarize health data"]]],
+      ["For providers", [["file-pen", "Documentation"], ["stethoscope", "Clinical decision support"], ["list-check", "Administrative support"], ["user-graduate", "Real-time education"]]],
+      ["For health systems", [["magnifying-glass", "Identify gaps in care", 1], ["gauge-high", "Quality metrics"], ["gear", "Operations optimization"], ["users", "Patient engagement at scale"]]],
+    ];
+    const tw = 3.7, th = 0.78, tg = 0.3, rg = 0.14, hy = 1.7, ty0 = 2.35, tx0 = (W - (3 * tw + 2 * tg)) / 2;
+    const pos = (c, r) => [tx0 + c * (tw + tg), ty0 + r * (th + rg)];
+    // a tile: o.morph names it for the next slide, else o.name
+    const tile = (s, x, y, icon, label, o) => {
+      const n = (k) => (o.morph ? { morph: `${o.morph}${k}` } : { name: `${o.name}${k}` });
+      return [s.card(x, y, tw, th, { rectRadius: 0.16, fill: "blue", transparency: o.transparency, ...n("") }),
+        s.icon(icon, x + 0.27, y + (th - 0.38) / 2, 0.38, "text", n(" icon")),
+        s.text(label, x + 0.85, y, tw - 1.0, th, { fontSize: 17, bold: true, valign: "middle", ...n(" label") })];
+    };
+    let pick;
+    GROUPS.forEach(([, items], c) => items.forEach(([icon, label, p], r) => { if (p) pick = { c, r, icon, label }; }));
+    {
+      const s = new Ctx("CONTENT", {
+        title: "Task", bar: 0, transition: "morph",
+        notes: `
+Starting with the task. Phyllis really covered this.
+(click) These are her tasks for agents. For patients: finding and scheduling appointments, personalized advice, medication reminders, summarizing their health data. For providers: documentation, clinical decision support, administrative support, real-time education. And for health systems: identifying gaps in care, quality metrics, running operations, and engaging patients at scale.
+(click) But it's crucial to pick one. Ours is for the health system: identify gaps in care. Is Rosa on a beta blocker, and if not, why not?
+(The tasks are Phyllis's, from her "Range of agentic AI tasks" slide, in her words.)`,
+      });
+      s.stagger(GROUPS.map(([head, items], c) => [
+        s.text(head, pos(c, 0)[0], hy, tw, 0.5, { fontSize: 22, bold: true, color: "muted", align: "center", valign: "middle", name: `Group ${head}` }),
+        items.map(([icon, label], r) => tile(s, ...pos(c, r), icon, label, { transparency: 62, name: `Task ${c}-${r}` })),
+      ]), { gap: 150, dur: 400 });
+      const veils = GROUPS.flatMap(([, items], c) => items.map((_, r) => {
+        if (c === pick.c && r === pick.r) return [];
+        const [x, y] = pos(c, r);
+        return s.card(x - 0.02, y - 0.02, tw + 0.04, th + 0.04, { fill: "bg", transparency: 45, rectRadius: 0.16, name: `Not picked ${c}-${r}` });
+      }));
+      s.anim([tile(s, ...pos(pick.c, pick.r), pick.icon, pick.label, { morph: "task-pick" }), veils]);
+      await s.done();
+    }
+    {
+      const s = new Ctx("CONTENT", {
+        title: "Task", bar: 0, transition: "morph",
+        notes: `
+(Morph: our task moves to the middle, and the rest hangs from it.) Because the task guides how you build the agent: everything else you pick follows from it. A small, clear task is easier to do well, and much easier to check, than "review the chart".
+(click) And defining the task is really going to be the clinician's job. More and more of the technical side is being taken care of; deciding exactly what we want it to do, and what it should have access to, isn't. When agents arrive in your health system, that's the part people in this room will be in charge of.`,
+      });
+      const px = (W - tw) / 2, py = 2.2;
+      tile(s, px, py, pick.icon, pick.label, { morph: "task-pick" });
+      const g = [], ts = 0.85, ty = 4.15, from = [W / 2, py + th];
+      SETUP.slice(1).forEach(([icon, label], k) => {
+        const cx = W / 2 + (k - 2) * 2.0;
+        g.push(link(s, from, [cx, ty], { vertical: true, color: "edge", width: 1.75, name: `Follows link ${k}` }));
+        g.push(s.shape("ROUNDED_RECTANGLE", cx - ts / 2, ty, ts, ts, { fill: "card", rectRadius: 0.14, name: `Follows tile ${k}` }));
+        g.push(s.icon(icon, cx - 0.21, ty + 0.215, 0.42, "text", { name: `Follows icon ${k}` }));
+        g.push(s.text(label, cx - 0.95, ty + ts + 0.08, 1.9, 0.35, { fontSize: 16, bold: true, align: "center", name: `Follows label ${k}` }));
+      });
+      const follows = s.text("Everything follows from the task.", M, 6.05, CW, 0.5, { fontSize: 22, bold: true, align: "center", name: "Message" });
+      s.anim([g, follows], { on: "after", dur: 500 });
+      // then the same place: whose job the task is
+      s.anim(follows, { fx: "fade-out", dur: 300 });
+      s.anim(s.text("Defining the task is the clinician’s job.", M, 6.05, CW, 0.5, { fontSize: 22, bold: true, align: "center", name: "Our job" }), { on: "after" });
+      await s.done();
+    }
   }
 
-  // ── Model: who do you need? Then the models, sized by parameters, open and closed
+  // ── Model, two slides. The open-weight models, sized by parameters, one at a time; then speed and cost under them.
+  // Then (Morph) they move left, and the closed models come in on the right with privacy, the third thing to weigh.
   {
-    const s = new Ctx("CONTENT", {
-      title: "Model", bar: 1,
-      notes: `
-Next: who do you need for the job?
-(click) Some jobs you'd give a medical student; others need a consultant. With people that's experience as much as intelligence. With models it really is capability, and capability goes with size.
-(click) Size is counted in parameters, the numbers inside the network. Gemma 3 has 4 billion and runs on a laptop. Llama 3.1, 8 billion. Qwen 3.6, 35 billion: the model in our study, on one GPU server; only 3 billion of them work on each word (a mixture of experts). OpenAI's gpt-oss, 117 billion. DeepSeek V3, 671 billion: a rack of GPUs. These are open weights: you can download them and run them on your own computers, inside the hospital's firewall.
-(click) Then the closed models, GPT, Claude and Gemini: the companies run them on their computers and we send them the text. They're usually the most capable, and they don't publish their sizes. Outside estimates put the largest above a trillion parameters; that's our estimate on the slide, not a published number, so the circle is dashed and drawn at one trillion.
-Bigger is usually more capable, and slower and costlier to run. Pick the smallest model that does the job well, and check it on your own task.
-(The circles grow with size but aren't to scale: diameter goes with the cube root of the parameter count, so the small ones stay visible.)
-
-Sources (model cards):
+    const OPEN = [["gemma-color", "Gemma 3", 4], ["meta-color", "Llama 3.1", 8], ["qwen-color", "Qwen 3.6", 35], ["openai", "gpt-oss", 117], ["deepseek-color", "DeepSeek V3", 671]];
+    const DMAX = 2.25, dia = (p) => DMAX * Math.cbrt(p / 671), base = 4.85, CD = dia(1000), HY = 1.7, TY = 6.15;
+    const cxs = [];
+    OPEN.forEach(([, , p], i) => cxs.push(i ? cxs[i - 1] + Math.max(1.4, (dia(OPEN[i - 1][2]) + dia(p)) / 2 + 0.4) : 0));
+    const last = cxs.at(-1);
+    // with the closed models: labels 0.75 left of the first; the closed circle past the dashed line
+    const span = last + DMAX / 2 + 1.0 + CD + 0.75, offB = M + (CW - span) / 2 + 0.75, dashX = offB + last + DMAX / 2 + 0.5, ccx = dashX + 0.5 + CD / 2;
+    const offA = W / 2 - last / 2; // open weights alone: centred
+    const bubble = (s, cx, d, logos, name, size, o = {}) => {
+      const m = (k) => o.morph && `${o.morph}-${k}`;
+      const g = [s.circle(cx, base - d / 2, d, o.dashed ? { fill: "blue", transparency: 82, line: { color: "blue", width: 2, dash: "dash" }, name: `Bubble ${name}` } : { fill: "blue", name: `Bubble ${name}`, morph: m("bubble") })];
+      const ls = o.dashed ? 0.5 : Math.min(Math.max(0.55 * d, 0.24), 0.9), lg = ls * 0.25, lw = logos.length * ls + (logos.length - 1) * lg;
+      for (const [k, file] of logos.entries()) g.push(s.picture(logoData(file), cx - lw / 2 + k * (ls + lg), base - d / 2 - ls / 2, ls, ls, { alt: name, name: `Logo ${name} ${k}`, morph: m(`logo-${k}`) }));
+      const tw = o.dashed ? 3.2 : 2.4;
+      g.push(s.text([br(name, { bold: true, fontSize: 16 }), { text: size, fontSize: 15, color: "muted" }], cx - tw / 2, base + 0.12, tw, 0.65, { align: "center", name: `Bubble label ${name}`, morph: m("label") }));
+      return g;
+    };
+    const head = (s, label, x, w, morph) => s.text(label, x, HY, w, 0.45, { fontSize: 20, bold: true, color: "muted", align: "center", name: `Head ${label}`, morph });
+    // what the choice trades off, as on the data slide; centred, so privacy moves them over when it joins
+    const TRADE = [["gauge-high", "Speed"], ["sack-dollar", "Cost"], ["lock", "Privacy"]];
+    const trade = (s, n) => TRADE.slice(0, n).map(([icon, label], k) => {
+      const cx = W / 2 + (k - (n - 1) / 2) * 3.6;
+      return [s.icon(icon, cx - 1.0, TY + 0.07, 0.45, "text", { morph: `trade-icon-${label}` }), s.text(label, cx - 0.38, TY, 2.2, 0.6, { fontSize: 24, bold: true, valign: "middle", morph: `trade-${label}` })];
+    });
+    const SOURCES = `Sources (model cards):
 Gemma 3: https://huggingface.co/google/gemma-3-4b-it#:~:text=for%20the%204B%2C%2012B%2C%20and%2027B%20sizes
 Llama 3.1: https://huggingface.co/meta-llama/Llama-3.1-8B#:~:text=in%208B%2C%2070B%20and%20405B%20sizes
 Qwen3.6-35B-A3B: https://huggingface.co/Qwen/Qwen3.6-35B-A3B#:~:text=35B%20in%20total%20and%203B%20activated
 gpt-oss-120b: https://huggingface.co/openai/gpt-oss-120b#:~:text=117B%20parameters%20with%205.1B%20active%20parameters
-DeepSeek-V3: https://arxiv.org/abs/2412.19437#:~:text=671B%20total%20parameters%20with%2037B%20activated`,
+DeepSeek-V3: https://arxiv.org/abs/2412.19437#:~:text=671B%20total%20parameters%20with%2037B%20activated`;
+
+    // 1. Open weights
+    {
+      const s = new Ctx("CONTENT", {
+        title: "Model", bar: 1,
+        notes: `
+Next, the model. We can use different models for different jobs: just as people differ in training, models differ in capability.
+(click) These are open-weight models, sized by their parameters, the numbers inside the network. Gemma 3 has 4 billion and runs on a laptop.
+(click) Llama 3.1, 8 billion.
+(click) Qwen 3.6, 35 billion: the model in our study, on one GPU server; only 3 billion of them work on each word (a mixture of experts).
+(click) OpenAI's gpt-oss, 117 billion.
+(click) DeepSeek V3, 671 billion: a rack of GPUs. Open weights means you can download them and run them on your own system, inside the hospital's firewall.
+(click) As they get bigger, they get smarter, at any one point in time: within the same generation of models. But they're also slower, and cost more to run. So speed and cost are things to consider.
+(Don't get into versions here: the names are only there to show the range.)
+(The circles grow with size but aren't to scale: diameter goes with the cube root of the parameter count, so the small ones stay visible.)
+
+${SOURCES}`,
+      });
+      const open = OPEN.map(([file, name, p], i) => bubble(s, offA + cxs[i], dia(p), [file], name, `${p}B`, { morph: `open-${i}` }));
+      const openHead = head(s, "Open weights", offA - 1.2, last + 2.4, "open-head");
+      open.forEach((g, i) => s.anim(i ? g : [openHead, g]));
+      s.anim(trade(s, 2));
+      await s.done();
+    }
+    // 2. And the closed ones (Morph)
+    {
+      const s = new Ctx("CONTENT", {
+        title: "Model", bar: 1, transition: "morph",
+        notes: `
+(Morph, and the closed models come in with privacy) Then the closed models: GPT, Claude and Gemini. They're usually the most capable, but they run on the company's computers, so we have to send them the data. They don't publish their sizes: outside estimates put the largest above a trillion parameters. That's our estimate, not a published number, so the circle is dashed and drawn at one trillion.
+So privacy is the third thing to consider: an open model can run inside the hospital; a closed one means sending patient data out, under an agreement.
+Tailor the model to the task: the smallest one that does the job well, checked on your own task. And you can combine them: a small model for the routine charts, a bigger one for the hard ones.`,
+      });
+      OPEN.forEach(([file, name, p], i) => bubble(s, offB + cxs[i], dia(p), [file], name, `${p}B`, { morph: `open-${i}` }));
+      head(s, "Open weights", offB - 0.75, dashX - offB + 0.75, "open-head");
+      const privacy = trade(s, 3)[2]; // speed and cost move over (Morph); privacy comes in
+      const closed = [s.line(dashX, HY - 0.05, dashX, 5.6, { color: "muted", width: 1.5, dash: "dash", name: "Open | closed" }), head(s, "Closed", ccx - 1.4, 2.8),
+        ...bubble(s, ccx, CD, ["openai", "claude-color", "gemini-color"], "GPT · Claude · Gemini", "not published; likely over 1T", { dashed: true })];
+      s.anim([closed, privacy], { on: "after", dur: 500 });
+      await s.done();
+    }
+  }
+
+  // ── Models keep getting better: METR's time horizons. The chart is METR's, drawn in greys (inverted for the black
+  // stage), so its colours don't take on the deck's meanings.
+  {
+    const s = new Ctx("CONTENT", {
+      title: "Model", bar: 1,
+      notes: `
+The meta point: these models are improving at breakneck speed, so today's capabilities shouldn't be taken as gospel. METR measures how long a task an AI agent can finish on its own, counted in how long the task takes a human expert: the length it gets right half the time. In 2023 that was a few minutes; now it's hours. METR: “The post-2023 doubling-time is 131 days under TH1.1”, about four months.
+(click) So what's true today won't be true in six months. The floor rises for every model, the small ones too. Choose a model for today's task, and set things up so you can swap it.
+(These are software and reasoning tasks, not clinical ones; the trend is the point. The chart is METR's, drawn in greys here. It prints a doubling time of 124 days for 2023 onwards; METR's Time Horizon 1.1 post gives 131 days. Confirm the chart's source page and licence before the day.)
+
+Source: METR, "Time Horizon 1.1", 29 January 2026: https://metr.org/blog/2026-01-29-time-horizon-1-1/#:~:text=The%20post%2D2023%20doubling%2Dtime%20is%20131%20days`,
     });
-    // 1. The framing: a medical student and a consultant, on one line.
-    const py = 3.75;
-    const people = [
-      s.icon("user-graduate", 2.0, py - 0.6, 1.2, "text", { name: "Student" }),
-      s.text("Medical student", 1.0, py + 0.72, 3.2, 0.45, { fontSize: 20, bold: true, align: "center", name: "Student label" }),
-      s.line(3.75, py, W - 3.75, py, { color: "dim", width: 2.5, name: "Spectrum" }),
-      s.icon("user-doctor", W - 3.2, py - 0.6, 1.2, "blue", { name: "Consultant" }),
-      s.text("Consultant", W - 4.2, py + 0.72, 3.2, 0.45, { fontSize: 20, bold: true, align: "center", name: "Consultant label" }),
-    ];
-    s.anim(people);
-    // 2. The models, smallest to largest, sitting on one line; open weights, then the closed ones past the dashed line,
-    // drawn at our estimate of a trillion parameters.
-    const OPEN = [["gemma-color", "Gemma 3", 4], ["meta-color", "Llama 3.1", 8], ["qwen-color", "Qwen 3.6", 35], ["openai", "gpt-oss", 117], ["deepseek-color", "DeepSeek V3", 671]];
-    const DMAX = 2.25, dia = (p) => DMAX * Math.cbrt(p / 671), base = 5.35, CD = dia(1000);
-    const cxs = [];
-    OPEN.forEach(([, , p], i) => cxs.push(i ? cxs[i - 1] + Math.max(1.4, (dia(OPEN[i - 1][2]) + dia(p)) / 2 + 0.4) : 0));
-    const span = cxs.at(-1) + DMAX / 2 + 1.0 + CD + 0.75; // labels 0.75 left of the first; the closed circle past the dashed line
-    const off = M + (CW - span) / 2 + 0.75, dashX = off + cxs.at(-1) + DMAX / 2 + 0.5, ccx = dashX + 0.5 + CD / 2;
-    const bubble = async (cx, d, logos, name, size, o = {}) => {
-      const g = [s.circle(cx, base - d / 2, d, o.dashed ? { fill: "blue", transparency: 82, line: { color: "blue", width: 2, dash: "dash" }, name: `Bubble ${name}` } : { fill: "blue", name: `Bubble ${name}` })];
-      const ls = o.dashed ? 0.5 : Math.min(Math.max(0.55 * d, 0.24), 0.9), lg = ls * 0.25, lw = logos.length * ls + (logos.length - 1) * lg;
-      for (const [k, file] of logos.entries()) g.push(s.picture(logoData(file), cx - lw / 2 + k * (ls + lg), base - d / 2 - ls / 2, ls, ls, { alt: name, name: `Logo ${name} ${k}` }));
-      const tw = o.dashed ? 3.2 : 2.4;
-      g.push(s.text([br(name, { bold: true, fontSize: 16 }), { text: size, fontSize: 15, color: "muted" }], cx - tw / 2, base + 0.12, tw, 0.65, { align: "center", name: `Bubble label ${name}` }));
-      return g;
-    };
-    const open = [];
-    for (const [i, [file, name, p]] of OPEN.entries()) open.push(await bubble(off + cxs[i], dia(p), [file], name, `${p}B`));
-    const heads = (label, x, w) => s.text(label, x, 2.2, w, 0.45, { fontSize: 20, bold: true, color: "muted", align: "center", name: `Head ${label}` });
-    s.anim(people, { fx: "fade-out" });
-    s.stagger(open, { on: "after", gap: 80, dur: 400 });
-    s.anim(heads("Open weights", off - 0.75, dashX - off + 0.75), { on: "after", delay: 150 });
-    const closed = [s.line(dashX, 2.15, dashX, 6.2, { color: "muted", width: 1.5, dash: "dash", name: "Open | closed" }), heads("Closed", ccx - 1.4, 2.8),
-      ...(await bubble(ccx, CD, ["openai", "claude-color", "gemini-color"], "GPT · Claude · Gemini", "not published; likely over 1T", { dashed: true }))];
-    s.anim(closed);
+    const file = here("../shared/charts/metr-length-of-tasks-log.png"), [pw, ph] = pngSize(file), ch = 4.55, cw = (ch * pw) / ph;
+    const grey = sharp(file).greyscale().negate({ alpha: false }).png().toBuffer().then((b) => "image/png;base64," + b.toString("base64"));
+    s.picture(grey, (W - cw) / 2, 1.45, cw, ch, { name: "METR chart", alt: "METR: length of tasks AI agents have been able to complete autonomously, by model release date" });
+    s.anim(s.text("What’s true today won’t be true in six months.", M, 6.15, CW, 0.55, { fontSize: 24, bold: true, align: "center", name: "Message" }));
+    cite(s, "Chart: METR, 2026 (in greys)");
     await s.done();
   }
 
@@ -854,9 +1030,9 @@ DeepSeek-V3: https://arxiv.org/abs/2412.19437#:~:text=671B%20total%20parameters%
     const s = new Ctx("CONTENT", {
       title: "Data", bar: 2,
       notes: `
-What can it see? Here's Rosa's record, laid out the way an EHR shows it. It holds much more than this question needs.
+Then the data: we specify exactly which parts of Rosa's chart are available. Here's her record, laid out the way an EHR shows it; it holds much more than this question needs.
 (click) For a beta blocker it needs six parts: her problem list, medications, allergies, vital signs, lab results and notes. Not her immunizations, appointments, family or social history, insurance or address.
-(click) Why not just give it everything? Privacy: every part is patient data the protocol has to justify, and the minimum necessary applies. Focus: what it doesn't need can distract it. And approval: each data source adds review time, IRB and IT. In the live build, each data card shows the weeks of review it adds.`,
+(click) That has implications for privacy: every part is patient data the protocol has to justify, and the minimum necessary applies. For focus: what the agent looks at; what it doesn't need can distract it. And for approval: the time it takes to get each source scoped and approved in a health system, by the IRB and IT. In the live build, each data card shows the weeks of review it adds.`,
     });
     // The window: Rosa's banner, tabs, then the summary's panels, each a heading over grey bars.
     const ex = M, ey = 1.6, ew = CW, eh = 3.9, by = ey, tby = by + 0.68;
@@ -896,28 +1072,32 @@ What can it see? Here's Rosa's record, laid out the way an EHR shows it. It hold
     await s.done();
   }
 
-  // ── Tools
+  // ── Tools: some gather context, some act (the faculty talk's agent slide, here rather than on the ReAct slide); for this
+  // task the ones that act are locked. The agent sits in the middle; links curve into it from the left and out of it to
+  // the right.
   {
     const s = new Ctx("CONTENT", {
       title: "Tools", bar: 3,
       notes: `
-What can it use? (click) Simple tools: search the notes, read a note, read the structured records. Tools that act, messaging the patient or placing an order, stay locked here: a quality review shouldn't contact patients or prescribe.
-(click) And a tool call is just text. The model writes a request: read her medication records.
-(click) The harness, the software around the model, reads that text and turns it into code, which runs: here a request to the EHR's FHIR interface for her medications.
-(click) What comes back is text again, here the line for her carvedilol (exactly what the demo's tool returns), and it goes into the model's context. Text in, text out. That's why almost anything can be a tool.`,
+Then the tools. We've covered how they work: it's all text, so almost anything can be a tool.
+(click) Some gather context: read a note, search the notes, read her records, her medications, diagnoses and vital signs.
+(click) And some act in the world, outside the chart: message the patient, and one day, place an order. That's where we need to be careful (the warning sign): gathering and acting are very different levels of trust.
+(click) So we have to be careful how each tool runs, and give it only the tools the task needs. For a quality review, the tools that act stay locked: it shouldn't contact patients or prescribe.`,
     });
-    const T = [["magnifying-glass", "Search notes"], ["file-lines", "Read a note"], ["table-list", "Read records"], ["message", "Message the patient", 1], ["prescription", "Place an order", 1]];
-    s.stagger(T.map(([icon, label, locked], i) => toolCard(s, i, icon, label, M, 1.95 + i * 0.88, 5.2, 0.72, { morph: false, dim: locked })), { gap: 60, dur: 400 });
-    // It's all text: the model writes text → the harness turns it into code and runs it → text comes back.
-    const rx = 6.85, bx = rx + 0.7, rw = W - M - bx, lab = (t, y) => s.text(t, bx, y, rw, 0.34, { fontSize: 14, color: "muted", valign: "middle", name: `Step ${t}` });
-    const down = (y) => s.arrow(bx + rw / 2, y, bx + rw / 2, y + 0.3, { name: `Down ${y}` });
-    s.anim(s.text("It’s all text", rx, 1.95, 5, 0.5, { fontSize: 24, bold: true, valign: "middle", name: "All text" }), { on: "after" });
-    s.anim([lab("The model writes text", 2.6), ...model(s, rx + 0.25, 3.23, 0.5, { morph: false }),
-      call(s, 'read_records("medications")', bx + rw / 2, 2.95, rw, { h: 0.56, pt: 18, name: "Call" })]);
-    s.anim([down(3.6), lab("The harness turns it into code, and runs it", 3.95), s.icon("gear", rx + 0.03, 4.36, 0.44, "muted", { name: "Harness icon" }),
-      s.text("GET /fhir/MedicationRequest?patient=…", bx, 4.3, rw, 0.56, { fontSize: 14, bold: true, font: MONO, fill: "card", shape: "ROUNDED_RECTANGLE", rectRadius: 0.12, valign: "middle", margin: 12, name: "Code" })]);
-    s.anim([down(4.95), lab("Text comes back, into the model’s context", 5.3), s.icon("file-lines", rx + 0.05, 5.95, 0.4, "muted", { name: "Result icon" }),
-      s.text("“carvedilol 12.5 mg oral tablet: 12.5 mg by mouth twice daily. Status stopped, ordered 2025-08-26, stopped 2026-05-14”", bx, 5.65, rw, 1.1, { fontSize: 14, fill: "card", shape: "ROUNDED_RECTANGLE", rectRadius: 0.12, valign: "middle", margin: 12, name: "Result" })]);
+    const cx = W / 2, cy = 3.95, LR = 1.0, tw = 3.9, th = 0.68, ys = [2.6, 3.5, 4.4], lxl = M, lxr = W - M - tw, hy = 1.8;
+    const gather = [["file-lines", "Read a note"], ["magnifying-glass", "Search notes"], ["table-list", "Read records"]];
+    const act = [["message", "Message the patient"], ["prescription", "Place an order"]];
+    const head = (icon, label, x, align) => [s.icon(icon, align === "right" ? x + tw - 0.45 : x, hy + 0.05, 0.45, "text", { name: `${label} icon` }),
+      s.text(label, align === "right" ? x : x + 0.62, hy, tw - 0.62, 0.55, { fontSize: 22, bold: true, align, valign: "middle", name: `${label} head` })];
+    const gl = gather.map((_, k) => link(s, [lxl + tw, ys[k] + th / 2], [cx - LR - 0.15, cy], { name: `Gather link ${k}` }));
+    const al = act.map((_, k) => link(s, [cx + LR + 0.15, cy], [lxr, ys[k] + th / 2], { name: `Act link ${k}` }));
+    agent(s, cx, cy, LR, { morph: false, width: 2.5 });
+    s.anim([head("eye", "Gather context", lxl, "left"), gl, gather.map(([icon, label], k) => toolCard(s, 10 + k, icon, label, lxl, ys[k], tw, th, { morph: false }))]);
+    s.anim([head("triangle-exclamation", "Act", lxr, "right"), al, act.map(([icon, label], k) => toolCard(s, 20 + k, icon, label, lxr, ys[k], tw, th, { morph: false }))]);
+    // locked: a veil over each, and a lock
+    s.anim([act.map((_, k) => [s.card(lxr - 0.02, ys[k] - 0.02, tw + 0.04, th + 0.04, { fill: "bg", transparency: 40, rectRadius: 0.18, name: `Locked veil ${k}` }),
+      s.icon("lock", lxr + tw - 0.55, ys[k] + (th - 0.3) / 2, 0.3, "text", { name: `Locked ${k}` })]),
+    s.text("Only the tools the task needs", M, 6.05, CW, 0.55, { fontSize: 26, bold: true, align: "center", name: "Message" })]);
     await s.done();
   }
 
@@ -931,8 +1111,7 @@ What can it use? (click) Simple tools: search the notes, read a note, read the s
     const box = s.shape("ROUNDED_RECTANGLE", M, RY - ph / 2, RW, ph, { fill: "card", rectRadius: 0.15, morph: "prompt-box" });
     const text = s.text(prompt, M + PAD, RY - ph / 2 + PAD, RW - 2 * PAD, ph - 2 * PAD, { fontSize: 22, valign: "middle", morph: `prompt-text-${k}` });
     const into = s.arrow(M + RW + 0.15, RY, AX - 1.0, RY, { morph: "prompt-arrow" });
-    const agent = [...loop(s, AX, RY, 0.78, { width: 2.5 }), ...model(s, AX, RY, 1.0)];
-    return { box, text, into, agent };
+    return { box, text, into, agent: agent(s, AX, RY, 0.85, { width: 2.5 }) };
   };
   const answer = (s, text, ph, o = {}) => ({
     arrow: s.arrow(AX + 1.0, RY, ANS_X - 0.15, RY, { name: "Answer arrow" }),
@@ -943,7 +1122,7 @@ What can it use? (click) Simple tools: search the notes, read a note, read the s
     const s = new Ctx("CONTENT", {
       title: "Prompt", bar: 4,
       notes: `
-Then the prompt: what we tell it, typed in, just as you'd type a message. It's what starts the loop.
+Then the prompt: what we tell it, typed in, just as you'd type a message. It's what starts the loop, and it's where clinicians come in again: saying exactly what we want to know.
 (click) Ask only "Is this patient on a beta blocker?"
 (click) It reads her medication list, and answers: no, carvedilol was stopped on 14 May. True, but it doesn't say why, and it doesn't say whether that's a problem.`,
     });
@@ -952,7 +1131,7 @@ Then the prompt: what we tell it, typed in, just as you'd type a message. It's w
     s.anim(box, { dur: 300 });
     s.typed(text, q, { on: "after" });
     s.anim([into, agent]);
-    s.anim(call(s, "read_records", AX, RY + 1.0), { on: "after", delay: 300 });
+    s.anim(call(s, "read_records", AX, RY + 1.1, { icon: "table-list" }), { on: "after", delay: 300 });
     const ans = answer(s, a, 1.2);
     s.anim([ans.arrow, ans.box], { on: "after", delay: 400 });
     s.written(ans.text, a, { on: "after" });
@@ -964,14 +1143,14 @@ Then the prompt: what we tell it, typed in, just as you'd type a message. It's w
       notes: `
 (The box grows; the new prompt is typed in.) Now ask the measure's whole question: if not, is there a documented reason, or is it a care gap? And give it her notes to answer with.
 (click) It reads her medications, then searches the notes, finds the heart block, and answers: stopped after Mobitz II heart block, the notes say not to restart, so a documented contraindication, not a care gap. The longer prompt sent it looking for the reason.
-(click) The prompt starts the loop, and steers it.
+(click) The prompt starts the loop, and steers it. Ask a simple question, get a simple answer; ask for more, and it does more work and tells you more, which may be what you actually wanted. Writing a good prompt is a clinical skill, not a technical one.
 (Both are runs recorded for the demo, on gpt-6-luna; the second also had her notes and the note search. The answers here are shortened.)`,
     });
     const q = "Is this patient on a beta blocker? If not, is there a documented reason, or is it a care gap?";
     const a = "No. Stopped after Mobitz II heart block; the notes say not to restart. Not a care gap.";
     const { text } = promptScene(s, q, 2.5, "b");
     s.typed(text, q, { on: "after", delay: 200, ms: 30 });
-    s.stagger([call(s, "read_records", AX, RY + 1.0), call(s, "search_notes", AX, RY + 1.5)], { gap: 350 });
+    s.stagger([call(s, "read_records", AX, RY + 1.1, { icon: "table-list" }), call(s, "search_notes", AX, RY + 1.7)], { gap: 350 });
     const ans = answer(s, a, 2.5, { right: true });
     s.anim([ans.arrow, ans.box], { on: "after", delay: 350 });
     s.written(ans.text, a, { on: "after" });
@@ -1071,6 +1250,7 @@ async function postProcess(file) {
       : transition === "morph"
         ? `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice xmlns:p159="http://schemas.microsoft.com/office/powerpoint/2015/09/main" Requires="p159"><p:transition spd="slow"><p159:morph option="byObject"/></p:transition></mc:Choice><mc:Fallback><p:transition spd="slow"><p:fade/></p:transition></mc:Fallback></mc:AlternateContent>`
         : `<p:transition spd="med"><p:fade/></p:transition>`;
+    xml = xml.replace(/<a:solidFill><a:srgbClr val="(FE\d{4})"\s*(?:\/>|>.*?<\/a:srgbClr>)<\/a:solidFill>/g, (m, key) => GRADS.get(key) || m); // gradient fills
     const timing = anims.length || videos.length ? timingXml(anims, ids, kinds, videos.map((nm) => ids[nm])) : "";
     const before = xml;
     xml = xml.replace(/(<p:clrMapOvr>.*?<\/p:clrMapOvr>|<p:clrMapOvr\/>)/s, (m) => m + tr + timing);
