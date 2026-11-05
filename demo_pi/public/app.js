@@ -664,7 +664,7 @@ function drawChat() {
     : `<div class="msg agent${r.error ? " err" : ""}">${many ? `<b class="mwho">${esc(r.name)}</b>` : ""}${esc(r.a || r.error || "No answer")}${r.meta ? `<div class="mmeta">${r.meta}</div>` : ""}</div>`;
   const who = askPicks.length === 1 ? `${esc(nameOf(askPicks[0]))}'s chart` : `these ${askPicks.length} patients' charts`;
   $("chat").innerHTML = chat.length ? chat.map((m) => `<div class="msg you">${esc(m.q)}</div>${m.replies.map(reply).join("")}`).join("")
-    : `<div class="chatEmpty">${askPicks.length ? `Ask about ${who}.` : "Pick a patient first."}</div>`;
+    : `<div class="msg agent hint">${askPicks.length ? `Ask about ${who}.` : "Pick a patient first."}</div>`;
   $("chat").scrollTop = $("chat").scrollHeight;
   $("askExamples").hidden = chat.length > 0;          // starting points, until the conversation starts
   if (!cfg.replay) $("askInput").placeholder = askPicks.length > 1 ? "Ask about these patients…" : "Ask about this patient…";
