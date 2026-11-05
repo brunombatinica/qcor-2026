@@ -12,7 +12,10 @@ const EARLY = ["overview", "intro", "chart"];          // before anything is bui
 const OWN = ["test", "ask"];                            // views that give the panel's space to the agents
 
 const KEY = "qcor-demo-v3";
-const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
+// Nothing is kept between visits: a refresh is a fresh start (no data, no tools, no prompt) for the next person at the
+// screen. What earlier versions kept in the browser is cleared. A screenshot script can set window.__qcorSeed first.
+localStorage.removeItem(KEY);
+const saved = window.__qcorSeed || {};
 const state = {
   view: VIEWS.includes(saved.view) ? saved.view : saved.view === "criteria" ? "test" : "overview",   // Criteria is on Test now
   sources: new Set(saved.sources || []), tools: new Set(saved.tools || []),
@@ -22,7 +25,7 @@ const state = {
 };
 let cfg;
 
-const save = () => { localStorage.setItem(KEY, JSON.stringify({ view: state.view, sources: [...state.sources], tools: [...state.tools], prompt: state.prompt, testPrompt: state.testPrompt, rules: state.rules, hood: state.hood, hoodSeen: state.hoodSeen, zoom: state.zoom })); recSync(); };
+const save = () => recSync();          // nothing to store (above); the recorded-run pickers follow the build
 const QUESTION = "Is there a beta-blocker care gap for this patient? Why or why not?";   // the test's question, as recorded
 const modelName = () => (cfg.replay ? cfg.replay.models[0] : cfg.model.id)?.split("/").pop() || "the model";
 const build = (prompt) => ({ sources: [...state.sources], tools: [...state.tools], prompt });

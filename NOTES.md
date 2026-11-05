@@ -33,6 +33,8 @@ answer card, the test's tokens tile and the runs table show the cost too. A last
 chat about any patient, the whole chart and the reading tools, the conversation so far in each prompt (`/api/ask`).
 Live only; tested on the stand-in model, not on Luna. The runs table under Test is gone: with a room using it, a
 list of every run isn't needed.
+Nothing is saved in the browser any more: a refresh starts on Overview with no data, tools or prompt, so each
+person at a screen starts fresh (what earlier versions saved is cleared on load).
 
 ## Demo, rulebooks and the page (2026-11-04, evening; Ryan)
 

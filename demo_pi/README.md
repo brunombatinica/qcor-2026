@@ -179,8 +179,8 @@ recover the key with it. Use a key from an OpenAI project with a budget cap, and
 `node test/with-stand-in.mjs --locked` serves the page locked behind a throwaway key whose code is `test-code`.
 
 Test results are cached per model, build, system prompt and cohort in `.cache/`. A build the room has already tried comes
-back at once; *Ignore cache* re-runs one and refreshes its cache. Rosa always runs live. The build is kept in the
-browser's localStorage.
+back at once; *Ignore cache* re-runs one and refreshes its cache. Rosa always runs live. Nothing is kept in the
+browser: a refresh starts fresh (no data, no tools, no prompt) for the next person at the screen.
 
 ### With no model: recorded runs
 
