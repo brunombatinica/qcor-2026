@@ -35,6 +35,9 @@ Live only; tested on the stand-in model, not on Luna. The runs table under Test 
 list of every run isn't needed.
 Nothing is saved in the browser any more: a refresh starts on Overview with no data, tools or prompt, so each
 person at a screen starts fresh (what earlier versions saved is cleared on load).
+Ask the EHR takes up to five patients (a dropdown with a search and ticks): each question goes to each of them, one
+session per patient with its own conversation, answers under each name. Its starting questions are about GDMT now
+(ACE inhibitor/ARB/ARNI, SGLT2 inhibitor, MRA and potassium/creatinine), not beta blockers.
 
 ## Demo, rulebooks and the page (2026-11-04, evening; Ryan)
 

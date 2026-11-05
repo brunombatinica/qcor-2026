@@ -634,39 +634,70 @@ function pickers() {
   }
 }
 
-// ---- Ask the EHR: questions about one patient, a fresh session each, with the conversation so far ----
+// ---- Ask the EHR: a question to up to five patients at once, a fresh session each, with that patient's conversation ----
 
-const ASK_EXAMPLES = ["What beta blockers has this patient been on, and when?", "Why isn't this patient on a beta blocker?", "What were the last heart rate and blood pressure?",
-  "Do the notes mention side effects?", "When is the next appointment?"];
+const ASK_MAX = 5;
+const ASK_EXAMPLES = ["Which GDMT medications is this patient on?", "Is this patient on an ACE inhibitor, ARB or ARNI?", "Is this patient on an SGLT2 inhibitor?",
+  "Is there a reason not to start an MRA, such as potassium or kidney function?", "What were the latest potassium and creatinine?"];
 const termAsk = new Term($("termAsk"), "pi · Ask the EHR");
-let chat = [], asking = false;
+const pidOf = (i) => `p${String(i).padStart(3, "0")}`, nameOf = (pid) => cfg.names[Number(pid.slice(1))];
+let askPicks = ["p000"], chat = [], asking = false;
+
+function drawPick() {
+  const n = askPicks.length;
+  $("askPickBtn").innerHTML = `${n ? esc(askPicks.slice(0, 2).map(nameOf).join(", ")) + (n > 2 ? ` +${n - 2}` : "") : "Pick patients"}<span class="caret">▾</span>`;
+  const find = $("askFind").value.trim().toLowerCase(), top = $("askList").scrollTop;
+  $("askList").innerHTML = cfg.names.map((name, i) => [pidOf(i), name]).filter(([pid, name]) => !find || name.toLowerCase().includes(find) || pid.includes(find)).map(([pid, name]) => {
+    const on = askPicks.includes(pid), full = !on && n >= ASK_MAX;
+    return `<label class="pickRow${full ? " full" : ""}"><input type="checkbox" data-pid="${pid}" ${on ? "checked" : ""} ${full ? "disabled" : ""}><span>${esc(name)}</span><em>${pid}</em></label>`;
+  }).join("");
+  $("askList").scrollTop = top;                       // ticking one keeps the list where it was
+  $("askCount").textContent = `${n} of ${ASK_MAX} picked`;
+}
+function openPick(open) { $("askMenu").hidden = !open; $("askPickBtn").setAttribute("aria-expanded", open); if (open) { $("askFind").value = ""; drawPick(); $("askFind").focus(); } }
+// a new set of patients is a new conversation
+function setPicks(list) { askPicks = list; chat = []; drawPick(); drawChat(); termAsk.reset("idle"); }
+
 function drawChat() {
-  $("chat").innerHTML = chat.length ? chat.map((m) => `<div class="msg you">${esc(m.q)}</div>` + (m.a === undefined ? `<div class="msg agent pending">reading the chart…</div>`
-    : `<div class="msg agent${m.error ? " err" : ""}">${esc(m.a || m.error || "No answer")}${m.meta ? `<div class="mmeta">${m.meta}</div>` : ""}</div>`)).join("")
-    : `<div class="chatEmpty">Ask about ${esc(cfg.names[Number($("askPatient").value.slice(1))])}'s chart.</div>`;
+  const many = askPicks.length > 1;
+  const reply = (r) => r.a === undefined ? `<div class="msg agent pending">${many ? `<b class="mwho">${esc(r.name)}</b>` : ""}reading the chart…</div>`
+    : `<div class="msg agent${r.error ? " err" : ""}">${many ? `<b class="mwho">${esc(r.name)}</b>` : ""}${esc(r.a || r.error || "No answer")}${r.meta ? `<div class="mmeta">${r.meta}</div>` : ""}</div>`;
+  const who = askPicks.length === 1 ? `${esc(nameOf(askPicks[0]))}'s chart` : `these ${askPicks.length} patients' charts`;
+  $("chat").innerHTML = chat.length ? chat.map((m) => `<div class="msg you">${esc(m.q)}</div>${m.replies.map(reply).join("")}`).join("")
+    : `<div class="chatEmpty">${askPicks.length ? `Ask about ${who}.` : "Pick a patient first."}</div>`;
   $("chat").scrollTop = $("chat").scrollHeight;
   $("askExamples").hidden = chat.length > 0;          // starting points, until the conversation starts
+  if (!cfg.replay) $("askInput").placeholder = askPicks.length > 1 ? "Ask about these patients…" : "Ask about this patient…";
 }
+
 async function ask(q) {
   q = String(q || "").trim();
-  if (!q || asking) return;
+  if (!q || asking || !askPicks.length) return;
   asking = true; $("askBtn").disabled = true; $("askInput").value = "";
-  const history = chat.filter((m) => m.a).map((m) => ({ q: m.q, a: m.a }));
-  const m = { q }; chat.push(m); drawChat();
+  const many = askPicks.length > 1;
+  const m = { q, replies: askPicks.map((pid) => ({ pid, name: nameOf(pid) })) };
+  // each patient's own conversation so far
+  const history = (pid) => chat.flatMap((x) => x.replies.filter((r) => r.pid === pid && r.a).map((r) => ({ q: x.q, a: r.a })));
+  const past = Object.fromEntries(askPicks.map((pid) => [pid, history(pid)]));
+  chat.push(m); drawChat();
   termAsk.reset("running"); termAsk.start(); newRun();
-  try {
-    await stream("/api/ask", { patient: $("askPatient").value, question: q, history }, (e) => {
-      if (e.kind === "wiring") termAsk.intro(e);
-      else if (e.kind === "answer") {
-        const c = cost(e.usage.input, e.usage.output, e.usage.cached);
-        Object.assign(m, { a: e.text, error: e.status === "ok" ? "" : e.error || e.status,
-          meta: [`${e.usage.toolCalls} tool call${e.usage.toolCalls === 1 ? "" : "s"}`, `${num(e.usage.input + e.usage.output)} tokens`, c === null ? "" : usd(c), `${e.seconds ?? "–"} s`].filter(Boolean).join(" · ") });
-        termAsk.line(e.status === "ok" ? "done" : "err", `■ ${esc(e.status === "ok" ? "done" : e.status)}`, (e.seconds || 0) * 1000);
-      } else { termAsk.event(e); if (e.kind === "usage") addTokens(e.input, e.output, e.cached); }
-    });
-    termAsk.setStatus("done");
-  } catch (err) { m.a = ""; m.error = err.message; termAsk.line("err", esc(err.message)); termAsk.setStatus("error"); }
-  if (m.a === undefined) m.a = "";
+  await Promise.all(m.replies.map(async (r, i) => {
+    const opts = many ? { prefix: r.pid } : {};
+    try {
+      await stream("/api/ask", { patient: r.pid, question: q, history: past[r.pid] }, (e) => {
+        if (e.kind === "wiring") { if (i === 0) termAsk.intro(e); }
+        else if (e.kind === "answer") {
+          const c = cost(e.usage.input, e.usage.output, e.usage.cached);
+          Object.assign(r, { a: e.text, error: e.status === "ok" ? "" : e.error || e.status,
+            meta: [`${e.usage.toolCalls} tool call${e.usage.toolCalls === 1 ? "" : "s"}`, `${num(e.usage.input + e.usage.output)} tokens`, c === null ? "" : usd(c), `${e.seconds ?? "–"} s`].filter(Boolean).join(" · ") });
+          termAsk.line(e.status === "ok" ? "done" : "err", `■ ${esc(e.status === "ok" ? "done" : e.status)}`, (e.seconds || 0) * 1000, opts);
+          drawChat();
+        } else { termAsk.event(e, opts); if (e.kind === "usage") addTokens(e.input, e.output, e.cached); }
+      });
+    } catch (err) { r.a = ""; r.error = err.message; termAsk.line("err", esc(err.message), undefined, opts); }
+    if (r.a === undefined) r.a = "";
+  }));
+  termAsk.setStatus(m.replies.some((r) => r.error) ? "error" : "done");
   termAsk.stop(); asking = false; $("askBtn").disabled = false; drawChat(); $("askInput").focus();
 }
 
@@ -896,14 +927,18 @@ $("wideBtn").onclick = () => { state.wide = !state.wide; hood(); };
 document.addEventListener("keydown", (e) => {
   if (/TEXTAREA|INPUT|SELECT/.test(document.activeElement.tagName)) return;
   if (e.key === "u" || e.key === "U") setHood(!state.hood);
-  if (e.key === "Escape") { $("inspect").hidden = true; }
+  if (e.key === "Escape") { $("inspect").hidden = true; openPick(false); }
   if (e.key === "ArrowRight") $("next").click();
   if (e.key === "ArrowLeft") $("back").click();
 });
 termRosa.reset("idle");
 termAsk.reset("idle");
-$("askPatient").innerHTML = cfg.names.map((n, i) => `<option value="p${String(i).padStart(3, "0")}">${esc(n)} · p${String(i).padStart(3, "0")}</option>`).join("");
-$("askPatient").onchange = () => { chat = []; drawChat(); termAsk.reset("idle"); };
+$("askPickBtn").onclick = () => openPick($("askMenu").hidden);
+$("askFind").oninput = drawPick;
+$("askList").onchange = (e) => { const pid = e.target.dataset.pid; if (pid) setPicks(e.target.checked ? [...askPicks, pid].slice(0, ASK_MAX) : askPicks.filter((x) => x !== pid)); };
+$("askClear").onclick = () => setPicks([]);
+document.addEventListener("click", (e) => { if (!$("askMenu").hidden && !e.target.closest("#askPick")) openPick(false); });
+drawPick();
 $("askExamples").innerHTML = ASK_EXAMPLES.map((q, i) => `<button class="chipBtn" data-q="${i}">${esc(q)}</button>`).join("");
 $("askExamples").onclick = (e) => { const b = e.target.closest("[data-q]"); if (b) ask(ASK_EXAMPLES[b.dataset.q]); };
 $("askForm").onsubmit = (e) => { e.preventDefault(); ask($("askInput").value); };

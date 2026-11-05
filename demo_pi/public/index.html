@@ -126,8 +126,15 @@
         <div class="split runSplit">
           <div class="col askCol">
             <h2 class="testHead">Ask the EHR</h2>
-            <p class="howto">Pick a patient and ask anything about their chart. The agent reads the whole record to answer.</p>
-            <select id="askPatient" class="rec askWho" aria-label="Patient"></select>
+            <p class="howto">Pick up to five patients and ask anything about their charts. The agent reads each whole record to answer.</p>
+            <div class="pick" id="askPick">
+              <button type="button" class="pickBtn" id="askPickBtn" aria-haspopup="listbox" aria-expanded="false"></button>
+              <div class="pickMenu" id="askMenu" hidden>
+                <input id="askFind" placeholder="Find a patient…" autocomplete="off">
+                <div class="pickList" id="askList" role="listbox" aria-multiselectable="true"></div>
+                <div class="pickFoot"><span id="askCount"></span><button type="button" class="linkBtn" id="askClear">Clear</button></div>
+              </div>
+            </div>
             <div class="chat" id="chat"></div>
             <div class="examples" id="askExamples"></div>
             <form class="askBox" id="askForm"><textarea id="askInput" rows="2" placeholder="Ask about this patient…"></textarea><button class="primary" id="askBtn">Ask</button></form>
