@@ -461,15 +461,8 @@ const liveAct = new Map();     // patient → its latest tool call, for the hove
 
 // The four outcomes of the care-gap answer against the answer key: a care gap found (true positive), missed (false
 // negative), a false alarm (false positive), and a patient rightly cleared (true negative). A patient without a gap
-// that it gave no answer for is none of them.
-const OUTCOMES = [
-  ["found", "care gaps found", "true positive", "Care gap found"],
-  ["missed", "missed", "false negative", "Missed care gap"],
-  ["alarm", "false alarms", "false positive", "False alarm"],
-  ["cleared", "rightly no gap", "true negative", "Rightly no gap"],
-  ["none", "no answer", "", "No answer"],
-];
-const OUTCOME = Object.fromEntries(OUTCOMES.map(([k, , , badge]) => [k, badge]));
+// that it gave no answer for is none of them. Each one's label, on the hover card and the inspect sheet:
+const OUTCOME = { found: "Care gap found", missed: "Missed care gap", alarm: "False alarm", cleared: "Rightly no gap", none: "No answer" };
 function outcome(s) {
   const q = s.questions.gap, gap = q.gold === "yes";
   if (q.agent === "yes") return gap ? "found" : "alarm";
@@ -501,22 +494,19 @@ function mistake(s) {
 const answerLine = (gap, why) => [gap === "yes" ? "Care gap" : gap === "no" ? "No care gap" : "", why ? cap(cfg.why[why] || why) : ""].filter(Boolean).join(" · ") || "No clear answer";
 const keyBy = (rules) => (cfg.key?.[rules]?.by === "opus" ? cfg.key[rules].model : "the chart");
 
+// green when its care-gap answer is right, red when it isn't, with a white ring for a care gap in the answer key; its
+// outcome goes on it too, for the filter
 function square(row) {
-  $(`sq-${row.patientId}`).className = `sq ${outcome(row.score)} ${row.score.unsafe ? "harm" : ""}`;
+  const s = row.score, el = $(`sq-${row.patientId}`);
+  el.className = `sq ${s.questions.gap.right ? "right" : "wrong"}${s.questions.gap.gold === "yes" ? " key" : ""} ${s.unsafe ? "harm" : ""}`;
+  el.dataset.o = outcome(s);
 }
 
-// the colours, with how many of each so far; a click shows only that kind
-function legend() {
-  const n = Object.fromEntries(OUTCOMES.map(([k]) => [k, 0]));
-  for (const r of rowsById.values()) n[outcome(r.score)] += 1;
-  const only = $("grid").dataset.only || "";
-  $("legend").innerHTML = OUTCOMES.filter(([k]) => k !== "none" || n.none).map(([k, label, term]) =>
-    `<button class="lg${only === k ? " on" : ""}${only && only !== k ? " off" : ""}" data-o="${k}" title="Show only these"><i class="sq ${k}"></i><b>${n[k]}</b>${label}${term ? `<small>${term}</small>` : ""}</button>`).join("");
-}
+// a click on the misses or the false alarms under the score shows only those; again, all
 function showOnly(k) {
   const g = $("grid");
   if (!k || g.dataset.only === k) delete g.dataset.only; else g.dataset.only = k;
-  legend();
+  document.querySelectorAll("#results .mkBtn").forEach((b) => b.classList.toggle("on", b.dataset.o === g.dataset.only));
 }
 
 // under the score: the missed gaps and false alarms, by kind of mistake
@@ -576,7 +566,6 @@ async function inspect(id) {
 function grid() {
   $("grid").innerHTML = Array.from({ length: cfg.cohort }, (_, i) => `<span class="sq" id="sq-p${String(i).padStart(3, "0")}" data-id="p${String(i).padStart(3, "0")}"></span>`).join("");
   delete $("grid").dataset.only;
-  legend();
 }
 
 // one small window per agent running at once: a patient takes a free window, and keeps it until the next one needs it
@@ -614,7 +603,7 @@ class Windows {
     if (!s) return;
     const el = $(`ag-${s.i}`), sc = row.score;
     const ok = sc.questions.gap.right, o = outcome(sc);
-    el.className = `win ${o === "alarm" ? "alarm" : ok ? "right" : "wrong"}`;
+    el.className = `win ${ok ? "right" : "wrong"}`;
     el.querySelector(".st").textContent = `${ok ? "✓" : "✗"} ${OUTCOME[o].toLowerCase()}${row.cached ? " · cache" : ""}`;
     this.add(row.patientId, "fin", QUESTIONS.map(([k, label]) => `${label} ${answerLabel(k, sc.questions[k].agent) || "–"}`).join(" · "));
     s.done = true;
@@ -680,7 +669,6 @@ async function runCohort() {
         if (q.agent === "yes") q.gold === "yes" ? (found += 1) : (alarms += 1);
         if (!r.cached && !r.replayed) addRead(r);
         square(r);
-        legend();
         if (!r.cached || done <= cfg.concurrency) wins.finish(r);
       } else if (m.kind === "summary") {
         const seconds = Math.round((performance.now() - t0) / 100) / 10;
@@ -1027,7 +1015,6 @@ $("suggest").onclick = (e) => {
 $("grid").onmouseover = tip;
 $("grid").onmouseleave = () => ($("tip").hidden = true);
 $("grid").onclick = (e) => { const sq = e.target.closest(".sq"); if (sq) inspect(sq.dataset.id); };
-$("legend").onclick = (e) => { const b = e.target.closest("[data-o]"); if (b) showOnly(b.dataset.o); };
 $("results").onclick = (e) => { const b = e.target.closest("[data-o]"); if (b) showOnly(b.dataset.o); };
 $("inspectClose").onclick = $("inspect").onclick = (e) => { if (e.target === $("inspect") || e.target === $("inspectClose")) $("inspect").hidden = true; };
 $("steps").onclick = (e) => { const b = e.target.closest("[data-go]"); if (b) go(b.dataset.go); };

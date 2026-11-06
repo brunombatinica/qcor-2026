@@ -15,6 +15,10 @@ it), "Where it went wrong", and the agent's reasoning. The inspect sheet opens w
 recorded ESC run: 24 found, 7 missed (all 7 took a reason ESC 2021 doesn't accept), 10 false alarms (6
 missed the medical reason, 4 saw the decline and still said gap), 59 rightly no gap.
 
+Then Ryan: go back to the original colours (green right, red wrong, a white ring for a care gap in the answer key);
+keep the hover card. The four colours and the counting legend are gone; the mistakes under the score stay, and a click
+on "7 missed" or "10 false alarms" still shows only those squares.
+
 ## Demo, Test as the game, and an Opus answer key (2026-11-04, late; Ryan)
 
 Ryan: the room at QCOR should play with it to find the best way to work. Criteria and Test become one slide, with a
