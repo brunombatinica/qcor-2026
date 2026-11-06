@@ -12,8 +12,9 @@
 //   POST /api/unlock    {code}              the workshop code: unlocks the model in workshop-key.json (agent/model.mjs)
 //   POST /api/run       {build, patient}    one session, streamed as server-sent events: the trace, then the scored answer
 //                                           (if every agent is busy, first its place in line: wait …, then start)
-//   POST /api/cohort    {build, n, fresh}   n patients, DEMO_CONCURRENCY at a time, streamed as they run, then a summary;
-//                                           one test at a time (DEMO_TESTS_AT_ONCE), the rest wait in line
+//   POST /api/cohort    {build, n, fresh}   n patients, DEMO_PER_TEST of them in the shared line at a time, streamed as
+//                                           they join it, start and finish, then a summary
+//   GET  /api/status                        the line right now: agents running, sessions waiting, streams open
 //   POST /auth/token, GET /fhir/…           the synthetic EHR (ehr/fhir.mjs)
 //
 // Cohort results are cached per model, build and cohort under .cache/, so a build the room has already tried comes back at
@@ -44,52 +45,44 @@ const arg = (name, fallback) => { const i = process.argv.indexOf(name); return i
 const PORT = Number(arg("--port", process.env.PORT ?? 8771));
 const HOST = arg("--host", process.env.HOST || "0.0.0.0");
 
-// one queue for every session, CONCURRENCY at a time; a Rosa run goes ahead of test sessions, so a click on Run on
-// Rosa doesn't wait behind someone's 100 patients. A finished session hands its slot straight to the next one.
-// `tell`, if given, hears how many sessions are ahead of it while it waits (again each time the line moves), then null
-// when its turn comes, so the page can say it is in line rather than stuck.
+// One line for every session, CONCURRENCY running at a time; a finished session hands its agent straight to the next
+// in line. A Rosa run (or an Ask the EHR question) goes ahead of tests' sessions, and is told its place while it waits
+// (`tell`: how many are ahead of it, again each time the line moves). A session whose page leaves (Stop, a closed tab)
+// leaves the line at once.
 let running = 0;
 const waiting = { rosa: [], cohort: [] };
-const tellWaiting = () => [...waiting.rosa, ...waiting.cohort].forEach((w, i) => w.tell?.(i));
-async function slot(fn, lane = "cohort", tell) {
+const tellWaiting = () => waiting.rosa.forEach((w, i) => w.tell?.(i));
+async function slot(fn, { lane = "cohort", tell, signal } = {}) {
+  if (signal?.aborted) return fn();                   // fn sees the aborted signal and returns at once, with no agent
   if (running < CONCURRENCY) running += 1;
   else {
-    await new Promise((go) => { waiting[lane].push({ go, tell }); tellWaiting(); });
-    tell?.(null);
+    const line = waiting[lane];
+    const turn = await new Promise((go) => {
+      const leave = () => { const i = line.indexOf(w); if (i >= 0) { line.splice(i, 1); tellWaiting(); go(false); } };
+      const w = { tell, go: (v) => { signal?.removeEventListener("abort", leave); go(v); } };
+      line.push(w);
+      signal?.addEventListener("abort", leave, { once: true });
+      tellWaiting();
+    });
+    if (!turn) return fn();                           // it left the line: as above
   }
   try { return await fn(); } finally {
     const next = waiting.rosa.shift() || waiting.cohort.shift();
-    if (next) { next.go(); tellWaiting(); } else running -= 1;
+    if (next) { next.go(true); tellWaiting(); } else running -= 1;
   }
 }
-// what a page waiting for its one session is sent: its place in line, then "start"
-const inLine = (send) => (ahead) => send(ahead === null ? { kind: "start" } : { kind: "wait", ahead, of: CONCURRENCY });
+// what a page waiting for its one session is sent: its place in line
+const inLine = (send) => (ahead) => send({ kind: "wait", ahead, of: CONCURRENCY });
 
-// 100-patient tests run TESTS_AT_ONCE at a time (default 1), in the order they were asked for: one test at a time
-// keeps the room under the model's tokens-per-minute limit (../docs/hosting.md). A test that waits is told how many
-// are ahead of it; one whose answers are all in the cache doesn't wait.
-const TESTS_AT_ONCE = Number(process.env.DEMO_TESTS_AT_ONCE || 1);
-let testsRunning = 0;
-const testLine = [];                                  // { start, tell }
-const tellLine = () => testLine.forEach((t, i) => t.tell(testsRunning + i));
-function nextTest() {
-  while (testsRunning < TESTS_AT_ONCE && testLine.length) { testsRunning += 1; testLine.shift().start(); }
-  tellLine();
-}
-/** Waits for a test's turn: resolves to the function that ends it, or null if the page left while waiting. */
-function testTurn(signal, tell) {
-  return new Promise((resolve) => {
-    let ended = false;
-    const end = () => { if (!ended) { ended = true; testsRunning -= 1; nextTest(); } };
-    const entry = { start: () => resolve(end), tell };
-    testLine.push(entry);
-    signal.addEventListener("abort", () => {
-      const i = testLine.indexOf(entry);
-      if (i >= 0) { testLine.splice(i, 1); tellLine(); resolve(null); }
-    }, { once: true });
-    nextTest();
-  });
-}
+// A test puts PER_TEST of its patients in the line, and each one that finishes makes room for its next patient, at the
+// back. So every test in the room moves at once, a few patients at a time, and none waits for another to finish: with
+// 4 tests or more, the CONCURRENCY agents are shared out between them.
+const PER_TEST = Number(process.env.DEMO_PER_TEST || 8);
+
+// At most MAX_OPEN runs, tests and questions open at once, for everyone. Past that a page is told the room is full and
+// to try again, rather than joining the line: a tab opened fifty times, or a script, can't pile it up.
+const MAX_OPEN = Number(process.env.DEMO_MAX_OPEN || 400);
+let open = 0;
 
 // a cached result is reused only for the same model, build, system prompt and cohort (editing instructions/ or
 // ehr/patients.mjs invalidates it)
@@ -100,10 +93,12 @@ const buildKey = (b) => createHash("sha1").update(JSON.stringify([MODEL.baseUrl,
 
 // cache: "use" reads and writes it, "refresh" only writes it (the page's "ignore cache"), absent leaves it alone
 const cacheFile = (build, patientId) => join(CACHE, buildKey(build), `${patientId}.json`);
-async function runScored(patientId, build, { onEvent, signal, cache, stream, lane, rules, tell } = {}) {
+async function runScored(patientId, build, { onEvent, signal, cache, stream, lane, rules, tell, started } = {}) {
   const file = cache && cacheFile(build, patientId);
-  if (cache === "use" && existsSync(file)) { const row = JSON.parse(readFileSync(file, "utf8")); return { ...row, score: score(row, build, rules), cached: true }; }
-  const result = await slot(() => (signal?.aborted ? { patientId, trace: [], usage: { input: 0, output: 0 }, status: "cancelled" } : runSession({ patientId, build, onEvent, signal, stream })), lane, tell);
+  if (cache === "use" && existsSync(file)) {
+    try { const row = JSON.parse(readFileSync(file, "utf8")); return { ...row, score: score(row, build, rules), cached: true }; } catch {}   // a half-written file: run it again
+  }
+  const result = await slot(() => { if (!signal?.aborted) started?.(); return runSession({ patientId, build, onEvent, signal, stream }); }, { lane, tell, signal });
   // free text is read by one more model call, for its two answers; the structured answer's fixed options need none
   const b = normalize(build);
   if (!b.tools.includes("structured") && answerText(result)) result.read = await read(answerText(result), b.prompt);
@@ -112,9 +107,15 @@ async function runScored(patientId, build, { onEvent, signal, cache, stream, lan
   return row;
 }
 
+// a stream of server-sent events, or null (and a 503) when the room is full (MAX_OPEN)
 function sse(res) {
+  if (open >= MAX_OPEN) { json(res, 503, { error: "The room is full right now. Try again in a minute." }); return null; }
+  open += 1;
   res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive", "X-Accel-Buffering": "no" });
-  return (obj) => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
+  const write = (text) => { if (!res.writableEnded) res.write(text); };
+  const ping = setInterval(() => write(": ping\n\n"), 15_000);      // so no proxy closes a stream that is quiet while it waits
+  res.once("close", () => { open -= 1; clearInterval(ping); });
+  return (obj) => write(`data: ${JSON.stringify(obj)}\n\n`);
 }
 
 const readBody = (req) => new Promise((resolve) => {
@@ -156,7 +157,7 @@ async function config() {
     // the lines criteriaPrompt adds around the sentences (headings, the closing line), so the page can take its block out
     criteriaFrame: criteriaPrompt(CRITERIA.map((c) => c.id)).split("\n").filter((l) => l && !l.startsWith("- ")), key: keyInfo(PATIENTS),
     rules: Object.fromEntries(Object.entries(RULES).map(([id, r]) => [id, { ...r, gaps: PATIENTS.filter((p) => goldFor(p, id).gap).length }])), examples: EXAMPLES, act: ACT_EXAMPLE, statuses: STATUSES, why: WHY,
-    cohort: PATIENTS.length, names: PATIENTS.map((p) => p.name), concurrency: CONCURRENCY, today: TODAY,
+    cohort: PATIENTS.length, names: PATIENTS.map((p) => p.name), concurrency: CONCURRENCY, perTest: PER_TEST, today: TODAY,
     rosa: { id: rosa.id, name: rosa.name, age: rosa.age, ef: rosa.ef, gold: rosa.gold, next: rosa.next.date },
   };
 }
@@ -223,6 +224,7 @@ const SOURCE_FILES = new Set([...TOOLS.map((t) => t.file), "fhir.ts"]);
 
 async function api(req, res, url) {
   if (url.pathname === "/api/config") return json(res, 200, await config());
+  if (url.pathname === "/api/status") return json(res, 200, { running, waiting: { rosa: waiting.rosa.length, tests: waiting.cohort.length }, open, concurrency: CONCURRENCY, perTest: PER_TEST, maxOpen: MAX_OPEN });
   if (url.pathname === "/api/chart") return json(res, 200, chart(url.searchParams.get("patient"), url.searchParams.get("rules")));
   if (url.pathname === "/api/source") {
     const file = url.searchParams.get("file");
@@ -246,11 +248,12 @@ async function api(req, res, url) {
     const history = (Array.isArray(body.history) ? body.history : []).filter((h) => h?.q && h?.a).slice(-6);
     const prompt = history.length ? `Earlier in this conversation:\n\n${history.map((h) => `Q: ${String(h.q).slice(0, 1000)}\nA: ${String(h.a).slice(0, 2000)}`).join("\n\n")}\n\nNow: ${question}` : question;
     const build = { sources: DATA.map((d) => d.id), tools: ["read_records", "search_notes", "read_note"], prompt };
+    const send = sse(res);
+    if (!send) return;
     const abort = new AbortController();
     res.on("close", () => abort.abort());
-    const send = sse(res);
     send({ kind: "wiring", ...wiring(build, patient) });
-    const r = await slot(() => runSession({ patientId: patient.id, build, onEvent: send, signal: abort.signal, stream: true }), "rosa", inLine(send));
+    const r = await slot(() => { send({ kind: "start" }); return runSession({ patientId: patient.id, build, onEvent: send, signal: abort.signal, stream: true }); }, { lane: "rosa", tell: inLine(send), signal: abort.signal });
     send({ kind: "answer", text: answerText(r), usage: r.usage, seconds: r.seconds, status: r.status, error: r.error });
     return res.end();
   }
@@ -263,42 +266,36 @@ async function api(req, res, url) {
     rec = recorded(kind, build, body.patient);
     if (!rec) return json(res, 404, { error: `${REPLAY ? "Replaying" : "No model, so replaying"} recorded runs, and this build wasn't recorded: pick one under Recorded runs.` });
   }
+  const send = sse(res);
+  if (!send) return;
   const abort = new AbortController();
   res.on("close", () => abort.abort());
-  const send = sse(res);
 
   if (kind === "rosa") {
     const patient = byPatientId(body.patient);
     send({ kind: "wiring", ...wiring(build, patient) });
     if (rec) await replay(rec, send, abort.signal, rules);
-    else send({ kind: "result", ...(await runScored(patient.id, build, { onEvent: send, signal: abort.signal, stream: true, lane: "rosa", rules, tell: inLine(send) })) });
+    else send({ kind: "result", ...(await runScored(patient.id, build, { onEvent: send, signal: abort.signal, stream: true, lane: "rosa", rules, tell: inLine(send), started: () => send({ kind: "start" }) })) });
     return res.end();
   }
   const n = Math.max(1, Math.min(PATIENTS.length, Number(body.n) || PATIENTS.length));
   send({ kind: "wiring", ...wiring(build, PATIENTS[0]), n });
   if (rec) { await replay(rec, send, abort.signal, rules); return res.end(); }
-  const cohort = PATIENTS.slice(0, n);
-  const allCached = !body.fresh && cohort.every((p) => existsSync(cacheFile(build, p.id)));
-  // while it waits, the place in line goes out again every 15 s, so no proxy closes a quiet stream
-  let ahead = 0;
-  const tell = (k) => { ahead = k; send({ kind: "line", ahead: k }); };
-  const keepAlive = setInterval(() => ahead && tell(ahead), 15_000);
-  const end = allCached ? () => {} : await testTurn(abort.signal, tell);
-  clearInterval(keepAlive);
-  if (!end) return res.end();
-  if (ahead) send({ kind: "line", ahead: 0 });
-  try {
-    const rows = await Promise.all(cohort.map(async (p) => {
+  // the test's patients join the shared line PER_TEST at a time (above); one from the cache needs no agent
+  const todo = PATIENTS.slice(0, n), rows = [];
+  const feed = async () => {
+    for (let p; !abort.signal.aborted && (p = todo.shift()); ) {
       send({ kind: "queued", patientId: p.id });
       const row = await runScored(p.id, build, {
-        signal: abort.signal, cache: body.fresh ? "refresh" : "use", rules,
+        signal: abort.signal, cache: body.fresh ? "refresh" : "use", rules, started: () => send({ kind: "start", patientId: p.id }),
         onEvent: (item) => item.kind !== "delta" && send({ kind: "event", patientId: p.id, item: { ...item, text: item.text?.slice(0, 300) } }),
       });
       send({ kind: "patient", row });
-      return row;
-    }));
-    send({ kind: "summary", build, rules, summary: summarize(rows) });
-  } finally { end(); }
+      rows.push(row);
+    }
+  };
+  await Promise.all(Array.from({ length: PER_TEST }, feed));
+  if (!abort.signal.aborted) send({ kind: "summary", build, rules, summary: summarize(rows) });
   return res.end();
 }
 

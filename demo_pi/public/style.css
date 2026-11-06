@@ -295,6 +295,7 @@ textarea:focus { outline: none; border-color: var(--edge); }
 /* test: a square per patient, a window per running agent */
 .grid { display: grid; grid-template-columns: repeat(20, 1fr); gap: 5px; margin-top: 8px; }
 .sq { aspect-ratio: 1; border-radius: 4px; background: var(--card); cursor: pointer; position: relative; display: grid; place-items: center; }
+.sq.line { box-shadow: inset 0 0 0 2px var(--amber); }   /* in the room's line for an agent */
 .sq.run { background: var(--edge); animation: pulse 1s infinite; }
 .sq.right { background: var(--green); animation: none; opacity: 0.8; } .sq.wrong { background: var(--red); animation: none; }
 .sq.key { box-shadow: inset 0 0 0 3px #fff; }
@@ -316,7 +317,7 @@ textarea:focus { outline: none; border-color: var(--edge); }
 .obadge.missed, .obadge.alarm { background: var(--red-s); color: var(--red); } .obadge.none { background: var(--raised); color: var(--muted); }
 .otop { display: flex; align-items: center; gap: 12px; margin: 0 40px 12px 0; font-size: 15px; }
 .tally { display: flex; gap: 18px; font-size: 15px; font-variant-numeric: tabular-nums; min-height: 22px; }
-.tally .t { color: var(--muted); } .tally .ok { color: var(--green); font-weight: 700; } .tally .no { color: var(--red); font-weight: 700; } .tally .run { color: var(--text); }
+.tally .t { color: var(--muted); } .tally .ok { color: var(--green); font-weight: 700; } .tally .no { color: var(--red); font-weight: 700; } .tally .run { color: var(--text); } .tally .line { color: var(--amber); }
 .wins { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .win { background: #0a0a0b; border: 1px solid var(--card); border-radius: 10px; height: 150px; display: flex; flex-direction: column; overflow: hidden; }
 .win.live { border-color: var(--dim); }

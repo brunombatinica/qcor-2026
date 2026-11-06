@@ -143,8 +143,9 @@ The model is any OpenAI-compatible `/v1` endpoint:
 | `DEMO_MODEL` | `$VLLM_MODEL` when `DEMO_BASE_URL` is unset, else the first model the endpoint lists |
 | `DEMO_CONTEXT_WINDOW` / `DEMO_MAX_TOKENS` | 131072 / 2048 |
 | `DEMO_CONCURRENCY` | 8 sessions at once (vLLM extract runs `--max-num-seqs 8`); a Rosa run goes ahead of test sessions |
-| `DEMO_TESTS_AT_ONCE` | 1: 100-patient tests run one at a time, the rest wait in line (the page says how many are ahead); one whose answers are all cached doesn't wait |
-| `DEMO_SESSION_TIMEOUT_MS` | 180000 |
+| `DEMO_PER_TEST` | 8: a test keeps that many of its patients in the shared line at a time, and each one that finishes makes room for its next, at the back, so every test in the room moves at once; a patient from the cache needs no agent |
+| `DEMO_SESSION_TIMEOUT_MS` | 60000: a session is killed after that, so it gives its agent back |
+| `DEMO_MAX_OPEN` | 400 runs, tests and questions open at once, for everyone; past that a page is told the room is full and to try again (`GET /api/status` shows the line) |
 | `DEMO_UNLOCK_CODE` | unset: the workshop code, to unlock `workshop-key.json` at start (below) |
 | `DEMO_REASONING_OFF` | what pi and the grader send as `reasoning_effort`: `none` for OpenAI's GPT-5.1 and later (`gpt-6-luna`), `minimal` for `gpt-5`, `-mini`, `-nano`, nothing elsewhere; `omit` sends nothing |
 

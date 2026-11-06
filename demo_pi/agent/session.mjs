@@ -23,7 +23,8 @@ const PI = join(HERE, "..", "node_modules", "@earendil-works", "pi-coding-agent"
 const EXTENSION = join(HERE, "extension.ts");
 const SETTINGS = join(HERE, "..", ".pi-agent");     // PI_CODING_AGENT_DIR: our settings, not the user's ~/.pi
 const WORKDIR = join(tmpdir(), "qcor-demo-pi");      // pi needs a cwd; with no file tools nothing is written there
-const TIMEOUT_MS = Number(process.env.DEMO_SESSION_TIMEOUT_MS || 180_000);
+// a session that runs longer than this is killed, so it gives its agent back (a normal one takes 5 to 15 s)
+const TIMEOUT_MS = Number(process.env.DEMO_SESSION_TIMEOUT_MS || 60_000);
 
 export const FHIR = { base: "" };                     // set by server.mjs once it listens: http://127.0.0.1:<port>/fhir
 
@@ -96,12 +97,14 @@ export function runSession({ patientId, build, onEvent = () => {}, signal, strea
   const t0 = Date.now();
   const result = { patientId: patient.id, answer: null, text: "", trace: [], usage: { input: 0, output: 0, cached: 0, modelCalls: 0, toolCalls: 0 }, status: "ok", error: null, scope: grant.scope };
   const emit = (item) => { item.t = Date.now() - t0; result.trace.push(item); onEvent(item); };
+  if (signal?.aborted) return { ...result, status: "cancelled", seconds: 0 };     // its page left before its turn
 
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [PI, ...command(patient, b)], { cwd: WORKDIR, env, stdio: ["ignore", "pipe", "pipe"], detached: true });
     const kill = () => { try { process.kill(-child.pid, "SIGKILL"); } catch {} };
     const timer = setTimeout(() => { result.status = "timeout"; kill(); }, TIMEOUT_MS);
-    signal?.addEventListener("abort", () => { result.status = "cancelled"; kill(); }, { once: true });
+    const cancel = () => { result.status = "cancelled"; kill(); };
+    signal?.addEventListener("abort", cancel, { once: true });
     let buffer = "", stderr = "";
     child.stderr.on("data", (d) => (stderr = (stderr + d).slice(-4000)));
     child.stdout.on("data", (d) => {
@@ -139,6 +142,7 @@ export function runSession({ patientId, build, onEvent = () => {}, signal, strea
     });
     child.on("close", (code) => {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", cancel);
       result.seconds = Math.round((Date.now() - t0) / 100) / 10;
       if (result.status === "ok" && code !== 0) { result.status = "error"; result.error ||= stderr.trim().split("\n").slice(-3).join(" ") || `pi exited with ${code}`; }
       if (result.status === "ok" && result.error && !result.answer && !result.text) result.status = "error";

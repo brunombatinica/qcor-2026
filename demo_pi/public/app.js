@@ -364,7 +364,8 @@ async function runRosa() {
     await stream("/api/run", { build: ran, patient: cfg.rosa.id, rules: state.rules }, (m) => {
       if (m.kind === "wiring") { termRosa.intro(m); lastWiring = m; }
       else if (m.kind === "wait" || m.kind === "start") {
-        // every agent is busy: say so where the answer will be, until its turn; then the clock times the run, not the wait
+        // every agent is busy: say so where the answer will be, until its turn; then (and at once if none was busy) the
+        // clock times the run, not the wait
         termRosa.queue(m);
         $("answer").innerHTML = m.kind === "wait" ? queuedCard(m) : "";
         if (m.kind === "start") termRosa.start();
@@ -453,7 +454,7 @@ function results(s, cached, seconds, rules = state.rules) {
   $("results").innerHTML = `
     <div class="resTop"><div>${gapScore(s, rules)}${mistakes()}</div><div class="resBars">${bars(QUESTIONS.map(([k, label]) => ({ label, right: s.questions[k].right, n: s.n })))}
     ${flags.length ? `<div class="flags">${flags.join("")}</div>` : ""}</div></div>
-    <div class="stats">${stat(num(s.tokens), "tokens", [s.tokensIn != null && cfg.price ? `≈ ${usd(cost(s.tokensIn, s.tokensOut, s.tokensCached))}` : "", `${num(s.tokensPerPatient)} per patient`, s.tokensRead ? `${num(s.tokens - s.tokensRead)} agent · ${num(s.tokensRead)} reading its answers` : ""].filter(Boolean).join("<br>"))}${stat(num(s.modelCalls ?? 0), "model calls", s.n ? `${Math.round(((s.modelCalls ?? 0) / s.n) * 10) / 10} per patient` : "")}${stat(seconds != null ? `${seconds} s` : "–", "wall clock", `${s.secondsPerPatient} s per patient, ${cfg.concurrency} at once`)}</div>
+    <div class="stats">${stat(num(s.tokens), "tokens", [s.tokensIn != null && cfg.price ? `≈ ${usd(cost(s.tokensIn, s.tokensOut, s.tokensCached))}` : "", `${num(s.tokensPerPatient)} per patient`, s.tokensRead ? `${num(s.tokens - s.tokensRead)} agent · ${num(s.tokensRead)} reading its answers` : ""].filter(Boolean).join("<br>"))}${stat(num(s.modelCalls ?? 0), "model calls", s.n ? `${Math.round(((s.modelCalls ?? 0) / s.n) * 10) / 10} per patient` : "")}${stat(seconds != null ? `${seconds} s` : "–", "wall clock", `${s.secondsPerPatient} s per patient, ${cfg.perTest} at a time`)}</div>
     ${cached ? `<div class="meta">${cached} from cache</div>` : ""}`;
 }
 
@@ -541,7 +542,7 @@ function tip(e) {
   let html;
   if (row) {
     html = tipCard(row.score);
-  } else html = `<div class="tipHead"><b>${esc(cfg.names[Number(id.slice(1))])}</b><span class="muted">${esc(id)} · ${sq.classList.contains("run") ? "running" : "waiting"}</span></div>${liveAct.get(id) ? `<code class="small">→ ${esc(liveAct.get(id))}</code>` : ""}`;
+  } else html = `<div class="tipHead"><b>${esc(cfg.names[Number(id.slice(1))])}</b><span class="muted">${esc(id)} · ${sq.classList.contains("run") ? "running" : sq.classList.contains("line") ? "in line for an agent" : "not started"}</span></div>${liveAct.get(id) ? `<code class="small">→ ${esc(liveAct.get(id))}</code>` : ""}`;
   const t = $("tip");
   t.innerHTML = html;
   t.hidden = false;
@@ -568,7 +569,8 @@ function grid() {
   delete $("grid").dataset.only;
 }
 
-// one small window per agent running at once: a patient takes a free window, and keeps it until the next one needs it
+// one small window per patient this test has in the line at a time (cfg.perTest): a patient takes a free window when its
+// agent starts, and keeps it until the next one needs it
 class Windows {
   constructor(el, n) {
     this.slots = Array.from({ length: n }, (_, i) => ({ i, pid: null, done: true, at: 0 }));
@@ -612,6 +614,7 @@ class Windows {
 }
 
 // the Run button is the Stop button while a test runs: stopping closes the stream, and the server stops its sessions
+// and takes the waiting ones out of the line
 function runButton(running) {
   $("runCohort").textContent = running ? "Stop" : "Run on 100 patients";
   $("runCohort").classList.toggle("stop", running);
@@ -625,15 +628,24 @@ async function runCohort() {
   $("results").innerHTML = "";
   grid();
   liveAct.clear();
-  const wins = new Windows($("agents"), cfg.concurrency);
-  let t0 = performance.now();
-  let done = 0, active = 0, cached = 0, found = 0, alarms = 0, ahead = 0, stopped = false;
+  const wins = new Windows($("agents"), cfg.perTest);
+  const t0 = performance.now();
+  let done = 0, active = 0, inLine = 0, cached = 0, found = 0, alarms = 0, stopped = false;
   $("tally").hidden = false; $("agentsBox").open = true;
   const gaps = cfg.rules[state.rules].gaps;
+  // each patient on its own: in the room's line for an agent, running, or done (the server keeps cfg.perTest of them in
+  // the line at a time, so every test in the room moves at once)
   const status = () => {
-    // the server runs one test at a time: while it waits its turn, say how many are ahead
-    if (ahead) { $("tally").innerHTML = `<span class="t run">In line: ${ahead} ${ahead === 1 ? "test" : "tests"} ahead of yours</span><span class="t">${clock(performance.now() - t0)}</span>`; return; }
-    $("tally").innerHTML = `<span class="t key">${found}/${gaps} care gaps found</span><span class="t ${alarms ? "no" : ""}">${alarms} false alarm${alarms === 1 ? "" : "s"}</span><span class="t run">${stopped ? "stopped" : `${active} running`}</span><span class="t">${n - done - (stopped ? 0 : active)} ${stopped ? "not run" : "waiting"}</span><span class="t">${clock(performance.now() - t0)}</span>`;
+    const left = n - done - (stopped ? 0 : active + inLine);
+    $("tally").innerHTML = `<span class="t key">${found}/${gaps} care gaps found</span><span class="t ${alarms ? "no" : ""}">${alarms} false alarm${alarms === 1 ? "" : "s"}</span>${stopped ? `<span class="t">stopped</span>` : `<span class="t run">${active} running</span><span class="t line">${inLine} in line</span>`}<span class="t">${done} done · ${left} ${stopped ? "not run" : "to go"}</span><span class="t">${clock(performance.now() - t0)}</span>`;
+  };
+  const sqOf = (id) => $(`sq-${id}`);
+  const begin = (id) => {                             // its agent started (replay sends no "start": its first event)
+    const sq = sqOf(id);
+    if (!sq || sq.classList.contains("run")) return;
+    if (sq.classList.contains("line")) { sq.classList.remove("line"); inLine -= 1; }
+    sq.classList.add("run"); active += 1;
+    wins.slot(id);
   };
   status();
   const ticker = setInterval(status, 200);
@@ -645,12 +657,10 @@ async function runCohort() {
   try {
     await stream("/api/cohort", { build: b, n, fresh: $("fresh").checked, rules: state.rules }, (m) => {
       if (m.kind === "wiring") lastWiring = m;
-      else if (m.kind === "line") {
-        if (ahead && !m.ahead) t0 = performance.now();     // its turn: the clock times the run, not the wait
-        ahead = m.ahead;
-      } else if (m.kind === "event") {
-        const sq = $(`sq-${m.patientId}`);
-        if (sq && !sq.classList.contains("run")) { sq.classList.add("run"); active += 1; }
+      else if (m.kind === "queued") { const sq = sqOf(m.patientId); if (sq && !sq.classList.contains("line")) { sq.classList.add("line"); inLine += 1; } }
+      else if (m.kind === "start") begin(m.patientId);
+      else if (m.kind === "event") {
+        begin(m.patientId);
         const it = m.item;
         if (it.kind === "usage") addTokens(it.input, it.output, it.cached);
         else if (it.kind === "act") {
@@ -662,14 +672,15 @@ async function runCohort() {
       } else if (m.kind === "patient") {
         const r = m.row;
         rowsById.set(r.patientId, r);
-        if ($(`sq-${r.patientId}`).classList.contains("run")) active -= 1;
+        const sq = sqOf(r.patientId);
+        if (sq.classList.contains("run")) active -= 1; else if (sq.classList.contains("line")) inLine -= 1;
         done += 1;
         if (r.cached) cached += 1;
         const q = r.score.questions.gap;
         if (q.agent === "yes") q.gold === "yes" ? (found += 1) : (alarms += 1);
         if (!r.cached && !r.replayed) addRead(r);
         square(r);
-        if (!r.cached || done <= cfg.concurrency) wins.finish(r);
+        if (!r.cached || done <= cfg.perTest) wins.finish(r);
       } else if (m.kind === "summary") {
         const seconds = Math.round((performance.now() - t0) / 100) / 10;
         results(m.summary, cached, seconds, m.rules || state.rules);
@@ -679,8 +690,8 @@ async function runCohort() {
   } catch (e) {
     if (cohortAbort.signal.aborted) {
       stopped = true;
-      document.querySelectorAll("#grid .sq.run").forEach((sq) => sq.classList.remove("run"));
-      active = 0;
+      document.querySelectorAll("#grid .sq.run, #grid .sq.line").forEach((sq) => sq.classList.remove("run", "line"));
+      active = 0; inLine = 0;
       $("results").innerHTML = `<div class="meta">Stopped · ${done}/${n}</div>`;
     } else $("results").innerHTML = `<div class="flag">${esc(e.message)}</div>`;
   }
@@ -1048,8 +1059,8 @@ $("askInput").onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.pre
 drawChat();
 if (cfg.replay) { $("askInput").disabled = $("askBtn").disabled = true; $("askInput").placeholder = "Ask the EHR needs the live model (it can't be replayed)"; }
 grid();
-new Windows($("agents"), cfg.concurrency);
-$("agentsLabel").textContent = `${cfg.concurrency} agents at once`;
+new Windows($("agents"), cfg.perTest);
+$("agentsLabel").textContent = `Your ${cfg.perTest} at a time · the room shares ${cfg.concurrency} agents`;
 pickers();
 if (!cfg.rules[state.rules]) state.rules = "cms144";
 // Test no longer offers "On a beta blocker?" or "Fix it": a prompt saved with one gets the care-gap question instead

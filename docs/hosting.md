@@ -26,11 +26,19 @@ numbers are the server's own cost; a real model adds 2 to 3 s of waiting per ses
 So each session costs about 1 to 1.7 CPU-seconds and about 100 MB. **One 8-vCPU server handles the whole room on Rosa
 runs.** The 100-patient test is where it gets heavy, in two ways:
 
-- **Queue.** A test puts 100 sessions in the shared queue. Before 2026-11-04 a Rosa run waited behind all of them
-  (62 s behind 3); now Rosa runs go first, and tests run one at a time (`DEMO_TESTS_AT_ONCE`, default 1), the rest
-  waiting in line with "In line: 2 tests ahead of yours" on the page. A test whose answers are all cached doesn't wait.
-  When every slot is busy, a Rosa run or an Ask the EHR question is told its place too: an amber "In line for an
-  agent: 3 runs ahead of yours" under Run and in the terminal, until its turn, so nobody takes it for stuck.
+- **Queue.** The line is of sessions, not tests. A test keeps 8 of its patients in the shared line at a time
+  (`DEMO_PER_TEST`), and each one that finishes makes room for its next patient, at the back. So every test in the room
+  moves at once, a few patients at a time, and none waits for another to finish: with 4 tests or more the 32 agents are
+  shared out between them. Each square on Test shows its own patient: in line (amber), running, or done. Rosa runs and
+  Ask the EHR questions go ahead of tests' patients; when every agent is busy they are told their place ("In line for
+  an agent: 3 runs ahead of yours", in amber under Run and in the terminal) until their turn. Sharing doesn't add
+  capacity: 32 agents finish about 200 sessions a minute, so 50 tests at once take about 25 minutes each, but everyone
+  sees results from the start. (Until 2026-11-06 tests ran one at a time, and the 50th waited 25 minutes to start.)
+- **Robustness.** A session is killed after 60 s (`DEMO_SESSION_TIMEOUT_MS`; a normal one takes 5 to 15 s), so it
+  always gives its agent back. Stop or a closed tab takes the test's waiting patients out of the line at once and
+  kills its running ones. At most 400 runs, tests and questions are open at once (`DEMO_MAX_OPEN`); past that a page
+  is told "The room is full right now. Try again in a minute." `GET /api/status` shows the line: agents running,
+  sessions waiting, streams open.
 - **Tokens.** If all 100 people each run one test with a different build, that is 10,000 sessions, about 14M to 56M
   tokens, in a few minutes. The workshop project's limit for `gpt-6-luna` is 2,000,000 tokens and 5,000 requests per
   minute (read from the API's `x-ratelimit-*` headers, 2026-11-04), so the room can run about 2 to 5 different tests a
@@ -72,7 +80,8 @@ multiplies the token cost by 100, takes minutes per person, and doesn't work wel
    environment variables. Check the project's tokens-per-minute limit for `gpt-6-luna` against the numbers above.
    Revoke the key afterwards.
 3. **Settings for a shared room:** `DEMO_CONCURRENCY` sized to the server (32 for 8 vCPU), `DEMO_MAX_TOKENS=400`,
-   and `DEMO_TESTS_AT_ONCE=1` (the default). Rosa runs going first and one test at a time are in `server.mjs`.
+   and the defaults for `DEMO_PER_TEST` (8), `DEMO_SESSION_TIMEOUT_MS` (60000) and `DEMO_MAX_OPEN` (400). The line is
+   in `server.mjs` (`slot`).
 4. **The deploy image** is `Dockerfile` and `.dockerignore` at the repo root: Node 22, pi, `demo_pi/` and `shared/`,
    and nothing else (the dev container's image has sshd and tools a deploy doesn't need). The measurements above ran on
    the same build steps. `just docker-demo` builds and runs it on your machine, with the model settings from `.env`.
@@ -119,7 +128,7 @@ Infrastructure as Code (`.railway/railway.ts`, applied with the Railway CLI), is
      billed for what it uses; the room needs no more (the measurements). Set lower only to cap the bill.
    - `DEMO_CONCURRENCY` is for the whole server, not per person: at most that many sessions at once, from everyone, the
      rest waiting (the page says so, with its place in line). 32 is what 8 vCPU was measured with; 2 would make a room
-     of 50 wait minutes for Rosa.
+     of 50 wait minutes for Rosa. On the day, `https://<your domain>/api/status` shows how full the line is.
    - **Build → Watch Paths:** `/demo_pi/**`, `/shared/**`, `/Dockerfile`, `/.dockerignore`. Railway redeploys on every
      push to `main`; with these, a push that only changes the slides or notes doesn't.
 6. **A volume for the cache.** Right-click the canvas (or ⌘K) → **Volume** → attach it to the service, mount path

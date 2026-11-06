@@ -19,7 +19,7 @@ demo-stop:
 # the deploy image (Dockerfile, what Railway runs), built and run here with the model settings from .env; needs Docker
 docker-demo port="8771":
     docker build -t qcor-demo .
-    set -a; [ ! -f .env ] || . ./.env; set +a; docker run --rm --init -p 127.0.0.1:{{port}}:8771 -e DEMO_BASE_URL -e DEMO_API_KEY -e DEMO_MODEL -e DEMO_MAX_TOKENS -e DEMO_CONCURRENCY -e DEMO_TESTS_AT_ONCE qcor-demo
+    set -a; [ ! -f .env ] || . ./.env; set +a; docker run --rm --init -p 127.0.0.1:{{port}}:8771 -e DEMO_BASE_URL -e DEMO_API_KEY -e DEMO_MODEL -e DEMO_MAX_TOKENS -e DEMO_CONCURRENCY -e DEMO_PER_TEST -e DEMO_SESSION_TIMEOUT_MS -e DEMO_MAX_OPEN qcor-demo
 
 # re-record the demo's planned builds on the live model, after editing its cohort or instructions (IDS: only those)
 demo-record *IDS:

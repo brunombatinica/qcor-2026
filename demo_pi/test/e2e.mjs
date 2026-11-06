@@ -12,10 +12,12 @@ process.env.DEMO_BASE_URL = `http://127.0.0.1:${model.address().port}/v1`;
 process.env.PORT = "0";
 process.env.HOST = "127.0.0.1";
 process.env.DEMO_ANSWER_KEY = "chart";          // the answers as the charts were written (test/answer-key.mjs checks the v2 key)
+// a small room, so the line fills: 4 agents, each test 4 patients at a time, at most 6 streams open
+Object.assign(process.env, { DEMO_CONCURRENCY: "4", DEMO_PER_TEST: "4", DEMO_MAX_OPEN: "6" });
 const { server, ready } = await import("../server.mjs");
 const base = `http://127.0.0.1:${await ready}`;
 
-const post = (path, body) => fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const post = (path, body, signal) => fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
 async function events(path, body) {
   const text = await (await post(path, body)).text();
   return text.split("\n\n").filter((c) => c.startsWith("data: ")).map((c) => JSON.parse(c.slice(6)));
@@ -165,38 +167,88 @@ const PROMPT = "Is there a beta-blocker care gap for this patient? Why or why no
   assert.equal(cfg.price, null, "no price for a model we don't know");
 }
 
-// one test at a time: a second, different test waits in line, is told how many are ahead, then runs
+// the line, from the server's side, and each message as it arrives with its time
+const status = async () => (await fetch(`${base}/api/status`)).json();
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function until(check, ms = 5000) { for (const t0 = Date.now(); Date.now() - t0 < ms; await sleep(25)) if (await check()) return true; return false; }
+async function timed(path, body, signal) {
+  const out = [], dec = new TextDecoder();
+  let buf = "";
+  try {
+    for await (const chunk of (await post(path, body, signal)).body) {
+      buf += dec.decode(chunk, { stream: true });
+      for (let i; (i = buf.indexOf("\n\n")) >= 0; buf = buf.slice(i + 2)) if (buf.startsWith("data: ")) out.push({ at: performance.now(), ...JSON.parse(buf.slice(6, i)) });
+    }
+  } catch (e) { if (!signal?.aborted) throw e; }
+  return out;
+}
+const busyBuild = (tag) => ({ tools: ["read_records"], sources: ["medications"], prompt: `${PROMPT} (${tag})` });
+
+// two tests at once both move: each keeps 4 patients in the line at a time, and the second starts long before the first
+// is done; a patient joins the line, starts, then finishes
 {
-  const a = { tools: ["read_records"], sources: ["medications"], prompt: `${PROMPT} (a)` };
-  const b = { ...a, prompt: `${PROMPT} (b)` };
-  const later = new Promise((r) => setTimeout(r, 100)).then(() => events("/api/cohort", { build: b, n: 3, fresh: true }));
-  const [ea, eb] = await Promise.all([events("/api/cohort", { build: a, n: 3, fresh: true }), later]);
-  assert.ok(!ea.some((e) => e.kind === "line"), "the first test doesn't wait");
-  assert.deepEqual(eb.filter((e) => e.kind === "line").map((e) => e.ahead), [1, 0], "the second waits behind one, then runs");
-  for (const ev of [ea, eb]) assert.equal(ev.find((e) => e.kind === "summary").summary.n, 3);
+  const later = sleep(100).then(() => timed("/api/cohort", { build: busyBuild("b"), n: 12, fresh: true }));
+  const [ea, eb] = await Promise.all([timed("/api/cohort", { build: busyBuild("a"), n: 12, fresh: true }), later]);
+  for (const ev of [ea, eb]) {
+    let inFlight = 0, most = 0;
+    for (const e of ev) { if (e.kind === "queued") most = Math.max(most, ++inFlight); if (e.kind === "patient") inFlight -= 1; }
+    assert.equal(most, 4, "4 of its patients in the line at a time");
+    const pid = (e) => e.patientId ?? e.row?.patientId;
+    for (const id of new Set(ev.map(pid).filter(Boolean))) {
+      const order = ev.filter((e) => pid(e) === id && ["queued", "start", "patient"].includes(e.kind)).map((e) => e.kind).join();
+      assert.equal(order, "queued,start,patient", `${id}: in line, its agent, done`);
+    }
+    assert.equal(ev.find((e) => e.kind === "summary").summary.n, 12);
+  }
+  assert.ok(eb.find((e) => e.kind === "start").at < ea.findLast((e) => e.kind === "patient").at, "the second test starts before the first is done");
 }
 
 // every agent busy (a test holds them all): a Rosa run is told its place in line, then its turn, ahead of the test's
-// waiting patients; two at once are told 0 and 1. One that doesn't wait is told nothing.
+// waiting patients; two at once are told 0 and 1. One with a free agent isn't told it waits.
 {
   const { concurrency } = await (await fetch(`${base}/api/config`)).json();
-  const a = { tools: ["read_records"], sources: ["medications"], prompt: `${PROMPT} (busy)` };
-  const busy = events("/api/cohort", { build: a, n: Math.min(100, concurrency + 6), fresh: true });
-  await new Promise((r) => setTimeout(r, 150));
-  const rosa = { build: a, patient: "p000" };
+  const busy = events("/api/cohort", { build: busyBuild("busy"), n: concurrency + 6, fresh: true });
+  await sleep(150);
+  const rosa = { build: busyBuild("busy"), patient: "p000" };
   const both = await Promise.all([events("/api/run", rosa), events("/api/run", rosa)]);
   for (const ev of both) {
     const at = (k) => ev.findIndex((e) => e.kind === k);
     assert.ok(at("wiring") < at("wait") && at("wait") < at("start") && at("start") < at("result"), "the wiring, its place in line, its turn, then the answer");
     assert.ok(ev.filter((e) => e.kind === "wait").every((e) => e.of === concurrency), "how many run at once");
-    assert.equal(ev.filter((e) => e.kind === "start").length, 1);
     assert.equal(ev.find((e) => e.kind === "result").status, "ok");
   }
   assert.deepEqual(both.map((ev) => ev.find((e) => e.kind === "wait").ahead).sort(), [0, 1], "the second is behind the first");
   assert.equal(both.map((ev) => ev.filter((e) => e.kind === "wait").at(-1).ahead).join(), "0,0", "each is next before its turn");
   await busy;
   const alone = await events("/api/run", rosa);
-  assert.ok(!alone.some((e) => e.kind === "wait" || e.kind === "start"), "a free agent: no line");
+  assert.ok(!alone.some((e) => e.kind === "wait") && alone.some((e) => e.kind === "start"), "a free agent: no line");
+}
+
+// Stop: a test's patients waiting in the line leave it at once, and nothing of it runs
+{
+  const a = timed("/api/cohort", { build: busyBuild("stop-a"), n: 12, fresh: true });
+  await sleep(150);
+  const stop = new AbortController();
+  const b = timed("/api/cohort", { build: busyBuild("stop-b"), n: 12, fresh: true }, stop.signal);
+  assert.ok(await until(async () => (await status()).waiting.tests === 4), "the second test's 4 are in the line");
+  stop.abort();
+  assert.ok(await until(async () => (await status()).waiting.tests === 0), "and leave it when it stops");
+  assert.ok(!(await b).some((e) => e.kind === "start"), "none of it ran");
+  await a;
+  assert.ok(await until(async () => { const s = await status(); return s.open === 0 && s.running === 0; }), "every stream closed, every agent free");
+}
+
+// a full room: past DEMO_MAX_OPEN streams, a page is told to try again; closing them frees every agent
+{
+  const stops = Array.from({ length: 6 }, () => new AbortController());
+  const tests = stops.map((c, i) => timed("/api/cohort", { build: busyBuild(`full-${i}`), n: 20, fresh: true }, c.signal));
+  assert.ok(await until(async () => (await status()).open === 6), "6 open");
+  const full = await post("/api/run", { build: busyBuild("full"), patient: "p000" });
+  assert.equal(full.status, 503);
+  assert.match((await full.json()).error, /room is full/);
+  stops.forEach((c) => c.abort());
+  await Promise.all(tests);
+  assert.ok(await until(async () => { const s = await status(); return s.open === 0 && s.running === 0 && s.waiting.tests === 0; }), "all closed: no agent held, nobody in line");
 }
 
 server.close();
