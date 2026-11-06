@@ -286,7 +286,7 @@ const answerLabel = (k, v) => (!v ? "" : k === "gap" || k === "given" ? cap(v) :
 function checkTable(s) {
   // "On a beta blocker?" only when the prompt asked it (score.mjs); the care gap and why are always the task
   const rows = [...(s.given?.asked ? [["given", "On a beta blocker?"]] : []), ...QUESTIONS];
-  return `<table class="qa"><thead><tr><th></th><th>Agent</th><th>Chart</th><th></th></tr></thead><tbody>${rows.map(([k, label]) => {
+  return `<table class="qa"><thead><tr><th></th><th>Agent</th><th>Answer key</th><th></th></tr></thead><tbody>${rows.map(([k, label]) => {
     const x = k === "given" ? s.given : s.questions[k];
     const agent = x.agent ? `<span class="ag">${esc(answerLabel(k, x.agent))}</span>${x.implied ? `<span class="imp">implied</span>` : ""}` : `<span class="na">–</span>`;
     return `<tr><th>${label}</th><td>${agent}</td><td>${esc(answerLabel(k, x.gold))}</td><td>${mark(x.right)}</td></tr>`;
@@ -435,12 +435,12 @@ const rowsById = new Map();
 const pct = (a, b) => (b ? Math.round((100 * a) / b) : 0);
 const bars = (groups) => groups.map((g) => `<div class="barRow"><span>${esc(g.label)}</span><span class="track"><i style="width:${pct(g.right, g.n)}%"></i></span><span class="num">${g.right}/${g.n}</span></div>`).join("");
 
-// the headline: of the patients with a care gap in the answer key, how many it found; then its false alarms, and how
-// many patients it got wholly right (both answers)
+// the headline: of the patients with a care gap in the answer key, how many it found, and what it was checked against
+// (the false alarms and misses go under it, by kind: mistakes)
 function gapScore(s, rules) {
   const g = s.gaps || { total: 0, found: 0, falseAlarms: 0 }, all = g.found === g.total;
   return `<div class="score"><span class="big ${all ? "good" : "bad"}">${g.found}<small>/${g.total}</small></span><span class="muted">care gaps found</span></div>
-    <div class="subScore"><span class="${g.falseAlarms ? "warnTxt" : ""}"><b>${g.falseAlarms}</b> false alarm${g.falseAlarms === 1 ? "" : "s"}</span><span>checked against ${esc(cfg.rules[rules]?.label || rules)}</span></div>`;
+    <div class="subScore"><span>checked against ${esc(cfg.rules[rules]?.label || rules)} · answer key by ${esc(keyBy(rules))}</span></div>`;
 }
 
 function results(s, cached, seconds, rules = state.rules) {
@@ -451,7 +451,7 @@ function results(s, cached, seconds, rules = state.rules) {
   if (s.leakedPatients) flags.push(`<span class="chip warn">${s.leakedPatients} patients' details sent to the web</span>`);
   if (s.errors) flags.push(`<span class="chip warn">${s.errors} sessions failed</span>`);
   $("results").innerHTML = `
-    <div class="resTop"><div>${gapScore(s, rules)}</div><div class="resBars">${bars(QUESTIONS.map(([k, label]) => ({ label, right: s.questions[k].right, n: s.n })))}
+    <div class="resTop"><div>${gapScore(s, rules)}${mistakes()}</div><div class="resBars">${bars(QUESTIONS.map(([k, label]) => ({ label, right: s.questions[k].right, n: s.n })))}
     ${flags.length ? `<div class="flags">${flags.join("")}</div>` : ""}</div></div>
     <div class="stats">${stat(num(s.tokens), "tokens", [s.tokensIn != null && cfg.price ? `≈ ${usd(cost(s.tokensIn, s.tokensOut, s.tokensCached))}` : "", `${num(s.tokensPerPatient)} per patient`, s.tokensRead ? `${num(s.tokens - s.tokensRead)} agent · ${num(s.tokensRead)} reading its answers` : ""].filter(Boolean).join("<br>"))}${stat(num(s.modelCalls ?? 0), "model calls", s.n ? `${Math.round(((s.modelCalls ?? 0) / s.n) * 10) / 10} per patient` : "")}${stat(seconds != null ? `${seconds} s` : "–", "wall clock", `${s.secondsPerPatient} s per patient, ${cfg.concurrency} at once`)}</div>
     ${cached ? `<div class="meta">${cached} from cache</div>` : ""}`;
@@ -459,12 +459,90 @@ function results(s, cached, seconds, rules = state.rules) {
 
 const liveAct = new Map();     // patient → its latest tool call, for the hover card while it runs
 
-function square(row) {
-  const s = row.score;
-  $(`sq-${row.patientId}`).className = `sq ${s.questions.gap.right ? "right" : "wrong"}${s.questions.gap.gold === "yes" ? " key" : ""} ${s.unsafe ? "harm" : ""}`;
+// The four outcomes of the care-gap answer against the answer key: a care gap found (true positive), missed (false
+// negative), a false alarm (false positive), and a patient rightly cleared (true negative). A patient without a gap
+// that it gave no answer for is none of them.
+const OUTCOMES = [
+  ["found", "care gaps found", "true positive", "Care gap found"],
+  ["missed", "missed", "false negative", "Missed care gap"],
+  ["alarm", "false alarms", "false positive", "False alarm"],
+  ["cleared", "rightly no gap", "true negative", "Rightly no gap"],
+  ["none", "no answer", "", "No answer"],
+];
+const OUTCOME = Object.fromEntries(OUTCOMES.map(([k, , , badge]) => [k, badge]));
+function outcome(s) {
+  const q = s.questions.gap, gap = q.gold === "yes";
+  if (q.agent === "yes") return gap ? "found" : "alarm";
+  if (gap) return "missed";
+  return q.agent === "no" ? "cleared" : "none";
 }
 
-const tipQa = (s) => `<table class="qa">${QUESTIONS.map(([k, label]) => { const x = s.questions[k]; return `<tr><th>${label}</th><td>${x.agent ? `<span class="ag">${esc(answerLabel(k, x.agent))}</span>` : `<span class="na">–</span>`}</td><td>${esc(answerLabel(k, x.gold))}</td><td>${mark(x.right)}</td></tr>`; }).join("")}</table>`;
+// What kind of mistake, from its two answers and the key's: short for the count under the score, and as a sentence
+// for the hover card. A right care-gap answer with the wrong reason says so too.
+function mistake(s) {
+  const o = outcome(s), w = s.questions.why, said = w.agent, key = w.gold;
+  if (o === "missed") {
+    if (!s.questions.gap.agent) return { short: "no clear answer", text: "It gave no clear answer." };
+    if (said === "on_beta_blocker") return { short: "thought they were on one", text: "It thought the patient was on a beta blocker that counts." };
+    if (said === "declined") return { short: "thought they declined", text: "It thought the patient had declined one." };
+    if (said === "medical_reason") return { short: "took a reason that doesn't count", text: "It took a reason not to treat that this definition doesn't accept." };
+    return { short: "said no gap, no reason", text: "It said no care gap without a reason that counts." };
+  }
+  if (o === "alarm") {
+    if (key === "on_beta_blocker") return { short: "missed the beta blocker", text: "It missed the beta blocker the patient is on." };
+    const what = key === "declined" ? "the decline" : "the medical reason";
+    if (said === key) return { short: `saw ${what}, still said gap`, text: `It found ${what} but still called it a gap. A documented ${key === "declined" ? "decline" : "reason"} is an exception.` };
+    return { short: `missed ${what}`, text: `It missed ${what} the chart documents.` };
+  }
+  if ((o === "found" || o === "cleared") && w.right === false) return { short: "", text: "Right about the care gap, but not the reason." };
+  return null;
+}
+
+const answerLine = (gap, why) => [gap === "yes" ? "Care gap" : gap === "no" ? "No care gap" : "", why ? cap(cfg.why[why] || why) : ""].filter(Boolean).join(" · ") || "No clear answer";
+const keyBy = (rules) => (cfg.key?.[rules]?.by === "opus" ? cfg.key[rules].model : "the chart");
+
+function square(row) {
+  $(`sq-${row.patientId}`).className = `sq ${outcome(row.score)} ${row.score.unsafe ? "harm" : ""}`;
+}
+
+// the colours, with how many of each so far; a click shows only that kind
+function legend() {
+  const n = Object.fromEntries(OUTCOMES.map(([k]) => [k, 0]));
+  for (const r of rowsById.values()) n[outcome(r.score)] += 1;
+  const only = $("grid").dataset.only || "";
+  $("legend").innerHTML = OUTCOMES.filter(([k]) => k !== "none" || n.none).map(([k, label, term]) =>
+    `<button class="lg${only === k ? " on" : ""}${only && only !== k ? " off" : ""}" data-o="${k}" title="Show only these"><i class="sq ${k}"></i><b>${n[k]}</b>${label}${term ? `<small>${term}</small>` : ""}</button>`).join("");
+}
+function showOnly(k) {
+  const g = $("grid");
+  if (!k || g.dataset.only === k) delete g.dataset.only; else g.dataset.only = k;
+  legend();
+}
+
+// under the score: the missed gaps and false alarms, by kind of mistake
+function mistakes() {
+  const by = { missed: new Map(), alarm: new Map() };
+  for (const r of rowsById.values()) {
+    const o = outcome(r.score), m = by[o] && mistake(r.score);
+    if (m) by[o].set(m.short, (by[o].get(m.short) || 0) + 1);
+  }
+  const line = (o, one, many) => {
+    const kinds = [...by[o]].sort((a, b) => b[1] - a[1]), total = kinds.reduce((t, [, c]) => t + c, 0);
+    return total ? `<div class="mk"><button class="mkBtn ${o}" data-o="${o}" title="Show only these">${total} ${total === 1 ? one : many}</button>${kinds.map(([k, c]) => `${c} ${esc(k)}`).join(" · ")}</div>` : "";
+  };
+  const html = line("missed", "missed", "missed") + line("alarm", "false alarm", "false alarms");
+  return html ? `<div class="mistakes">${html}</div>` : "";
+}
+
+function tipCard(s) {
+  const o = outcome(s), q = s.questions, m = mistake(s);
+  return `<div class="tipHead"><b>${esc(s.name)} <span class="muted">${esc(s.patientId)}</span></b><span class="obadge ${o}">${OUTCOME[o]}</span></div>
+    <div class="trow"><span class="tk">Agent said</span><span class="ag">${esc(answerLine(q.gap.agent, q.why.agent))}</span></div>
+    <div class="trow"><span class="tk">Answer key</span><span>${esc(answerLine(q.gap.gold, q.why.gold))}<small>${esc(s.rationale || "")} <i>· by ${esc(keyBy(s.rules))}</i></small></span></div>
+    ${m ? `<div class="twrong"><span class="tk">Where it went wrong</span>${esc(m.text)}</div>` : ""}
+    ${s.said ? `<div class="treason"><span class="tk"><span class="qm">?</span>Agent's reasoning</span><span class="ag">${esc(s.said.replace(/\n/g, " · ").slice(0, 260))}${s.said.length > 260 ? "…" : ""}</span></div>` : ""}
+    <div class="tfoot">Click the square for the full session</div>`;
+}
 
 function tip(e) {
   const sq = e.target.closest?.(".sq");
@@ -472,8 +550,7 @@ function tip(e) {
   const id = sq.dataset.id, row = rowsById.get(id);
   let html;
   if (row) {
-    const s = row.score;
-    html = `<div class="tipHead"><b>${esc(s.name)}</b><span class="muted">${esc(id)}</span></div>${s.said ? `<div class="said">${esc(s.said.replace(/\n/g, " · ").slice(0, 200))}</div>` : ""}${tipQa(s)}`;
+    html = tipCard(row.score);
   } else html = `<div class="tipHead"><b>${esc(cfg.names[Number(id.slice(1))])}</b><span class="muted">${esc(id)} · ${sq.classList.contains("run") ? "running" : "waiting"}</span></div>${liveAct.get(id) ? `<code class="small">→ ${esc(liveAct.get(id))}</code>` : ""}`;
   const t = $("tip");
   t.innerHTML = html;
@@ -487,7 +564,8 @@ async function inspect(id) {
   const row = rowsById.get(id);
   if (!row) return;
   $("inspect").hidden = false;
-  $("inspectBody").innerHTML = `${verdictCard(row, { who: `${row.score.name} · ${row.patientId}` })}<div class="term tall" id="termInspect"></div>`;
+  const o = outcome(row.score), m = mistake(row.score);
+  $("inspectBody").innerHTML = `<div class="otop"><span class="obadge ${o}">${OUTCOME[o]}</span>${m ? `<span>${esc(m.text)}</span>` : ""}</div>${verdictCard(row, { who: `${row.score.name} · ${row.patientId}` })}<div class="term tall" id="termInspect"></div>`;
   const t = new Term($("termInspect"), `pi · ${row.patientId}`);
   if (cohortBuild) t.intro(await post("/api/preview", { build: cohortBuild, patient: id }));
   for (const m of row.trace) t.event(m);
@@ -495,7 +573,11 @@ async function inspect(id) {
   t.el.querySelector(".clock").textContent = clock((row.seconds || 0) * 1000);
 }
 
-const grid = () => ($("grid").innerHTML = Array.from({ length: cfg.cohort }, (_, i) => `<span class="sq" id="sq-p${String(i).padStart(3, "0")}" data-id="p${String(i).padStart(3, "0")}"></span>`).join(""));
+function grid() {
+  $("grid").innerHTML = Array.from({ length: cfg.cohort }, (_, i) => `<span class="sq" id="sq-p${String(i).padStart(3, "0")}" data-id="p${String(i).padStart(3, "0")}"></span>`).join("");
+  delete $("grid").dataset.only;
+  legend();
+}
 
 // one small window per agent running at once: a patient takes a free window, and keeps it until the next one needs it
 class Windows {
@@ -531,9 +613,9 @@ class Windows {
     const s = this.by.get(row.patientId) || this.slot(row.patientId);
     if (!s) return;
     const el = $(`ag-${s.i}`), sc = row.score;
-    const ok = sc.questions.gap.right;
-    el.className = `win ${ok ? "right" : "wrong"}`;
-    el.querySelector(".st").textContent = `${ok ? "✓ right" : "✗ wrong"}${row.cached ? " · cache" : ""}`;
+    const ok = sc.questions.gap.right, o = outcome(sc);
+    el.className = `win ${o === "alarm" ? "alarm" : ok ? "right" : "wrong"}`;
+    el.querySelector(".st").textContent = `${ok ? "✓" : "✗"} ${OUTCOME[o].toLowerCase()}${row.cached ? " · cache" : ""}`;
     this.add(row.patientId, "fin", QUESTIONS.map(([k, label]) => `${label} ${answerLabel(k, sc.questions[k].agent) || "–"}`).join(" · "));
     s.done = true;
     s.at = performance.now();
@@ -598,6 +680,7 @@ async function runCohort() {
         if (q.agent === "yes") q.gold === "yes" ? (found += 1) : (alarms += 1);
         if (!r.cached && !r.replayed) addRead(r);
         square(r);
+        legend();
         if (!r.cached || done <= cfg.concurrency) wins.finish(r);
       } else if (m.kind === "summary") {
         const seconds = Math.round((performance.now() - t0) / 100) / 10;
@@ -944,6 +1027,8 @@ $("suggest").onclick = (e) => {
 $("grid").onmouseover = tip;
 $("grid").onmouseleave = () => ($("tip").hidden = true);
 $("grid").onclick = (e) => { const sq = e.target.closest(".sq"); if (sq) inspect(sq.dataset.id); };
+$("legend").onclick = (e) => { const b = e.target.closest("[data-o]"); if (b) showOnly(b.dataset.o); };
+$("results").onclick = (e) => { const b = e.target.closest("[data-o]"); if (b) showOnly(b.dataset.o); };
 $("inspectClose").onclick = $("inspect").onclick = (e) => { if (e.target === $("inspect") || e.target === $("inspectClose")) $("inspect").hidden = true; };
 $("steps").onclick = (e) => { const b = e.target.closest("[data-go]"); if (b) go(b.dataset.go); };
 $("back").onclick = () => go(VIEWS[Math.max(0, VIEWS.indexOf(state.view) - 1)]);

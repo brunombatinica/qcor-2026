@@ -3,6 +3,18 @@
 Handoff notes for picking the brainstorm back up in a new session. To restart, tell Claude:
 "read NOTES.md and let's continue the QCOR brainstorm."
 
+## Demo, Test: the four outcomes and why it was wrong (2026-11-05; Ryan)
+
+Ryan: right and wrong isn't enough; the room should see true positives, true negatives, and which wrong ones are
+false positives or false negatives and why. On hover, label which answer is the truth and which is the agent's, and
+show why the agent decided. Done: each square is one of four outcomes (found green, missed red, false alarm amber,
+rightly no gap hollow green), the legend under the grid counts each and filters the grid on a click, and under the score
+the misses and false alarms are counted by kind of mistake, from the agent's "Why?" answer against the key's (so it
+costs nothing). The hover card: an outcome badge, "Agent said" (blue) and "Answer key" (with its reason and who wrote
+it), "Where it went wrong", and the agent's reasoning. The inspect sheet opens with the outcome and the mistake. On the
+recorded ESC run: 24 found, 7 missed (all 7 took a reason ESC 2021 doesn't accept), 10 false alarms (6
+missed the medical reason, 4 saw the decline and still said gap), 59 rightly no gap.
+
 ## Demo, Test as the game, and an Opus answer key (2026-11-04, late; Ryan)
 
 Ryan: the room at QCOR should play with it to find the best way to work. Criteria and Test become one slide, with a

@@ -1,6 +1,6 @@
 /* The talk's look (pptx/build.mjs): a black stage, Apple dark-mode greys, Arial, Font Awesome icons. Each colour means
-   one thing: blue is the model and what it writes, purple its handed-in answer, green is right (it matches the chart),
-   red is wrong. Everything else is white or grey. */
+   one thing: blue is the model and what it writes, purple its handed-in answer, green is right (it matches the answer
+   key), red is wrong; amber is waiting in line, and on the Test grid a false alarm. Everything else is white or grey. */
 :root {
   --bg: #000; --text: #f5f5f7; --muted: #8e8e93; --card: #1c1c1e; --raised: #2c2c2e; --dim: #3a3a3c; --edge: #48484a;
   --blue: #0a84ff; --blue-s: rgba(10, 132, 255, 0.16); --green: #30d158; --green-s: rgba(48, 209, 88, 0.16);
@@ -261,9 +261,6 @@ textarea:focus { outline: none; border-color: var(--edge); }
 .agentsBox summary { cursor: pointer; list-style: none; } .agentsBox summary::-webkit-details-marker { display: none; }
 .agentsBox summary::before { content: "▸ "; } .agentsBox[open] summary::before { content: "▾ "; }
 .subScore { display: flex; gap: 18px; flex-wrap: wrap; margin: 6px 0 4px; font-size: 14px; color: var(--muted); } .subScore b { color: var(--text); font-size: 17px; }
-.subScore .warnTxt b { color: var(--red); }
-.sq.key { box-shadow: inset 0 0 0 3px #fff; }
-.legend .sq.key { background: var(--card); }
 .tally .key { color: var(--text); font-weight: 700; }
 
 /* Ask the EHR */
@@ -299,11 +296,29 @@ textarea:focus { outline: none; border-color: var(--edge); }
 .grid { display: grid; grid-template-columns: repeat(20, 1fr); gap: 5px; margin-top: 8px; }
 .sq { aspect-ratio: 1; border-radius: 4px; background: var(--card); cursor: pointer; position: relative; display: grid; place-items: center; }
 .sq.run { background: var(--edge); animation: pulse 1s infinite; }
-.sq.right { background: var(--green); animation: none; opacity: 0.8; } .sq.wrong { background: var(--red); animation: none; }
+/* the four outcomes (app.js OUTCOMES): found and rightly cleared are green, filled and hollow; missed is red; a false
+   alarm amber */
+.sq.found, .sq.cleared, .sq.missed, .sq.alarm, .sq.none { animation: none; }
+.sq.found { background: var(--green); } .sq.cleared { background: var(--green-s); box-shadow: inset 0 0 0 2px rgba(48, 209, 88, 0.6); }
+.sq.missed { background: var(--red); } .sq.alarm { background: var(--amber); } .sq.none { background: var(--card); box-shadow: inset 0 0 0 2px var(--edge); }
+#grid[data-only] .sq { opacity: 0.15; }
+#grid[data-only="found"] .sq.found, #grid[data-only="cleared"] .sq.cleared, #grid[data-only="missed"] .sq.missed, #grid[data-only="alarm"] .sq.alarm, #grid[data-only="none"] .sq.none { opacity: 1; }
 .sq.harm::after { content: ""; position: absolute; inset: 30%; border-radius: 50%; background: #000; }
 .sq:hover { outline: 2px solid var(--text); }
-.legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 8px; font-size: 12px; color: #c7c7cc; align-items: center; }
-.legend span { display: inline-flex; align-items: center; gap: 6px; } .legend .sq { width: 13px; height: 13px; cursor: default; animation: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 13px; color: #c7c7cc; align-items: center; }
+.legend .lg { display: inline-flex; align-items: baseline; gap: 6px; background: none; border: 0; padding: 2px 0; color: inherit; font: inherit; cursor: pointer; }
+.legend .lg b { color: var(--text); font-variant-numeric: tabular-nums; } .legend .lg small { color: var(--muted); font-size: 11.5px; }
+.legend .lg:hover { color: var(--text); } .legend .lg.off { opacity: 0.45; } .legend .lg.on { color: var(--text); text-decoration: underline; text-underline-offset: 4px; }
+.legend .sq { width: 12px; height: 12px; align-self: center; cursor: inherit; }
+/* the kinds of mistake, under the score */
+.mistakes { margin-top: 8px; font-size: 13.5px; color: var(--muted); display: grid; gap: 3px; }
+.mkBtn { background: none; border: 0; padding: 0; margin-right: 8px; font: inherit; font-weight: 700; cursor: pointer; }
+.mkBtn.missed { color: var(--red); } .mkBtn.alarm { color: var(--amber); } .mkBtn:hover { text-decoration: underline; }
+/* an outcome as a label: on the hover card and the inspect sheet */
+.obadge { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.obadge.found { background: var(--green-s); color: var(--green); } .obadge.cleared { background: var(--green-s); color: var(--green); }
+.obadge.missed { background: var(--red-s); color: var(--red); } .obadge.alarm { background: var(--amber-s); color: var(--amber); } .obadge.none { background: var(--raised); color: var(--muted); }
+.otop { display: flex; align-items: center; gap: 12px; margin: 0 40px 12px 0; font-size: 15px; }
 .tally { display: flex; gap: 18px; font-size: 15px; font-variant-numeric: tabular-nums; min-height: 22px; }
 .tally .t { color: var(--muted); } .tally .ok { color: var(--green); font-weight: 700; } .tally .no { color: var(--red); font-weight: 700; } .tally .run { color: var(--text); }
 .wins { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
@@ -313,6 +328,7 @@ textarea:focus { outline: none; border-color: var(--edge); }
 .win .ah { display: flex; gap: 6px; align-items: center; padding: 5px 8px; font: 11px var(--mono); color: var(--muted); border-bottom: 1px solid var(--card); white-space: nowrap; overflow: hidden; }
 .win .ah b { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; } .win .ah .st { margin-left: auto; }
 .win.right .st { color: var(--green); } .win.wrong .st { color: var(--red); }
+.win.alarm { border-color: rgba(255, 159, 10, 0.7); } .win.alarm .st { color: var(--amber); }
 .win .ab { flex: 1; overflow: hidden; padding: 4px 8px; font: 10.5px/1.45 var(--mono); display: flex; flex-direction: column; justify-content: flex-end; }
 .win .ab div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .win .act { color: var(--blue); } .win .obs { color: #8e8e93; } .win .say { color: var(--blue); white-space: normal; } .win .fin { color: var(--purple); white-space: normal; }
@@ -327,7 +343,13 @@ textarea:focus { outline: none; border-color: var(--edge); }
 .chip { font-size: 12.5px; padding: 3px 10px; border-radius: 999px; background: var(--raised); color: #c7c7cc; }
 .chip.warn { background: var(--red-s); color: var(--red); }
 .tip { position: fixed; z-index: 20; width: 360px; background: var(--card); border: 1px solid var(--dim); border-radius: 12px; padding: 10px 12px; font-size: 13px; pointer-events: none; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6); }
-.tipHead { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 4px; } .tipHead span { font-size: 12px; }
+.tipHead { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 6px; } .tipHead .muted { font-size: 12px; font-weight: 400; }
+.trow, .treason { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 8px; padding: 6px 0; border-top: 1px solid var(--raised); line-height: 1.4; }
+.trow small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; } .trow small i { font-style: normal; color: var(--edge); }
+.tk { color: var(--muted); font-size: 11.5px; } .tip .ag { color: var(--blue); }
+.twrong { margin: 4px 0 2px; padding: 7px 9px; border-radius: 8px; background: var(--raised); line-height: 1.4; } .twrong .tk { display: block; margin-bottom: 2px; }
+.qm { display: inline-grid; place-items: center; width: 14px; height: 14px; margin-right: 5px; border-radius: 50%; border: 1px solid var(--muted); font-size: 10px; font-weight: 700; vertical-align: 1px; }
+.tfoot { color: var(--muted); font-size: 11.5px; padding-top: 6px; border-top: 1px solid var(--raised); }
 .tip .qa { font-size: 12.5px; margin: 6px 0; } .tip .said { font-size: 13px; margin: 6px 0; }
 
 /* under the hood: what you're setting up, then an example of what it does */
